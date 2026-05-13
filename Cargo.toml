@@ -1,0 +1,56 @@
+[package]
+name = "space-sim"
+version = "0.1.0"
+edition = "2024"
+authors = ["Landon Gingerich"]
+description = "Astrodynamics simulator"
+readme = "README.md"
+repository = "https://github.com/lgingerich/space-sim"
+
+[[example]]
+name = "orbit_viz"
+path = "examples/orbit_viz.rs"
+doc = false
+
+[dependencies]
+macroquad = "0.4.14"
+nalgebra = "0.34.2"
+thiserror = "2.0.18"
+
+[profile.release]
+codegen-units = 1
+debug = 0
+debug-assertions = false
+incremental = false
+opt-level = 3
+lto = true
+panic = "abort"
+strip = "debuginfo"
+
+[profile.dev]
+codegen-units = 256
+debug = 2
+debug-assertions = true
+incremental = true
+opt-level = 0
+lto = false
+panic = "unwind"
+strip = false
+
+[lints.rust]
+missing_docs = "warn"
+
+[lints.clippy]
+type_complexity = "allow"
+redundant_clone = "warn"
+unnecessary_to_owned = "warn"
+inefficient_to_string = "warn"
+large_enum_variant = "warn"
+box_collection = "warn"
+or_fun_call = "warn"
+expect_fun_call = "warn"
+single_char_pattern = "warn"
+string_add_assign = "warn"
+vec_init_then_push = "warn"
+expect_used = "deny"
+unwrap_used = "deny"
