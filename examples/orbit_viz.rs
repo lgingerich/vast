@@ -3,7 +3,8 @@
 use macroquad::prelude::*;
 use space_sim::{
     Angle, CircularOrbit, Distance, Duration, Epoch, GravitationalParameter, Integrator, MU_EARTH,
-    OrbitDirection, OrbitPlane, R_EARTH, RungeKutta4Integrator, Speed, TimeStep, TwoBodyGravity,
+    OrbitDirection, OrbitPlane, OrbitalDiagnostics, R_EARTH, RungeKutta4Integrator, Speed,
+    TimeStep, TwoBodyGravity,
 };
 
 const TRAIL_POINTS_MAX: usize = 2_000;
@@ -123,15 +124,20 @@ impl OrbitVizScenario {
             let ship = world_to_screen(position.x, position.y, self.meters_per_pixel) + center;
             draw_circle(ship.x, ship.y, 4.0, WHITE);
 
-            self.draw_hud(position.norm());
+            self.draw_hud();
 
             next_frame().await;
         }
     }
 
-    fn draw_hud(&self, radius_m: f64) {
-        let altitude_m = radius_m - self.earth_radius_m;
-        let radius_drift_m = radius_m - self.ideal_orbital_radius.meters();
+    fn draw_hud(&self) {
+        let Some(diagnostics) = OrbitalDiagnostics::from_state(&self.state, self.earth.mu) else {
+            draw_text("orbital diagnostics unavailable", 20.0, 30.0, 24.0, RED);
+            return;
+        };
+
+        let altitude_m = diagnostics.radius.meters() - self.earth_radius_m;
+        let radius_drift_m = diagnostics.radius.meters() - self.ideal_orbital_radius.meters();
         let orbit_progress = self.t.seconds() / self.orbital_period.seconds();
         let orbit_progress_percent = orbit_progress.fract() * 100.0;
 
@@ -148,9 +154,17 @@ impl OrbitVizScenario {
                 radius_drift_m / 1000.0,
             ),
             format!(
-                "circular speed = {:.3} km/s | period = {:.3} min",
+                "speed = {:.3} km/s | circular speed = {:.3} km/s",
+                diagnostics.speed.meters_per_second() / 1000.0,
                 self.circular_speed.meters_per_second() / 1000.0,
-                self.orbital_period.seconds() / 60.0,
+            ),
+            format!(
+                "eccentricity = {:.9} | specific energy = {:.3} MJ/kg",
+                diagnostics.eccentricity.scalar(),
+                diagnostics
+                    .specific_energy
+                    .square_meters_per_square_second()
+                    / 1.0e6,
             ),
         ];
 

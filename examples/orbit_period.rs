@@ -2,8 +2,9 @@
 
 use space_sim::{
     Angle, CartesianState, CircularOrbit, Distance, Duration, Epoch, EulerIntegrator,
-    GravitationalParameter, Integrator, MU_EARTH, OrbitDirection, OrbitPlane, R_EARTH,
-    RungeKutta4Integrator, Speed, TimeStep, TwoBodyGravity,
+    GravitationalParameter, Integrator, MU_EARTH, OrbitDirection, OrbitPlane, OrbitalDiagnostics,
+    R_EARTH, RungeKutta4Integrator, SpecificAngularMomentum, SpecificEnergy, Speed, TimeStep,
+    TwoBodyGravity,
 };
 
 const ALTITUDE_M: f64 = 400_000.0;
@@ -16,6 +17,9 @@ struct PropagationSummary {
     overshoot: Duration,
     position_drift: Distance,
     speed_error: Speed,
+    specific_energy_error: SpecificEnergy,
+    specific_angular_momentum_error: SpecificAngularMomentum,
+    eccentricity: f64,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -50,14 +54,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!();
     println!(
-        "{:>8} {:>8} {:>8} {:>12} {:>13} {:>20} {:>18}",
+        "{:>8} {:>8} {:>8} {:>12} {:>13} {:>20} {:>18} {:>18} {:>16} {:>12}",
         "method",
         "dt(s)",
         "steps",
         "elapsed(s)",
         "overshoot(s)",
         "position drift(km)",
-        "speed error(m/s)"
+        "speed error(m/s)",
+        "energy error",
+        "h error",
+        "eccentricity",
     );
 
     for step_seconds in STEP_SECONDS {
@@ -82,6 +89,8 @@ fn propagate_one_period<I: Integrator>(
     dt: TimeStep,
 ) -> Result<PropagationSummary, Box<dyn std::error::Error>> {
     let initial_position = initial_state.position;
+    let initial_diagnostics = OrbitalDiagnostics::from_state(initial_state, gravity.mu)
+        .ok_or("invalid initial diagnostics")?;
     let mut epoch = Epoch::from_seconds(0.0).ok_or("invalid initial epoch")?;
     let mut state = CartesianState::new(initial_state.position, initial_state.velocity);
     let mut steps = 0;
@@ -106,6 +115,28 @@ fn propagate_one_period<I: Integrator>(
         (state.velocity.vector().norm() - circular_speed.meters_per_second()).abs(),
     )
     .ok_or("invalid speed error")?;
+    let final_diagnostics =
+        OrbitalDiagnostics::from_state(&state, gravity.mu).ok_or("invalid final diagnostics")?;
+    let specific_energy_error = SpecificEnergy::from_square_meters_per_square_second(
+        (final_diagnostics
+            .specific_energy
+            .square_meters_per_square_second()
+            - initial_diagnostics
+                .specific_energy
+                .square_meters_per_square_second())
+        .abs(),
+    )
+    .ok_or("invalid specific energy error")?;
+    let specific_angular_momentum_error = SpecificAngularMomentum::from_square_meters_per_second(
+        (final_diagnostics
+            .specific_angular_momentum
+            .square_meters_per_second()
+            - initial_diagnostics
+                .specific_angular_momentum
+                .square_meters_per_second())
+        .abs(),
+    )
+    .ok_or("invalid specific angular momentum error")?;
 
     Ok(PropagationSummary {
         dt,
@@ -115,17 +146,27 @@ fn propagate_one_period<I: Integrator>(
             .ok_or("invalid period overshoot")?,
         position_drift,
         speed_error,
+        specific_energy_error,
+        specific_angular_momentum_error,
+        eccentricity: final_diagnostics.eccentricity.scalar(),
     })
 }
 
 fn print_summary(method: &str, summary: &PropagationSummary) {
     println!(
-        "{method:>8} {:>8.2} {:>8} {:>12.1} {:>13.3} {:>20.6} {:>18.9}",
+        "{method:>8} {:>8.2} {:>8} {:>12.1} {:>13.3} {:>20.6} {:>18.9} {:>18.6} {:>16.6} {:>12.9}",
         summary.dt.seconds(),
         summary.steps,
         summary.elapsed.seconds(),
         summary.overshoot.seconds(),
         summary.position_drift.meters() / 1000.0,
         summary.speed_error.meters_per_second(),
+        summary
+            .specific_energy_error
+            .square_meters_per_square_second(),
+        summary
+            .specific_angular_momentum_error
+            .square_meters_per_second(),
+        summary.eccentricity,
     );
 }
