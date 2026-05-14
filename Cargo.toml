@@ -13,9 +13,11 @@ path = "examples/orbit_viz.rs"
 doc = false
 
 [dependencies]
-macroquad = "0.4.14"
 nalgebra = "0.34.2"
 thiserror = "2.0.18"
+
+[dev-dependencies]
+macroquad = "0.4.14"
 
 [profile.release]
 codegen-units = 1

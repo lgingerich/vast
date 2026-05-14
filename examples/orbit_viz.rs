@@ -1,11 +1,12 @@
 #![allow(missing_docs)]
 
 use macroquad::prelude::*;
-use nalgebra::Vector3;
 use space_sim::{
-    CartesianState, Duration, Epoch, EulerIntegrator, Integrator, MU_EARTH, Position, R_EARTH,
-    TwoBodyGravity, Velocity,
+    Angle, CircularOrbit, Distance, Epoch, EulerIntegrator, GravitationalParameter, Integrator,
+    MU_EARTH, OrbitDirection, OrbitPlane, R_EARTH, TimeStep, TwoBodyGravity,
 };
+
+const TRAIL_POINTS_MAX: usize = 2_000;
 
 fn main() {
     let window_config = Conf {
@@ -17,64 +18,120 @@ fn main() {
 }
 
 async fn async_main() {
-    let earth = TwoBodyGravity { mu: MU_EARTH };
-    let integrator = EulerIntegrator;
-
-    let altitude_m = 400_000.0;
-    let earth_radius_m = R_EARTH;
-    let orbital_radius = earth_radius_m + altitude_m;
-
-    // Circular orbit speed: v = sqrt(mu / r)
-    let orbital_speed = (earth.mu / orbital_radius).sqrt();
-
-    let mut state = CartesianState {
-        position: Position(Vector3::new(orbital_radius, 0.0, 0.0)),
-        velocity: Velocity(Vector3::new(0.0, 5000.0, orbital_speed)),
+    let Some(mut scenario) = OrbitVizScenario::new() else {
+        eprintln!("invalid orbit visualization scenario");
+        return;
     };
 
-    let mut t = Epoch(0.0);
-    let dt = Duration(1.0);
-    let meters_per_pixel = 40_000.0;
-    let mut trail = Vec::new();
+    scenario.run().await;
+}
 
-    loop {
-        for _ in 0..20 {
-            state = integrator.step(&earth, &state, t, dt);
-            t = Epoch(t.0 + dt.0);
+struct OrbitVizScenario {
+    earth: TwoBodyGravity,
+    integrator: EulerIntegrator,
+    state: space_sim::CartesianState,
+    t: Epoch,
+    dt: TimeStep,
+    earth_radius_m: f64,
+    meters_per_pixel: f64,
+    trail: [Vec2; TRAIL_POINTS_MAX],
+    trail_start: usize,
+    trail_count: usize,
+}
 
-            let position = state.position.0;
-            trail.push(world_to_screen(position.x, position.y, meters_per_pixel));
+impl OrbitVizScenario {
+    fn new() -> Option<Self> {
+        let earth = TwoBodyGravity {
+            mu: GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?,
+        };
+        let integrator = EulerIntegrator;
 
-            if trail.len() > 2_000 {
-                trail.remove(0);
+        let altitude_m = 400_000.0;
+        let earth_radius_m = R_EARTH;
+        let orbital_radius_m = earth_radius_m + altitude_m;
+        let orbit = CircularOrbit {
+            radius: Distance::from_meters(orbital_radius_m)?,
+            mu: earth.mu,
+            plane: OrbitPlane::Xy,
+            phase: Angle::from_radians(0.0)?,
+            direction: OrbitDirection::Prograde,
+        };
+
+        Some(Self {
+            earth,
+            integrator,
+            state: orbit.to_cartesian_state()?,
+            t: Epoch::from_seconds(0.0)?,
+            dt: TimeStep::from_seconds(1.0)?,
+            earth_radius_m,
+            meters_per_pixel: 40_000.0,
+            trail: [Vec2::ZERO; TRAIL_POINTS_MAX],
+            trail_start: 0,
+            trail_count: 0,
+        })
+    }
+
+    async fn run(&mut self) {
+        loop {
+            for _ in 0..20 {
+                let Ok(next_state) =
+                    self.integrator
+                        .step(&self.earth, &self.state, self.t, self.dt)
+                else {
+                    eprintln!("simulation state became invalid");
+                    return;
+                };
+                self.state = next_state;
+                let Some(next_epoch) = self.t.advance_by(self.dt) else {
+                    eprintln!("simulation epoch became invalid");
+                    return;
+                };
+                self.t = next_epoch;
+
+                let position = self.state.position.vector();
+                let trail_next = (self.trail_start + self.trail_count) % TRAIL_POINTS_MAX;
+                self.trail[trail_next] =
+                    world_to_screen(position.x, position.y, self.meters_per_pixel);
+
+                if self.trail_count < TRAIL_POINTS_MAX {
+                    self.trail_count += 1;
+                } else {
+                    self.trail_start = (self.trail_start + 1) % TRAIL_POINTS_MAX;
+                }
             }
+
+            clear_background(BLACK);
+
+            let center = vec2(screen_width() / 2.0, screen_height() / 2.0);
+            draw_circle(center.x, center.y, 10.0, BLUE);
+
+            for trail_index in 1..self.trail_count {
+                let previous = (self.trail_start + trail_index - 1) % TRAIL_POINTS_MAX;
+                let current = (self.trail_start + trail_index) % TRAIL_POINTS_MAX;
+                let start = self.trail[previous] + center;
+                let end = self.trail[current] + center;
+                draw_line(start.x, start.y, end.x, end.y, 1.0, GREEN);
+            }
+
+            let position = self.state.position.vector();
+            let ship = world_to_screen(position.x, position.y, self.meters_per_pixel) + center;
+            draw_circle(ship.x, ship.y, 4.0, WHITE);
+
+            let altitude_m = position.norm() - self.earth_radius_m;
+            draw_text(
+                &format!(
+                    "t = {:.0}s | altitude = {:.0} km",
+                    self.t.seconds(),
+                    altitude_m / 1000.0
+                ),
+                20.0,
+                30.0,
+                24.0,
+                WHITE,
+            );
+
+            next_frame().await;
         }
-
-        clear_background(BLACK);
-
-        let center = vec2(screen_width() / 2.0, screen_height() / 2.0);
-        draw_circle(center.x, center.y, 10.0, BLUE);
-
-        for segment in trail.windows(2) {
-            let start = segment[0] + center;
-            let end = segment[1] + center;
-            draw_line(start.x, start.y, end.x, end.y, 1.0, GREEN);
-        }
-
-        let position = state.position.0;
-        let ship = world_to_screen(position.x, position.y, meters_per_pixel) + center;
-        draw_circle(ship.x, ship.y, 4.0, WHITE);
-
-        let altitude = position.norm() - earth_radius_m;
-        draw_text(
-            &format!("t = {:.0}s | altitude = {:.0} km", t.0, altitude / 1000.0),
-            20.0,
-            30.0,
-            24.0,
-            WHITE,
-        );
-
-        next_frame().await;
     }
 }
 
