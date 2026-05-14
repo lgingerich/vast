@@ -38,24 +38,43 @@ pub struct CircularOrbit {
 impl CircularOrbit {
     /// Circular orbital speed.
     pub fn speed(&self) -> Option<Speed> {
-        Speed::from_meters_per_second(
-            (self.mu.meters_cubed_per_second_squared() / self.radius.meters()).sqrt(),
-        )
+        let mu = self.mu.meters_cubed_per_second_squared();
+        let radius = self.radius.meters();
+
+        debug_assert!(mu.is_finite());
+        debug_assert!(mu > 0.0);
+        debug_assert!(radius.is_finite());
+        debug_assert!(radius > 0.0);
+
+        Speed::from_meters_per_second((mu / radius).sqrt())
     }
 
     /// Circular orbital period.
     pub fn period(&self) -> Option<Duration> {
-        Duration::from_seconds(
-            2.0 * std::f64::consts::PI
-                * (self.radius.meters().powi(3) / self.mu.meters_cubed_per_second_squared()).sqrt(),
-        )
+        let mu = self.mu.meters_cubed_per_second_squared();
+        let radius = self.radius.meters();
+
+        debug_assert!(mu.is_finite());
+        debug_assert!(mu > 0.0);
+        debug_assert!(radius.is_finite());
+        debug_assert!(radius > 0.0);
+
+        Duration::from_seconds(2.0 * std::f64::consts::PI * (radius.powi(3) / mu).sqrt())
     }
 
     /// Converts this orbit into an inertial Cartesian state.
     pub fn to_cartesian_state(&self) -> Option<CartesianState> {
         let radius = self.radius.meters();
         let speed = self.speed()?.meters_per_second();
-        let (sin_phase, cos_phase) = self.phase.radians().sin_cos();
+        let phase = self.phase.radians();
+
+        debug_assert!(radius.is_finite());
+        debug_assert!(radius > 0.0);
+        debug_assert!(speed.is_finite());
+        debug_assert!(speed >= 0.0);
+        debug_assert!(phase.is_finite());
+
+        let (sin_phase, cos_phase) = phase.sin_cos();
 
         let (position, prograde_velocity) = match self.plane {
             OrbitPlane::Xy => (
@@ -76,6 +95,13 @@ impl CircularOrbit {
             OrbitDirection::Prograde => prograde_velocity,
             OrbitDirection::Retrograde => -prograde_velocity,
         };
+
+        debug_assert!(position.x.is_finite());
+        debug_assert!(position.y.is_finite());
+        debug_assert!(position.z.is_finite());
+        debug_assert!(velocity.x.is_finite());
+        debug_assert!(velocity.y.is_finite());
+        debug_assert!(velocity.z.is_finite());
 
         Some(CartesianState::new(
             Position::from_vector(position)?,
@@ -108,14 +134,22 @@ mod tests {
 
     const EPS: f64 = 1.0e-9;
 
-    fn circular_orbit(phase: Angle, direction: OrbitDirection) -> Option<CircularOrbit> {
+    fn circular_orbit_in_plane(
+        phase: Angle,
+        direction: OrbitDirection,
+        plane: OrbitPlane,
+    ) -> Option<CircularOrbit> {
         Some(CircularOrbit {
             radius: Distance::from_meters(R_EARTH + 400_000.0)?,
             mu: GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?,
-            plane: OrbitPlane::Xy,
+            plane,
             phase,
             direction,
         })
+    }
+
+    fn circular_orbit(phase: Angle, direction: OrbitDirection) -> Option<CircularOrbit> {
+        circular_orbit_in_plane(phase, direction, OrbitPlane::Xy)
     }
 
     fn assert_close(actual: f64, expected: f64, tolerance: f64) {
@@ -164,24 +198,55 @@ mod tests {
     }
 
     #[test]
-    fn circular_orbit_converts_phase_zero_to_xy_cartesian_state() -> TestResult {
-        let orbit = circular_orbit(
-            Angle::from_radians(0.0).ok_or("invalid angle")?,
-            OrbitDirection::Prograde,
-        )
-        .ok_or("invalid orbit")?;
-        let state = orbit.to_cartesian_state().ok_or("invalid state")?;
-        let speed = orbit
-            .speed()
-            .ok_or("invalid orbital speed")?
-            .meters_per_second();
+    fn circular_orbit_converts_phase_zero_to_each_cartesian_plane() -> TestResult {
+        for (plane, position_unit, velocity_unit) in [
+            (
+                OrbitPlane::Xy,
+                Vector3::new(1.0, 0.0, 0.0),
+                Vector3::new(0.0, 1.0, 0.0),
+            ),
+            (
+                OrbitPlane::Xz,
+                Vector3::new(1.0, 0.0, 0.0),
+                Vector3::new(0.0, 0.0, 1.0),
+            ),
+            (
+                OrbitPlane::Yz,
+                Vector3::new(0.0, 1.0, 0.0),
+                Vector3::new(0.0, 0.0, 1.0),
+            ),
+        ] {
+            let orbit = circular_orbit_in_plane(
+                Angle::from_radians(0.0).ok_or("invalid angle")?,
+                OrbitDirection::Prograde,
+                plane,
+            )
+            .ok_or("invalid orbit")?;
+            let state = orbit.to_cartesian_state().ok_or("invalid state")?;
+            let speed = orbit
+                .speed()
+                .ok_or("invalid orbital speed")?
+                .meters_per_second();
 
-        assert_close(state.position.vector().x, orbit.radius.meters(), EPS);
-        assert_close(state.position.vector().y, 0.0, EPS);
-        assert_close(state.position.vector().z, 0.0, EPS);
-        assert_close(state.velocity.vector().x, 0.0, EPS);
-        assert_close(state.velocity.vector().y, speed, EPS);
-        assert_close(state.velocity.vector().z, 0.0, EPS);
+            assert_close(
+                state.position.vector().x,
+                orbit.radius.meters() * position_unit.x,
+                EPS,
+            );
+            assert_close(
+                state.position.vector().y,
+                orbit.radius.meters() * position_unit.y,
+                EPS,
+            );
+            assert_close(
+                state.position.vector().z,
+                orbit.radius.meters() * position_unit.z,
+                EPS,
+            );
+            assert_close(state.velocity.vector().x, speed * velocity_unit.x, EPS);
+            assert_close(state.velocity.vector().y, speed * velocity_unit.y, EPS);
+            assert_close(state.velocity.vector().z, speed * velocity_unit.z, EPS);
+        }
         Ok(())
     }
 

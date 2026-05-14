@@ -28,14 +28,29 @@ impl Integrator for EulerIntegrator {
     ) -> Result<CartesianState, IntegrationError> {
         let acceleration = dynamics.acceleration(state, t)?;
         let dt_s = dt.seconds();
+        let position = state.position.vector();
+        let velocity = state.velocity.vector();
+        let acceleration = acceleration.vector();
 
-        let new_vel = state.velocity.vector() + acceleration.vector() * dt_s;
-        let new_pos = state.position.vector() + new_vel * dt_s;
+        debug_assert!(dt_s.is_finite());
+        debug_assert!(dt_s > 0.0);
+        debug_assert!(position.x.is_finite());
+        debug_assert!(position.y.is_finite());
+        debug_assert!(position.z.is_finite());
+        debug_assert!(velocity.x.is_finite());
+        debug_assert!(velocity.y.is_finite());
+        debug_assert!(velocity.z.is_finite());
+        debug_assert!(acceleration.x.is_finite());
+        debug_assert!(acceleration.y.is_finite());
+        debug_assert!(acceleration.z.is_finite());
 
-        Ok(CartesianState::new(
-            Position::from_vector(new_pos).ok_or(IntegrationError::InvalidPosition)?,
-            Velocity::from_vector(new_vel).ok_or(IntegrationError::InvalidVelocity)?,
-        ))
+        let new_vel = velocity + acceleration * dt_s;
+        let new_pos = position + new_vel * dt_s;
+
+        let velocity = Velocity::from_vector(new_vel).ok_or(IntegrationError::InvalidVelocity)?;
+        let position = Position::from_vector(new_pos).ok_or(IntegrationError::InvalidPosition)?;
+
+        Ok(CartesianState::new(position, velocity))
     }
 }
 
@@ -61,6 +76,20 @@ mod tests {
             _t: Epoch,
         ) -> Result<Acceleration, DynamicsError> {
             Ok(self.acceleration)
+        }
+    }
+
+    struct FailingDynamics {
+        error: DynamicsError,
+    }
+
+    impl Dynamics for FailingDynamics {
+        fn acceleration(
+            &self,
+            _state: &CartesianState,
+            _t: Epoch,
+        ) -> Result<Acceleration, DynamicsError> {
+            Err(self.error)
         }
     }
 
@@ -103,6 +132,75 @@ mod tests {
         assert_close(next.position.vector().x, 15.0, EPS);
         assert_close(next.position.vector().y, 80.0, EPS);
         assert_close(next.position.vector().z, 45.0, EPS);
+        Ok(())
+    }
+
+    #[test]
+    fn semi_implicit_euler_propagates_dynamics_errors() -> TestResult {
+        let integrator = EulerIntegrator;
+        let dynamics = FailingDynamics {
+            error: DynamicsError::PositionAtGravityCenter,
+        };
+        let state =
+            state_at(Vector3::new(1.0, 0.0, 0.0), Vector3::zeros()).ok_or("invalid state")?;
+
+        assert!(matches!(
+            integrator.step(
+                &dynamics,
+                &state,
+                Epoch::from_seconds(0.0).ok_or("invalid epoch")?,
+                TimeStep::from_seconds(1.0).ok_or("invalid time step")?,
+            ),
+            Err(IntegrationError::Dynamics(
+                DynamicsError::PositionAtGravityCenter
+            )),
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn semi_implicit_euler_rejects_nonfinite_velocity_update() -> TestResult {
+        let integrator = EulerIntegrator;
+        let dynamics = ConstantAcceleration {
+            acceleration: Acceleration::from_vector(Vector3::new(f64::MAX, 0.0, 0.0))
+                .ok_or("invalid acceleration")?,
+        };
+        let state = state_at(Vector3::zeros(), Vector3::zeros()).ok_or("invalid state")?;
+
+        assert!(matches!(
+            integrator.step(
+                &dynamics,
+                &state,
+                Epoch::from_seconds(0.0).ok_or("invalid epoch")?,
+                TimeStep::from_seconds(2.0).ok_or("invalid time step")?,
+            ),
+            Err(IntegrationError::InvalidVelocity),
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn semi_implicit_euler_rejects_nonfinite_position_update() -> TestResult {
+        let integrator = EulerIntegrator;
+        let dynamics = ConstantAcceleration {
+            acceleration: Acceleration::from_vector(Vector3::zeros())
+                .ok_or("invalid acceleration")?,
+        };
+        let state = state_at(
+            Vector3::new(f64::MAX, 0.0, 0.0),
+            Vector3::new(f64::MAX, 0.0, 0.0),
+        )
+        .ok_or("invalid state")?;
+
+        assert!(matches!(
+            integrator.step(
+                &dynamics,
+                &state,
+                Epoch::from_seconds(0.0).ok_or("invalid epoch")?,
+                TimeStep::from_seconds(2.0).ok_or("invalid time step")?,
+            ),
+            Err(IntegrationError::InvalidPosition),
+        ));
         Ok(())
     }
 

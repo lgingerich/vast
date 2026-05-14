@@ -226,11 +226,131 @@ mod tests {
     }
 
     #[test]
+    fn epoch_accepts_finite_values() {
+        for value in [-1.0, 0.0, 1.0] {
+            assert!(Epoch::from_seconds(value).is_some());
+        }
+    }
+
+    #[test]
+    fn epoch_rejects_nonfinite_values() {
+        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(Epoch::from_seconds(value).is_none());
+        }
+    }
+
+    #[test]
+    fn epoch_advance_rejects_nonfinite_result() -> Result<(), &'static str> {
+        let epoch = Epoch::from_seconds(f64::MAX).ok_or("invalid epoch")?;
+        let dt = TimeStep::from_seconds(f64::MAX).ok_or("invalid time step")?;
+
+        assert!(epoch.advance_by(dt).is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn time_step_accepts_positive_finite_values() {
+        for value in [f64::MIN_POSITIVE, 1.0] {
+            assert!(TimeStep::from_seconds(value).is_some());
+        }
+    }
+
+    #[test]
+    fn time_step_rejects_nonpositive_and_nonfinite_values() {
+        for value in [-1.0, 0.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(TimeStep::from_seconds(value).is_none());
+        }
+    }
+
+    #[test]
+    fn duration_accepts_nonnegative_finite_values() {
+        for value in [0.0, 1.0] {
+            assert!(Duration::from_seconds(value).is_some());
+        }
+    }
+
+    #[test]
+    fn duration_rejects_negative_and_nonfinite_values() {
+        for value in [-1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(Duration::from_seconds(value).is_none());
+        }
+    }
+
+    #[test]
     fn duration_can_be_created_from_time_step() -> Result<(), &'static str> {
         let dt = TimeStep::from_seconds(2.5).ok_or("invalid time step")?;
         let duration = Duration::from(dt);
 
         assert_close(duration.seconds(), 2.5, EPS);
         Ok(())
+    }
+
+    #[test]
+    fn distance_accepts_positive_finite_values() {
+        for value in [f64::MIN_POSITIVE, 1.0] {
+            assert!(Distance::from_meters(value).is_some());
+        }
+    }
+
+    #[test]
+    fn distance_rejects_nonpositive_and_nonfinite_values() {
+        for value in [-1.0, 0.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(Distance::from_meters(value).is_none());
+        }
+    }
+
+    #[test]
+    fn speed_accepts_nonnegative_finite_values() {
+        for value in [0.0, 1.0] {
+            assert!(Speed::from_meters_per_second(value).is_some());
+        }
+    }
+
+    #[test]
+    fn speed_rejects_negative_and_nonfinite_values() {
+        for value in [-1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(Speed::from_meters_per_second(value).is_none());
+        }
+    }
+
+    #[test]
+    fn gravitational_parameter_accepts_positive_finite_values() {
+        for value in [f64::MIN_POSITIVE, 1.0] {
+            assert!(GravitationalParameter::from_meters_cubed_per_second_squared(value).is_some());
+        }
+    }
+
+    #[test]
+    fn gravitational_parameter_rejects_nonpositive_and_nonfinite_values() {
+        for value in [-1.0, 0.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(GravitationalParameter::from_meters_cubed_per_second_squared(value).is_none());
+        }
+    }
+
+    #[test]
+    fn angle_accepts_finite_values() {
+        for value in [-1.0, 0.0, 1.0] {
+            assert!(Angle::from_radians(value).is_some());
+        }
+    }
+
+    #[test]
+    fn angle_rejects_nonfinite_values() {
+        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(Angle::from_radians(value).is_none());
+        }
+    }
+
+    #[test]
+    fn position_velocity_and_acceleration_reject_nonfinite_components() {
+        for vector in [
+            Vector3::new(f64::NAN, 0.0, 0.0),
+            Vector3::new(0.0, f64::INFINITY, 0.0),
+            Vector3::new(0.0, 0.0, f64::NEG_INFINITY),
+        ] {
+            assert!(Position::from_vector(vector).is_none());
+            assert!(Velocity::from_vector(vector).is_none());
+            assert!(Acceleration::from_vector(vector).is_none());
+        }
     }
 }

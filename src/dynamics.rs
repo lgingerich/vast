@@ -23,12 +23,18 @@ impl Dynamics for TwoBodyGravity {
     ) -> Result<Acceleration, DynamicsError> {
         let r = state.position.vector();
         let radius_m = r.norm();
+        let mu = self.mu.meters_cubed_per_second_squared();
 
         if radius_m == 0.0 {
             return Err(DynamicsError::PositionAtGravityCenter);
         }
 
-        Acceleration::from_vector(-self.mu.meters_cubed_per_second_squared() * r / radius_m.powi(3))
+        debug_assert!(radius_m.is_finite());
+        debug_assert!(radius_m > 0.0);
+        debug_assert!(mu.is_finite());
+        debug_assert!(mu > 0.0);
+
+        Acceleration::from_vector(-mu * r / radius_m.powi(3))
             .ok_or(DynamicsError::InvalidAcceleration)
     }
 }
@@ -99,6 +105,28 @@ mod tests {
     }
 
     #[test]
+    fn two_body_gravity_matches_off_axis_vector_formula() -> TestResult {
+        let gravity = TwoBodyGravity {
+            mu: GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)
+                .ok_or("invalid earth mu")?,
+        };
+        let radius = R_EARTH + 400_000.0;
+        let position = Vector3::new(3.0 * radius, 4.0 * radius, 0.0);
+        let state = state_at(position, Vector3::zeros()).ok_or("invalid state")?;
+        let expected = -MU_EARTH * position / position.norm().powi(3);
+
+        let acceleration = gravity
+            .acceleration(&state, Epoch::from_seconds(0.0).ok_or("invalid epoch")?)
+            .map_err(|_| "invalid acceleration")?
+            .vector();
+
+        assert_close(acceleration.x, expected.x, EPS);
+        assert_close(acceleration.y, expected.y, EPS);
+        assert_close(acceleration.z, expected.z, EPS);
+        Ok(())
+    }
+
+    #[test]
     fn two_body_gravity_falls_off_with_inverse_square_distance() -> TestResult {
         let gravity = TwoBodyGravity {
             mu: GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)
@@ -152,6 +180,22 @@ mod tests {
         assert!(matches!(
             gravity.acceleration(&state, Epoch::from_seconds(0.0).ok_or("invalid epoch")?),
             Err(DynamicsError::PositionAtGravityCenter),
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn two_body_gravity_rejects_nonfinite_acceleration() -> TestResult {
+        let gravity = TwoBodyGravity {
+            mu: GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)
+                .ok_or("invalid earth mu")?,
+        };
+        let state =
+            state_at(Vector3::new(1.0e-150, 0.0, 0.0), Vector3::zeros()).ok_or("invalid state")?;
+
+        assert!(matches!(
+            gravity.acceleration(&state, Epoch::from_seconds(0.0).ok_or("invalid epoch")?),
+            Err(DynamicsError::InvalidAcceleration),
         ));
         Ok(())
     }
