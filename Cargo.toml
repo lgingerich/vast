@@ -12,6 +12,10 @@ name = "orbit_viz"
 path = "examples/orbit_viz.rs"
 doc = false
 
+[[example]]
+name = "orbit_period"
+path = "examples/orbit_period.rs"
+
 [dependencies]
 nalgebra = "0.34.2"
 thiserror = "2.0.18"

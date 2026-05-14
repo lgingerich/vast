@@ -23,4 +23,7 @@ pub enum IntegrationError {
     /// The integrated velocity was not finite.
     #[error("integrated velocity was not finite")]
     InvalidVelocity,
+    /// The integration epoch was not finite.
+    #[error("integration epoch was not finite")]
+    InvalidEpoch,
 }

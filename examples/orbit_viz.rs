@@ -2,8 +2,8 @@
 
 use macroquad::prelude::*;
 use space_sim::{
-    Angle, CircularOrbit, Distance, Epoch, EulerIntegrator, GravitationalParameter, Integrator,
-    MU_EARTH, OrbitDirection, OrbitPlane, R_EARTH, TimeStep, TwoBodyGravity,
+    Angle, CircularOrbit, Distance, Duration, Epoch, GravitationalParameter, Integrator, MU_EARTH,
+    OrbitDirection, OrbitPlane, R_EARTH, RungeKutta4Integrator, Speed, TimeStep, TwoBodyGravity,
 };
 
 const TRAIL_POINTS_MAX: usize = 2_000;
@@ -28,11 +28,14 @@ async fn async_main() {
 
 struct OrbitVizScenario {
     earth: TwoBodyGravity,
-    integrator: EulerIntegrator,
+    integrator: RungeKutta4Integrator,
     state: space_sim::CartesianState,
     t: Epoch,
     dt: TimeStep,
     earth_radius_m: f64,
+    ideal_orbital_radius: Distance,
+    circular_speed: Speed,
+    orbital_period: Duration,
     meters_per_pixel: f64,
     trail: [Vec2; TRAIL_POINTS_MAX],
     trail_start: usize,
@@ -44,7 +47,7 @@ impl OrbitVizScenario {
         let earth = TwoBodyGravity {
             mu: GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?,
         };
-        let integrator = EulerIntegrator;
+        let integrator = RungeKutta4Integrator;
 
         let altitude_m = 400_000.0;
         let earth_radius_m = R_EARTH;
@@ -64,6 +67,9 @@ impl OrbitVizScenario {
             t: Epoch::from_seconds(0.0)?,
             dt: TimeStep::from_seconds(1.0)?,
             earth_radius_m,
+            ideal_orbital_radius: orbit.radius,
+            circular_speed: orbit.speed()?,
+            orbital_period: orbit.period()?,
             meters_per_pixel: 40_000.0,
             trail: [Vec2::ZERO; TRAIL_POINTS_MAX],
             trail_start: 0,
@@ -117,20 +123,39 @@ impl OrbitVizScenario {
             let ship = world_to_screen(position.x, position.y, self.meters_per_pixel) + center;
             draw_circle(ship.x, ship.y, 4.0, WHITE);
 
-            let altitude_m = position.norm() - self.earth_radius_m;
-            draw_text(
-                &format!(
-                    "t = {:.0}s | altitude = {:.0} km",
-                    self.t.seconds(),
-                    altitude_m / 1000.0
-                ),
-                20.0,
-                30.0,
-                24.0,
-                WHITE,
-            );
+            self.draw_hud(position.norm());
 
             next_frame().await;
+        }
+    }
+
+    fn draw_hud(&self, radius_m: f64) {
+        let altitude_m = radius_m - self.earth_radius_m;
+        let radius_drift_m = radius_m - self.ideal_orbital_radius.meters();
+        let orbit_progress = self.t.seconds() / self.orbital_period.seconds();
+        let orbit_progress_percent = orbit_progress.fract() * 100.0;
+
+        let lines = [
+            format!(
+                "t = {:.0}s | orbit progress = {:.1}% ({:.2} rev)",
+                self.t.seconds(),
+                orbit_progress_percent,
+                orbit_progress,
+            ),
+            format!(
+                "altitude = {:.0} km | circular radius drift = {:+.3} km",
+                altitude_m / 1000.0,
+                radius_drift_m / 1000.0,
+            ),
+            format!(
+                "circular speed = {:.3} km/s | period = {:.3} min",
+                self.circular_speed.meters_per_second() / 1000.0,
+                self.orbital_period.seconds() / 60.0,
+            ),
+        ];
+
+        for (index, line) in lines.iter().enumerate() {
+            draw_text(line, 20.0, 30.0 + index as f32 * 26.0, 24.0, WHITE);
         }
     }
 }
