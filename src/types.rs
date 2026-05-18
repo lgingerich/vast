@@ -21,6 +21,30 @@ impl Angle {
     }
 }
 
+/// Angular rate, measured in radians per second.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct AngularRate(f64);
+
+impl AngularRate {
+    /// Creates an angular rate from radians per second.
+    pub fn from_radians_per_second(value: f64) -> Option<Self> {
+        value.is_finite().then_some(Self(value))
+    }
+
+    /// Returns this angular rate in radians per second.
+    #[inline]
+    pub const fn radians_per_second(self) -> f64 {
+        self.0
+    }
+
+    /// Returns this angular rate in degrees per day.
+    #[inline]
+    pub fn degrees_per_day(self) -> f64 {
+        self.0.to_degrees() * 86_400.0
+    }
+}
+
 /// Instant in simulation time, measured in seconds from the simulation epoch.
 ///
 /// `Epoch` represents an absolute point on the simulation timeline.
@@ -341,6 +365,27 @@ mod tests {
     fn angle_rejects_nonfinite_values() {
         for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
             assert!(Angle::from_radians(value).is_none());
+        }
+    }
+
+    #[test]
+    fn angular_rate_converts_to_degrees_per_day() -> Result<(), &'static str> {
+        let rate = AngularRate::from_radians_per_second(std::f64::consts::PI / 86_400.0)
+            .ok_or("invalid angular rate")?;
+
+        assert_close(
+            rate.radians_per_second(),
+            std::f64::consts::PI / 86_400.0,
+            EPS,
+        );
+        assert_close(rate.degrees_per_day(), 180.0, EPS);
+        Ok(())
+    }
+
+    #[test]
+    fn angular_rate_rejects_nonfinite_values() {
+        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(AngularRate::from_radians_per_second(value).is_none());
         }
     }
 

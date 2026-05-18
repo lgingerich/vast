@@ -2,7 +2,7 @@ use nalgebra::Vector3;
 
 use crate::diagnostics::Eccentricity;
 use crate::state::{CartesianState, CartesianStates};
-use crate::types::{Angle, Distance, GravitationalParameter};
+use crate::types::{Angle, AngularRate, Distance, GravitationalParameter};
 
 const DEFAULT_CIRCULAR_ECCENTRICITY_TOLERANCE: f64 = 1.0e-6;
 const DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE_RAD: f64 = 1.0e-10;
@@ -131,6 +131,60 @@ pub struct EquatorialEllipticElements {
     pub longitude_of_periapsis: Angle,
     /// True anomaly measured from periapsis.
     pub true_anomaly: Angle,
+}
+
+/// First-order J2 secular rates for near-circular orbits.
+#[derive(Debug, Clone, Copy)]
+pub struct J2SecularRates {
+    /// Right ascension of the ascending node rate.
+    pub raan_rate: AngularRate,
+}
+
+/// Computes first-order J2 RAAN drift for a circular orbit.
+///
+/// This is a secular validation helper, not a state propagator.
+pub fn j2_circular_raan_rate(
+    semi_major_axis: Distance,
+    inclination: Angle,
+    mu: GravitationalParameter,
+    equatorial_radius: Distance,
+    j2: f64,
+) -> Option<AngularRate> {
+    let semi_major_axis = semi_major_axis.meters();
+    let inclination = inclination.radians();
+    let mu = mu.meters_cubed_per_second_squared();
+    let equatorial_radius = equatorial_radius.meters();
+
+    if !j2.is_finite() {
+        return None;
+    }
+
+    debug_assert!(semi_major_axis.is_finite());
+    debug_assert!(semi_major_axis > 0.0);
+    debug_assert!(inclination.is_finite());
+    debug_assert!(mu.is_finite());
+    debug_assert!(mu > 0.0);
+    debug_assert!(equatorial_radius.is_finite());
+    debug_assert!(equatorial_radius > 0.0);
+
+    let mean_motion = (mu / semi_major_axis.powi(3)).sqrt();
+    let radius_ratio = equatorial_radius / semi_major_axis;
+    AngularRate::from_radians_per_second(
+        -1.5 * j2 * mean_motion * radius_ratio * radius_ratio * inclination.cos(),
+    )
+}
+
+/// Computes first-order J2 secular rates for a circular orbit.
+pub fn j2_circular_secular_rates(
+    semi_major_axis: Distance,
+    inclination: Angle,
+    mu: GravitationalParameter,
+    equatorial_radius: Distance,
+    j2: f64,
+) -> Option<J2SecularRates> {
+    Some(J2SecularRates {
+        raan_rate: j2_circular_raan_rate(semi_major_axis, inclination, mu, equatorial_radius, j2)?,
+    })
 }
 
 impl OrbitalElements {
@@ -327,12 +381,12 @@ fn normalize_angle(radians: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::constants::{MU_EARTH, R_EARTH};
-    use crate::dynamics::TwoBodyGravity;
+    use crate::constants::{J2_EARTH, MU_EARTH, R_EARTH};
+    use crate::dynamics::{OblateBodyGravity, TwoBodyGravity};
     use crate::integrators::{Integrator, VelocityVerletIntegrator};
     use crate::orbits::{CircularOrbit, CircularOrbitOrientation, OrbitDirection};
     use crate::state::CartesianStateBuffer;
-    use crate::types::{Epoch, Position, TimeStep, Velocity};
+    use crate::types::{Duration, Epoch, Position, TimeStep, Velocity};
 
     type TestResult = Result<(), &'static str>;
 
@@ -364,6 +418,175 @@ mod tests {
             (actual - expected).abs() <= tolerance,
             "expected {actual} to be within {tolerance} of {expected}",
         );
+    }
+
+    fn angle_delta_degrees(final_degrees: f64, initial_degrees: f64) -> f64 {
+        let delta = (final_degrees - initial_degrees).rem_euclid(360.0);
+        if delta > 180.0 { delta - 360.0 } else { delta }
+    }
+
+    fn raan_degrees(elements: &OrbitalElements) -> Option<f64> {
+        match elements {
+            OrbitalElements::Classical(elements) => Some(
+                elements
+                    .right_ascension_of_ascending_node
+                    .radians()
+                    .to_degrees(),
+            ),
+            OrbitalElements::CircularInclined(elements) => Some(
+                elements
+                    .right_ascension_of_ascending_node
+                    .radians()
+                    .to_degrees(),
+            ),
+            OrbitalElements::CircularEquatorial(_) | OrbitalElements::EquatorialElliptic(_) => None,
+        }
+    }
+
+    #[test]
+    fn j2_circular_raan_rate_is_negative_for_inclined_leo() -> TestResult {
+        let rate = j2_circular_raan_rate(
+            Distance::from_meters(R_EARTH + 600_000.0).ok_or("invalid semi-major axis")?,
+            Angle::from_radians(51.6_f64.to_radians()).ok_or("invalid inclination")?,
+            earth_mu().ok_or("invalid mu")?,
+            Distance::from_meters(R_EARTH).ok_or("invalid equatorial radius")?,
+            J2_EARTH,
+        )
+        .ok_or("invalid rate")?;
+
+        assert!(rate.radians_per_second() < 0.0);
+        assert_close(rate.degrees_per_day(), -4.518243696, 1.0e-9);
+        Ok(())
+    }
+
+    #[test]
+    fn j2_circular_raan_rate_is_zero_when_j2_is_zero() -> TestResult {
+        let rate = j2_circular_raan_rate(
+            Distance::from_meters(R_EARTH + 600_000.0).ok_or("invalid semi-major axis")?,
+            Angle::from_radians(51.6_f64.to_radians()).ok_or("invalid inclination")?,
+            earth_mu().ok_or("invalid mu")?,
+            Distance::from_meters(R_EARTH).ok_or("invalid equatorial radius")?,
+            0.0,
+        )
+        .ok_or("invalid rate")?;
+
+        assert_close(rate.radians_per_second(), 0.0, EPS);
+        assert_close(rate.degrees_per_day(), 0.0, EPS);
+        Ok(())
+    }
+
+    #[test]
+    fn j2_circular_raan_rate_is_zero_for_polar_orbit() -> TestResult {
+        let rate = j2_circular_raan_rate(
+            Distance::from_meters(R_EARTH + 600_000.0).ok_or("invalid semi-major axis")?,
+            Angle::from_radians(std::f64::consts::FRAC_PI_2).ok_or("invalid inclination")?,
+            earth_mu().ok_or("invalid mu")?,
+            Distance::from_meters(R_EARTH).ok_or("invalid equatorial radius")?,
+            J2_EARTH,
+        )
+        .ok_or("invalid rate")?;
+
+        assert_close(rate.degrees_per_day(), 0.0, 1.0e-12);
+        Ok(())
+    }
+
+    #[test]
+    fn j2_circular_raan_rate_rejects_nonfinite_j2() -> TestResult {
+        assert!(
+            j2_circular_raan_rate(
+                Distance::from_meters(R_EARTH + 600_000.0).ok_or("invalid semi-major axis")?,
+                Angle::from_radians(51.6_f64.to_radians()).ok_or("invalid inclination")?,
+                earth_mu().ok_or("invalid mu")?,
+                Distance::from_meters(R_EARTH).ok_or("invalid equatorial radius")?,
+                f64::NAN,
+            )
+            .is_none()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn j2_circular_secular_rates_wraps_raan_rate() -> TestResult {
+        let rates = j2_circular_secular_rates(
+            Distance::from_meters(R_EARTH + 600_000.0).ok_or("invalid semi-major axis")?,
+            Angle::from_radians(51.6_f64.to_radians()).ok_or("invalid inclination")?,
+            earth_mu().ok_or("invalid mu")?,
+            Distance::from_meters(R_EARTH).ok_or("invalid equatorial radius")?,
+            J2_EARTH,
+        )
+        .ok_or("invalid rates")?;
+
+        assert!(rates.raan_rate.radians_per_second() < 0.0);
+        Ok(())
+    }
+
+    #[test]
+    fn simulated_j2_raan_drift_matches_analytical_rate() -> TestResult {
+        let mu = earth_mu().ok_or("invalid mu")?;
+        let orbit = CircularOrbit {
+            radius: Distance::from_meters(R_EARTH + 600_000.0).ok_or("invalid radius")?,
+            mu,
+            orientation: CircularOrbitOrientation::new(
+                Angle::from_radians(51.6_f64.to_radians()).ok_or("invalid inclination")?,
+                Angle::from_radians(32.0_f64.to_radians()).ok_or("invalid raan")?,
+            ),
+            phase: Angle::from_radians(0.0).ok_or("invalid phase")?,
+            direction: OrbitDirection::Prograde,
+        };
+        let mut states = CartesianStateBuffer::<1>::new();
+        states
+            .write_from_state(
+                0,
+                &orbit.to_cartesian_state().ok_or("invalid initial state")?,
+            )
+            .map_err(|_| "failed to write state")?;
+        let gravity = OblateBodyGravity {
+            mu,
+            equatorial_radius: Distance::from_meters(R_EARTH).ok_or("invalid equatorial radius")?,
+            j2: J2_EARTH,
+        };
+        let integrator = VelocityVerletIntegrator;
+        let dt = TimeStep::from_seconds(30.0).ok_or("invalid time step")?;
+        let duration = Duration::from_seconds(3.0 * 86_400.0).ok_or("invalid duration")?;
+        let initial_raan = raan_degrees(
+            &OrbitalElements::from_states(&states.view(), 0, mu)
+                .ok_or("invalid initial elements")?,
+        )
+        .ok_or("initial RAAN undefined")?;
+        let mut epoch = Epoch::from_seconds(0.0).ok_or("invalid epoch")?;
+
+        while epoch.seconds() < duration.seconds() {
+            let remaining_seconds = duration.seconds() - epoch.seconds();
+            let step = TimeStep::from_seconds(dt.seconds().min(remaining_seconds))
+                .ok_or("invalid step")?;
+            integrator
+                .step(&gravity, &mut states.view_mut(), 0, epoch, step)
+                .map_err(|_| "integration failed")?;
+            epoch = epoch.advance_by(step).ok_or("invalid next epoch")?;
+        }
+
+        let final_raan = raan_degrees(
+            &OrbitalElements::from_states(&states.view(), 0, mu).ok_or("invalid final elements")?,
+        )
+        .ok_or("final RAAN undefined")?;
+        let simulated_drift_degrees_per_day =
+            angle_delta_degrees(final_raan, initial_raan) / (duration.seconds() / 86_400.0);
+        let analytical_drift_degrees_per_day = j2_circular_raan_rate(
+            orbit.radius,
+            orbit.orientation.inclination,
+            mu,
+            Distance::from_meters(R_EARTH).ok_or("invalid equatorial radius")?,
+            J2_EARTH,
+        )
+        .ok_or("invalid analytical rate")?
+        .degrees_per_day();
+
+        assert_close(
+            simulated_drift_degrees_per_day,
+            analytical_drift_degrees_per_day,
+            0.1,
+        );
+        Ok(())
     }
 
     #[test]

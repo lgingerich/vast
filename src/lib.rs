@@ -14,7 +14,8 @@ pub use diagnostics::{Eccentricity, OrbitalDiagnostics, SpecificAngularMomentum,
 pub use dynamics::{Dynamics, OblateBodyGravity, TwoBodyGravity};
 pub use elements::{
     CircularEquatorialElements, CircularInclinedElements, ClassicalOrbitalElements,
-    EquatorialEllipticElements, OrbitalElementClassification, OrbitalElements,
+    EquatorialEllipticElements, J2SecularRates, OrbitalElementClassification, OrbitalElements,
+    j2_circular_raan_rate, j2_circular_secular_rates,
 };
 pub use errors::{DynamicsError, IntegrationError, StateError};
 pub use integrators::{
@@ -28,6 +29,6 @@ pub use state::{
     CartesianVelocityComponents,
 };
 pub use types::{
-    Acceleration, Angle, Distance, Duration, Epoch, GravitationalParameter, Position, Speed,
-    TimeStep, Velocity,
+    Acceleration, Angle, AngularRate, Distance, Duration, Epoch, GravitationalParameter, Position,
+    Speed, TimeStep, Velocity,
 };

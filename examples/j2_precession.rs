@@ -4,6 +4,7 @@ use space_sim::{
     Angle, CartesianStateBuffer, CircularOrbit, CircularOrbitOrientation, Distance, Duration,
     Epoch, GravitationalParameter, Integrator, J2_EARTH, MU_EARTH, OblateBodyGravity,
     OrbitDirection, OrbitalElements, R_EARTH, TimeStep, TwoBodyGravity, VelocityVerletIntegrator,
+    j2_circular_raan_rate,
 };
 
 const ALTITUDE_M: f64 = 600_000.0;
@@ -38,6 +39,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dt = TimeStep::from_seconds(STEP_SECONDS).ok_or("invalid time step")?;
     let duration = Duration::from_seconds(PROPAGATION_DAYS * 86_400.0)
         .ok_or("invalid propagation duration")?;
+    let analytical_raan_rate = j2_circular_raan_rate(
+        orbit.radius,
+        orbit.orientation.inclination,
+        mu,
+        Distance::from_meters(R_EARTH).ok_or("invalid equatorial radius")?,
+        J2_EARTH,
+    )
+    .ok_or("invalid analytical RAAN rate")?;
     let mut two_body_states = CartesianStateBuffer::<1>::new();
     let mut j2_states = CartesianStateBuffer::<1>::new();
     two_body_states.write_from_state(0, &initial_state)?;
@@ -70,6 +79,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     .ok_or("final J2 RAAN is undefined")?;
     let two_body_drift = angle_delta_degrees(final_two_body_raan, initial_raan);
     let j2_drift = angle_delta_degrees(final_j2_raan, initial_raan);
+    let analytical_drift_per_day = analytical_raan_rate.degrees_per_day();
+    let simulated_drift_per_day = j2_drift / PROPAGATION_DAYS;
 
     println!(
         "J2 precession demo: altitude {:.0} km | inclination {:.1} deg",
@@ -89,8 +100,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!(
         "J2 RAAN: {:.6} deg | drift: {:+.6} deg/day",
-        final_j2_raan,
-        j2_drift / PROPAGATION_DAYS,
+        final_j2_raan, simulated_drift_per_day,
+    );
+    println!(
+        "analytical J2 drift: {:+.6} deg/day | error: {:+.6} deg/day",
+        analytical_drift_per_day,
+        simulated_drift_per_day - analytical_drift_per_day,
     );
 
     Ok(())
