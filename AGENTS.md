@@ -51,10 +51,6 @@ not copy TigerBeetle-specific constraints blindly.
 
 ## Invariants And Assertions
 
-- Put invariants on the type that owns the meaning. Use the existing
-  `debug_assert_valid()` pattern on `Epoch`, `Duration`, `Position`, `Velocity`,
-  `Acceleration`, and state types instead of repeating component checks in every
-  algorithm.
 - Call invariant checks at boundaries: before using caller-provided state, after
   computing derived values, and before returning new simulation state.
 - Split unrelated assertions. Prefer:
@@ -100,6 +96,23 @@ not copy TigerBeetle-specific constraints blindly.
 - Put explicit bounds on loops that process simulation steps, histories, events,
   or render trails. If a loop is intentionally unbounded, make that clear in the
   surrounding structure.
+
+## State Storage And Stepping
+
+- Use `CartesianStateBuffer`, `CartesianStates`, and `CartesianStatesMut` as the
+  core dense Cartesian state storage path. The internal layout is SoA for batched
+  stepping, but public names should remain domain-oriented.
+- Keep `CartesianState` as a boundary type for orbit construction, tests,
+  diagnostics, and readable single-body setup. Do not use it as the core hot-loop
+  storage path when stepping simulations.
+- Integrators should implement indexed stepping over `CartesianStatesMut` and
+  remain allocation-free.
+- Prefer `VelocityVerletIntegrator` or `LeapfrogIntegrator` for long orbital
+  rollouts with position-dependent conservative dynamics. Use RK4 for
+  comparison, controls, thrust, drag, or other dissipative/non-conservative
+  effects.
+- Do not claim mutual N-body or coupled dynamics readiness until stepping uses a
+  read-old/write-new state split or another deterministic update strategy.
 
 ## Rust Style
 

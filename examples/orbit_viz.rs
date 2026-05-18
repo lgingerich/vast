@@ -2,9 +2,9 @@
 
 use macroquad::prelude::*;
 use space_sim::{
-    Angle, CircularOrbit, Distance, Duration, Epoch, GravitationalParameter, Integrator, MU_EARTH,
-    OrbitDirection, OrbitPlane, OrbitalDiagnostics, R_EARTH, RungeKutta4Integrator, Speed,
-    TimeStep, TwoBodyGravity,
+    Angle, CartesianStateBuffer, CircularOrbit, Distance, Duration, Epoch, GravitationalParameter,
+    Integrator, MU_EARTH, OrbitDirection, OrbitPlane, OrbitalDiagnostics, R_EARTH,
+    RungeKutta4Integrator, Speed, TimeStep, TwoBodyGravity,
 };
 
 const TRAIL_POINTS_MAX: usize = 2_000;
@@ -30,7 +30,7 @@ async fn async_main() {
 struct OrbitVizScenario {
     earth: TwoBodyGravity,
     integrator: RungeKutta4Integrator,
-    state: space_sim::CartesianState,
+    states: CartesianStateBuffer<1>,
     t: Epoch,
     dt: TimeStep,
     earth_radius_m: f64,
@@ -61,10 +61,15 @@ impl OrbitVizScenario {
             direction: OrbitDirection::Prograde,
         };
 
+        let mut states = CartesianStateBuffer::<1>::new();
+        states
+            .write_from_state(0, &orbit.to_cartesian_state()?)
+            .ok()?;
+
         Some(Self {
             earth,
             integrator,
-            state: orbit.to_cartesian_state()?,
+            states,
             t: Epoch::from_seconds(0.0)?,
             dt: TimeStep::from_seconds(1.0)?,
             earth_radius_m,
@@ -81,21 +86,27 @@ impl OrbitVizScenario {
     async fn run(&mut self) {
         loop {
             for _ in 0..20 {
-                let Ok(next_state) =
-                    self.integrator
-                        .step(&self.earth, &self.state, self.t, self.dt)
-                else {
+                let Ok(()) = self.integrator.step(
+                    &self.earth,
+                    &mut self.states.view_mut(),
+                    0,
+                    self.t,
+                    self.dt,
+                ) else {
                     eprintln!("simulation state became invalid");
                     return;
                 };
-                self.state = next_state;
                 let Some(next_epoch) = self.t.advance_by(self.dt) else {
                     eprintln!("simulation epoch became invalid");
                     return;
                 };
                 self.t = next_epoch;
 
-                let position = self.state.position.vector();
+                let Ok(position) = self.states.view().position(0) else {
+                    eprintln!("simulation state became invalid");
+                    return;
+                };
+                let position = position.vector();
                 let trail_next = (self.trail_start + self.trail_count) % TRAIL_POINTS_MAX;
                 self.trail[trail_next] =
                     world_to_screen(position.x, position.y, self.meters_per_pixel);
@@ -120,7 +131,11 @@ impl OrbitVizScenario {
                 draw_line(start.x, start.y, end.x, end.y, 1.0, GREEN);
             }
 
-            let position = self.state.position.vector();
+            let Ok(position) = self.states.view().position(0) else {
+                eprintln!("simulation state became invalid");
+                return;
+            };
+            let position = position.vector();
             let ship = world_to_screen(position.x, position.y, self.meters_per_pixel) + center;
             draw_circle(ship.x, ship.y, 4.0, WHITE);
 
@@ -131,7 +146,9 @@ impl OrbitVizScenario {
     }
 
     fn draw_hud(&self) {
-        let Some(diagnostics) = OrbitalDiagnostics::from_state(&self.state, self.earth.mu) else {
+        let Some(diagnostics) =
+            OrbitalDiagnostics::from_states(&self.states.view(), 0, self.earth.mu)
+        else {
             draw_text("orbital diagnostics unavailable", 20.0, 30.0, 24.0, RED);
             return;
         };

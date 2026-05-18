@@ -1,10 +1,10 @@
 #![allow(missing_docs)]
 
 use space_sim::{
-    Angle, CartesianState, CircularOrbit, Distance, Duration, Epoch, EulerIntegrator,
-    GravitationalParameter, Integrator, MU_EARTH, OrbitDirection, OrbitPlane, OrbitalDiagnostics,
-    R_EARTH, RungeKutta4Integrator, SpecificAngularMomentum, SpecificEnergy, Speed, TimeStep,
-    TwoBodyGravity,
+    Angle, CartesianState, CartesianStateBuffer, CircularOrbit, Distance, Duration, Epoch,
+    EulerIntegrator, GravitationalParameter, Integrator, MU_EARTH, OrbitDirection, OrbitPlane,
+    OrbitalDiagnostics, R_EARTH, RungeKutta4Integrator, SpecificAngularMomentum, SpecificEnergy,
+    Speed, TimeStep, TwoBodyGravity,
 };
 
 const ALTITUDE_M: f64 = 400_000.0;
@@ -92,7 +92,8 @@ fn propagate_one_period<I: Integrator>(
     let initial_diagnostics = OrbitalDiagnostics::from_state(initial_state, gravity.mu)
         .ok_or("invalid initial diagnostics")?;
     let mut epoch = Epoch::from_seconds(0.0).ok_or("invalid initial epoch")?;
-    let mut state = CartesianState::new(initial_state.position, initial_state.velocity);
+    let mut states = CartesianStateBuffer::<1>::new();
+    states.write_from_state(0, initial_state)?;
     let mut steps = 0;
 
     while epoch.seconds() < period.seconds() {
@@ -100,11 +101,12 @@ fn propagate_one_period<I: Integrator>(
         let step_seconds = dt.seconds().min(remaining_seconds);
         let step = TimeStep::from_seconds(step_seconds).ok_or("invalid final time step")?;
 
-        state = integrator.step(gravity, &state, epoch, step)?;
+        integrator.step(gravity, &mut states.view_mut(), 0, epoch, step)?;
         epoch = epoch.advance_by(step).ok_or("invalid next epoch")?;
         steps += 1;
     }
 
+    let state = states.read_state(0)?;
     let position_drift = Distance::from_meters(
         (state.position.vector() - initial_position.vector())
             .norm()

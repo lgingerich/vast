@@ -1,6 +1,6 @@
 use nalgebra::Vector3;
 
-use crate::state::CartesianState;
+use crate::state::{CartesianState, CartesianStates};
 use crate::types::{Distance, GravitationalParameter, Speed};
 
 /// Specific orbital energy, measured in square meters per square second.
@@ -84,8 +84,28 @@ pub struct OrbitalDiagnostics {
 impl OrbitalDiagnostics {
     /// Computes two-body diagnostics from an inertial Cartesian state.
     pub fn from_state(state: &CartesianState, mu: GravitationalParameter) -> Option<Self> {
-        let position = state.position.vector();
-        let velocity = state.velocity.vector();
+        Self::from_components(state.position.vector(), state.velocity.vector(), mu)
+    }
+
+    /// Computes two-body diagnostics from an indexed inertial Cartesian state view.
+    pub fn from_states(
+        states: &CartesianStates<'_>,
+        index: usize,
+        mu: GravitationalParameter,
+    ) -> Option<Self> {
+        let components = states.components(index).ok()?;
+        Self::from_components(
+            components.position.vector(),
+            components.velocity.vector(),
+            mu,
+        )
+    }
+
+    fn from_components(
+        position: Vector3<f64>,
+        velocity: Vector3<f64>,
+        mu: GravitationalParameter,
+    ) -> Option<Self> {
         let mu = mu.meters_cubed_per_second_squared();
         let radius = position.norm();
         let speed = velocity.norm();
@@ -150,6 +170,7 @@ mod tests {
     use super::*;
     use crate::constants::{MU_EARTH, R_EARTH};
     use crate::orbits::{CircularOrbit, OrbitDirection, OrbitPlane};
+    use crate::state::CartesianStateBuffer;
     use crate::types::{Angle, Position, Velocity};
 
     type TestResult = Result<(), &'static str>;
@@ -182,9 +203,13 @@ mod tests {
     fn circular_orbit_diagnostics_match_two_body_invariants() -> TestResult {
         let orbit = circular_orbit().ok_or("invalid orbit")?;
         let state = orbit.to_cartesian_state().ok_or("invalid state")?;
+        let mut states = CartesianStateBuffer::<1>::new();
+        states
+            .write_from_state(0, &state)
+            .map_err(|_| "invalid state buffer")?;
 
-        let diagnostics =
-            OrbitalDiagnostics::from_state(&state, orbit.mu).ok_or("invalid diagnostics")?;
+        let diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, orbit.mu)
+            .ok_or("invalid diagnostics")?;
 
         let radius = orbit.radius.meters();
         let speed = orbit
@@ -242,8 +267,15 @@ mod tests {
             Position::from_vector(Vector3::zeros()).ok_or("invalid position")?,
             Velocity::from_vector(Vector3::zeros()).ok_or("invalid velocity")?,
         );
+        let mut states = CartesianStateBuffer::<1>::new();
+        states
+            .write_from_state(0, &state)
+            .map_err(|_| "invalid state buffer")?;
 
-        assert!(OrbitalDiagnostics::from_state(&state, earth_mu().ok_or("invalid mu")?).is_none());
+        assert!(
+            OrbitalDiagnostics::from_states(&states.view(), 0, earth_mu().ok_or("invalid mu")?)
+                .is_none()
+        );
         Ok(())
     }
 
@@ -261,6 +293,17 @@ mod tests {
         assert!(diagnostics.semi_major_axis.is_none());
         assert!(diagnostics.periapsis_radius.is_none());
         assert!(diagnostics.apoapsis_radius.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn diagnostics_reject_invalid_state_index() -> TestResult {
+        let states = CartesianStateBuffer::<1>::new();
+
+        assert!(
+            OrbitalDiagnostics::from_states(&states.view(), 1, earth_mu().ok_or("invalid mu")?)
+                .is_none()
+        );
         Ok(())
     }
 }
