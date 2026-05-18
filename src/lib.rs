@@ -3,6 +3,7 @@
 mod constants;
 mod diagnostics;
 mod dynamics;
+mod elements;
 mod errors;
 mod integrators;
 mod orbits;
@@ -11,6 +12,10 @@ mod types;
 pub use constants::{MU_EARTH, R_EARTH};
 pub use diagnostics::{Eccentricity, OrbitalDiagnostics, SpecificAngularMomentum, SpecificEnergy};
 pub use dynamics::{Dynamics, TwoBodyGravity};
+pub use elements::{
+    CircularEquatorialElements, CircularInclinedElements, ClassicalOrbitalElements,
+    EquatorialEllipticElements, OrbitalElements,
+};
 pub use errors::{DynamicsError, IntegrationError, StateError};
 pub use integrators::{
     EulerIntegrator, Integrator, LeapfrogIntegrator, RungeKutta4Integrator,
