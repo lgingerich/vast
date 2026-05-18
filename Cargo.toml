@@ -20,6 +20,10 @@ path = "examples/orbit_period.rs"
 name = "inclined_orbit"
 path = "examples/inclined_orbit.rs"
 
+[[example]]
+name = "j2_precession"
+path = "examples/j2_precession.rs"
+
 [dependencies]
 nalgebra = "0.34.2"
 thiserror = "2.0.18"

@@ -9,9 +9,9 @@ mod integrators;
 mod orbits;
 mod state;
 mod types;
-pub use constants::{MU_EARTH, R_EARTH};
+pub use constants::{J2_EARTH, MU_EARTH, R_EARTH};
 pub use diagnostics::{Eccentricity, OrbitalDiagnostics, SpecificAngularMomentum, SpecificEnergy};
-pub use dynamics::{Dynamics, TwoBodyGravity};
+pub use dynamics::{Dynamics, OblateBodyGravity, TwoBodyGravity};
 pub use elements::{
     CircularEquatorialElements, CircularInclinedElements, ClassicalOrbitalElements,
     EquatorialEllipticElements, OrbitalElements,

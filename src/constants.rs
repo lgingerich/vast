@@ -5,3 +5,6 @@ pub const MU_EARTH: f64 = 3.986004418e14;
 
 /// Earth's equatorial radius in meters.
 pub const R_EARTH: f64 = 6378137.0;
+
+/// Earth's second zonal harmonic coefficient, dimensionless.
+pub const J2_EARTH: f64 = 1.08262668e-3;
