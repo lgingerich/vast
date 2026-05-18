@@ -6,6 +6,9 @@ use nalgebra::Vector3;
 pub struct Angle(f64);
 
 impl Angle {
+    /// Zero radians.
+    pub const ZERO: Self = Self(0.0);
+
     /// Creates an angle from radians.
     pub fn from_radians(value: f64) -> Option<Self> {
         value.is_finite().then_some(Self(value))

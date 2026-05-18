@@ -1,10 +1,11 @@
 #![allow(missing_docs)]
 
 use space_sim::{
-    Angle, CartesianState, CartesianStateBuffer, CircularOrbit, Distance, Duration, Epoch,
-    EulerIntegrator, GravitationalParameter, Integrator, MU_EARTH, OrbitDirection, OrbitPlane,
-    OrbitalDiagnostics, R_EARTH, RungeKutta4Integrator, SpecificAngularMomentum, SpecificEnergy,
-    Speed, TimeStep, TwoBodyGravity,
+    Angle, CartesianState, CartesianStateBuffer, CircularOrbit, CircularOrbitOrientation, Distance,
+    Duration, Epoch, EulerIntegrator, GravitationalParameter, Integrator, LeapfrogIntegrator,
+    MU_EARTH, OrbitDirection, OrbitalDiagnostics, R_EARTH, RungeKutta4Integrator,
+    SpecificAngularMomentum, SpecificEnergy, Speed, TimeStep, TwoBodyGravity,
+    VelocityVerletIntegrator,
 };
 
 const ALTITUDE_M: f64 = 400_000.0;
@@ -28,7 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let orbit = CircularOrbit {
         radius: Distance::from_meters(R_EARTH + ALTITUDE_M).ok_or("invalid orbital radius")?,
         mu,
-        plane: OrbitPlane::Xy,
+        orientation: CircularOrbitOrientation::equatorial(),
         phase: Angle::from_radians(0.0).ok_or("invalid initial phase")?,
         direction: OrbitDirection::Prograde,
     };
@@ -41,6 +42,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let gravity = TwoBodyGravity { mu };
     let euler = EulerIntegrator;
     let rk4 = RungeKutta4Integrator;
+    let verlet = VelocityVerletIntegrator;
+    let leapfrog = LeapfrogIntegrator;
 
     println!(
         "Circular Earth orbit at {:.0} km altitude",
@@ -72,9 +75,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let euler_summary =
             propagate_one_period(&euler, &gravity, &initial_state, speed, period, dt)?;
         let rk4_summary = propagate_one_period(&rk4, &gravity, &initial_state, speed, period, dt)?;
+        let verlet_summary =
+            propagate_one_period(&verlet, &gravity, &initial_state, speed, period, dt)?;
+        let leapfrog_summary =
+            propagate_one_period(&leapfrog, &gravity, &initial_state, speed, period, dt)?;
 
         print_summary("Euler", &euler_summary);
         print_summary("RK4", &rk4_summary);
+        print_summary("Verlet", &verlet_summary);
+        print_summary("Leapfrog", &leapfrog_summary);
     }
 
     Ok(())

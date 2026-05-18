@@ -2,9 +2,9 @@
 
 use macroquad::prelude::*;
 use space_sim::{
-    Angle, CartesianStateBuffer, CircularOrbit, Distance, Duration, Epoch, GravitationalParameter,
-    Integrator, MU_EARTH, OrbitDirection, OrbitPlane, OrbitalDiagnostics, R_EARTH,
-    RungeKutta4Integrator, Speed, TimeStep, TwoBodyGravity,
+    Angle, CartesianStateBuffer, CircularOrbit, CircularOrbitOrientation, Distance, Duration,
+    Epoch, GravitationalParameter, Integrator, LeapfrogIntegrator, MU_EARTH, OrbitDirection,
+    OrbitalDiagnostics, R_EARTH, Speed, TimeStep, TwoBodyGravity,
 };
 
 const TRAIL_POINTS_MAX: usize = 2_000;
@@ -29,7 +29,7 @@ async fn async_main() {
 
 struct OrbitVizScenario {
     earth: TwoBodyGravity,
-    integrator: RungeKutta4Integrator,
+    integrator: LeapfrogIntegrator,
     states: CartesianStateBuffer<1>,
     t: Epoch,
     dt: TimeStep,
@@ -48,7 +48,7 @@ impl OrbitVizScenario {
         let earth = TwoBodyGravity {
             mu: GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?,
         };
-        let integrator = RungeKutta4Integrator;
+        let integrator = LeapfrogIntegrator;
 
         let altitude_m = 400_000.0;
         let earth_radius_m = R_EARTH;
@@ -56,7 +56,7 @@ impl OrbitVizScenario {
         let orbit = CircularOrbit {
             radius: Distance::from_meters(orbital_radius_m)?,
             mu: earth.mu,
-            plane: OrbitPlane::Xy,
+            orientation: CircularOrbitOrientation::equatorial(),
             phase: Angle::from_radians(0.0)?,
             direction: OrbitDirection::Prograde,
         };

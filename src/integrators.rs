@@ -273,7 +273,7 @@ mod tests {
     use crate::diagnostics::OrbitalDiagnostics;
     use crate::dynamics::TwoBodyGravity;
     use crate::errors::{DynamicsError, StateError};
-    use crate::orbits::{CircularOrbit, OrbitDirection, OrbitPlane};
+    use crate::orbits::{CircularOrbit, CircularOrbitOrientation, OrbitDirection};
     use crate::state::{CartesianAccelerationComponents, CartesianState, CartesianStateBuffer};
     use crate::types::{Acceleration, Angle, Distance, GravitationalParameter, Position, Velocity};
     use nalgebra::Vector3;
@@ -794,7 +794,7 @@ mod tests {
         Some(CircularOrbit {
             radius: Distance::from_meters(radius_m)?,
             mu,
-            plane: OrbitPlane::Xy,
+            orientation: CircularOrbitOrientation::equatorial(),
             phase: Angle::from_radians(phase_rad)?,
             direction: OrbitDirection::Prograde,
         })

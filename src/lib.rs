@@ -16,7 +16,7 @@ pub use integrators::{
     EulerIntegrator, Integrator, LeapfrogIntegrator, RungeKutta4Integrator,
     VelocityVerletIntegrator,
 };
-pub use orbits::{CircularOrbit, Orbit, OrbitDirection, OrbitPlane};
+pub use orbits::{CircularOrbit, CircularOrbitOrientation, Orbit, OrbitDirection};
 pub use state::{
     CartesianAccelerationComponents, CartesianPositionComponents, CartesianState,
     CartesianStateBuffer, CartesianStateComponents, CartesianStates, CartesianStatesMut,

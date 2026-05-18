@@ -169,7 +169,7 @@ fn bound_semi_major_axis(mu: f64, specific_energy: f64) -> Option<Distance> {
 mod tests {
     use super::*;
     use crate::constants::{MU_EARTH, R_EARTH};
-    use crate::orbits::{CircularOrbit, OrbitDirection, OrbitPlane};
+    use crate::orbits::{CircularOrbit, CircularOrbitOrientation, OrbitDirection};
     use crate::state::CartesianStateBuffer;
     use crate::types::{Angle, Position, Velocity};
 
@@ -182,7 +182,7 @@ mod tests {
         Some(CircularOrbit {
             radius: Distance::from_meters(R_EARTH + ALTITUDE_M)?,
             mu: earth_mu()?,
-            plane: OrbitPlane::Xy,
+            orientation: CircularOrbitOrientation::equatorial(),
             phase: Angle::from_radians(0.0)?,
             direction: OrbitDirection::Prograde,
         })
