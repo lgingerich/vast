@@ -14,7 +14,7 @@ pub use diagnostics::{Eccentricity, OrbitalDiagnostics, SpecificAngularMomentum,
 pub use dynamics::{Dynamics, OblateBodyGravity, TwoBodyGravity};
 pub use elements::{
     CircularEquatorialElements, CircularInclinedElements, ClassicalOrbitalElements,
-    EquatorialEllipticElements, OrbitalElements,
+    EquatorialEllipticElements, OrbitalElementClassification, OrbitalElements,
 };
 pub use errors::{DynamicsError, IntegrationError, StateError};
 pub use integrators::{
