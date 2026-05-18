@@ -132,6 +132,42 @@ impl Distance {
     }
 }
 
+/// Mass density, measured in kilograms per cubic meter.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct MassDensity(f64);
+
+impl MassDensity {
+    /// Creates a non-negative mass density from kilograms per cubic meter.
+    pub fn from_kilograms_per_cubic_meter(value: f64) -> Option<Self> {
+        (value.is_finite() && value >= 0.0).then_some(Self(value))
+    }
+
+    /// Returns this mass density in kilograms per cubic meter.
+    #[inline]
+    pub const fn kilograms_per_cubic_meter(self) -> f64 {
+        self.0
+    }
+}
+
+/// Area per mass, measured in square meters per kilogram.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct AreaPerMass(f64);
+
+impl AreaPerMass {
+    /// Creates a non-negative area per mass from square meters per kilogram.
+    pub fn from_square_meters_per_kilogram(value: f64) -> Option<Self> {
+        (value.is_finite() && value >= 0.0).then_some(Self(value))
+    }
+
+    /// Returns this area per mass in square meters per kilogram.
+    #[inline]
+    pub const fn square_meters_per_kilogram(self) -> f64 {
+        self.0
+    }
+}
+
 /// Scalar speed, measured in meters per second.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
@@ -323,6 +359,34 @@ mod tests {
     fn distance_rejects_nonpositive_and_nonfinite_values() {
         for value in [-1.0, 0.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
             assert!(Distance::from_meters(value).is_none());
+        }
+    }
+
+    #[test]
+    fn mass_density_accepts_nonnegative_finite_values() {
+        for value in [0.0, f64::MIN_POSITIVE, 1.0] {
+            assert!(MassDensity::from_kilograms_per_cubic_meter(value).is_some());
+        }
+    }
+
+    #[test]
+    fn mass_density_rejects_negative_and_nonfinite_values() {
+        for value in [-1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(MassDensity::from_kilograms_per_cubic_meter(value).is_none());
+        }
+    }
+
+    #[test]
+    fn area_per_mass_accepts_nonnegative_finite_values() {
+        for value in [0.0, f64::MIN_POSITIVE, 1.0] {
+            assert!(AreaPerMass::from_square_meters_per_kilogram(value).is_some());
+        }
+    }
+
+    #[test]
+    fn area_per_mass_rejects_negative_and_nonfinite_values() {
+        for value in [-1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(AreaPerMass::from_square_meters_per_kilogram(value).is_none());
         }
     }
 

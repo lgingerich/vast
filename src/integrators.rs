@@ -38,9 +38,8 @@ impl StateDerivative {
         velocity: Vector3<f64>,
         t: Epoch,
     ) -> Result<Self, IntegrationError> {
-        let position =
-            CartesianPositionComponents::new_unchecked(position.x, position.y, position.z);
-        let acceleration = dynamics.acceleration_at(position, t)?;
+        let state = components_from_vectors(position, velocity)?;
+        let acceleration = dynamics.acceleration_at(state, t)?;
 
         Ok(Self {
             position: velocity,
@@ -72,7 +71,7 @@ impl Integrator for EulerIntegrator {
         dt: TimeStep,
     ) -> Result<(), IntegrationError> {
         let state = states.components(index)?;
-        let acceleration = dynamics.acceleration_at(state.position, t)?;
+        let acceleration = dynamics.acceleration_at(state, t)?;
         let dt_s = dt.seconds();
         let position = state.position.vector();
         let velocity = state.velocity.vector();
@@ -117,7 +116,7 @@ impl Integrator for VelocityVerletIntegrator {
         let dt_s = dt.seconds();
         let position = state.position.vector();
         let velocity = state.velocity.vector();
-        let acceleration = dynamics.acceleration_at(state.position, t)?.vector();
+        let acceleration = dynamics.acceleration_at(state, t)?.vector();
         let next_t = t.advance_by(dt).ok_or(IntegrationError::InvalidEpoch)?;
 
         debug_assert!(dt_s.is_finite());
@@ -136,7 +135,16 @@ impl Integrator for VelocityVerletIntegrator {
         let new_position =
             CartesianPositionComponents::from_meters(new_pos.x, new_pos.y, new_pos.z)
                 .ok_or(IntegrationError::InvalidPosition)?;
-        let next_acceleration = dynamics.acceleration_at(new_position, next_t)?.vector();
+        let next_state = CartesianStateComponents {
+            position: new_position,
+            velocity: CartesianVelocityComponents::from_meters_per_second(
+                (velocity + acceleration * dt_s).x,
+                (velocity + acceleration * dt_s).y,
+                (velocity + acceleration * dt_s).z,
+            )
+            .ok_or(IntegrationError::InvalidVelocity)?,
+        };
+        let next_acceleration = dynamics.acceleration_at(next_state, next_t)?.vector();
         let new_vel = velocity + (acceleration + next_acceleration) * (0.5 * dt_s);
         let new_velocity =
             CartesianVelocityComponents::from_meters_per_second(new_vel.x, new_vel.y, new_vel.z)
@@ -166,7 +174,7 @@ impl Integrator for LeapfrogIntegrator {
         let dt_s = dt.seconds();
         let position = state.position.vector();
         let velocity = state.velocity.vector();
-        let acceleration = dynamics.acceleration_at(state.position, t)?.vector();
+        let acceleration = dynamics.acceleration_at(state, t)?.vector();
         let next_t = t.advance_by(dt).ok_or(IntegrationError::InvalidEpoch)?;
 
         debug_assert!(dt_s.is_finite());
@@ -186,7 +194,16 @@ impl Integrator for LeapfrogIntegrator {
         let new_position =
             CartesianPositionComponents::from_meters(new_pos.x, new_pos.y, new_pos.z)
                 .ok_or(IntegrationError::InvalidPosition)?;
-        let next_acceleration = dynamics.acceleration_at(new_position, next_t)?.vector();
+        let next_state = CartesianStateComponents {
+            position: new_position,
+            velocity: CartesianVelocityComponents::from_meters_per_second(
+                half_velocity.x,
+                half_velocity.y,
+                half_velocity.z,
+            )
+            .ok_or(IntegrationError::InvalidVelocity)?,
+        };
+        let next_acceleration = dynamics.acceleration_at(next_state, next_t)?.vector();
         let new_vel = half_velocity + next_acceleration * (0.5 * dt_s);
         let new_velocity =
             CartesianVelocityComponents::from_meters_per_second(new_vel.x, new_vel.y, new_vel.z)
@@ -266,6 +283,20 @@ fn advance_epoch(t: Epoch, seconds: f64) -> Result<Epoch, IntegrationError> {
     Epoch::from_seconds(t.seconds() + seconds).ok_or(IntegrationError::InvalidEpoch)
 }
 
+fn components_from_vectors(
+    position: Vector3<f64>,
+    velocity: Vector3<f64>,
+) -> Result<CartesianStateComponents, IntegrationError> {
+    Ok(CartesianStateComponents {
+        position: CartesianPositionComponents::from_meters(position.x, position.y, position.z)
+            .ok_or(IntegrationError::InvalidPosition)?,
+        velocity: CartesianVelocityComponents::from_meters_per_second(
+            velocity.x, velocity.y, velocity.z,
+        )
+        .ok_or(IntegrationError::InvalidVelocity)?,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -289,7 +320,7 @@ mod tests {
     impl Dynamics for ConstantAcceleration {
         fn acceleration_at(
             &self,
-            _position: CartesianPositionComponents,
+            _state: CartesianStateComponents,
             _t: Epoch,
         ) -> Result<CartesianAccelerationComponents, DynamicsError> {
             let acceleration = self.acceleration.vector();
@@ -309,7 +340,7 @@ mod tests {
     impl Dynamics for FailingDynamics {
         fn acceleration_at(
             &self,
-            _position: CartesianPositionComponents,
+            _state: CartesianStateComponents,
             _t: Epoch,
         ) -> Result<CartesianAccelerationComponents, DynamicsError> {
             Err(self.error)

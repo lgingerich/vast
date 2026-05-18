@@ -11,7 +11,10 @@ mod state;
 mod types;
 pub use constants::{J2_EARTH, MU_EARTH, R_EARTH};
 pub use diagnostics::{Eccentricity, OrbitalDiagnostics, SpecificAngularMomentum, SpecificEnergy};
-pub use dynamics::{Dynamics, OblateBodyGravity, TwoBodyGravity};
+pub use dynamics::{
+    AtmosphericDrag, CompositeDynamics, Dynamics, ExponentialAtmosphere, OblateBodyGravity,
+    TwoBodyGravity,
+};
 pub use elements::{
     CircularEquatorialElements, CircularInclinedElements, ClassicalOrbitalElements,
     EquatorialEllipticElements, J2SecularRates, OrbitalElementClassification, OrbitalElements,
@@ -29,6 +32,6 @@ pub use state::{
     CartesianVelocityComponents,
 };
 pub use types::{
-    Acceleration, Angle, AngularRate, Distance, Duration, Epoch, GravitationalParameter, Position,
-    Speed, TimeStep, Velocity,
+    Acceleration, Angle, AngularRate, AreaPerMass, Distance, Duration, Epoch,
+    GravitationalParameter, MassDensity, Position, Speed, TimeStep, Velocity,
 };
