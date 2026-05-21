@@ -12,26 +12,14 @@ The long-term goal is not just to draw an orbit. It is to grow a simulation core
 - **Growing fidelity**: Start with two-body motion, then add better numerics, thrust, contacts, multiple bodies, and environment tooling.
 - **Performance-aware foundation**: Keep the design compatible with batched stepping, parallel execution, and efficient data layout.
 
-## Target Architecture
+## Documentation
 
-Space Sim is intended to grow around a few stable concepts:
+- **[Architecture](docs/architecture.md)** — layered simulator model, physics vs simulation boundaries, and design targets
+- **[Roadmap](ROADMAP.md)** — prioritized unimplemented work
 
-- **State**: where each body is and how it is moving.
-- **Dynamics**: the forces and accelerations acting on bodies.
-- **Integrators**: numerical methods that advance the simulation through time.
-- **Environments**: reusable worlds with observations, actions, rewards, and stopping conditions.
-- **Scenarios**: named setups such as circular orbit, transfer orbit, reentry, rendezvous, or multi-body demos.
-- **Visualization**: tools for seeing trajectories, policies, energy drift, velocity vectors, and diagnostics.
-
-```text
-scenario / environment
-   |
-   v
-state + dynamics + controls + integrator
-   |
-   v
-observations + rewards + trajectory + visualization
-```
+The physics core (state, dynamics, integrators) is implemented today. The
+simulation layer (scenario, propagator, termination, maneuvers, events,
+environments) is planned — see the architecture doc and roadmap.
 
 ## Running
 

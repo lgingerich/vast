@@ -9,6 +9,17 @@ by Tiger Style, but adapted to this project: keep work bounded, make invalid
 states hard to ignore, and design for performance without hiding correctness. Do
 not copy TigerBeetle-specific constraints blindly.
 
+## Core Behavior
+
+- Ask before assuming when requirements, architecture, or intent are unclear.
+- Prefer the simplest solution that satisfies the request.
+- Think before writing code for architecture, debugging, or non-trivial feature work. Surface the approach and tradeoffs first.
+- Stay in scope. Only modify files and code directly related to the current task.
+- Do not refactor, rename, reformat, or reorganize unrelated code. Mention worthwhile follow-ups instead of making them.
+- Ask before big changes that restructure existing code, remove behavior, change public APIs, or alter project conventions.
+- Admit uncertainty before it costs the user. If a fact, version, API, or approach is uncertain, say so before relying on it.
+- Before destructive or irreversible actions, explain the impact and wait for explicit confirmation.
+
 ## Core Priorities
 
 - Performance is a primary design constraint. Prefer bounded work, predictable
@@ -130,14 +141,6 @@ not copy TigerBeetle-specific constraints blindly.
   systems, operation kinds, environment states, or integrator choices.
 - Keep APIs simple. Use generics or `impl Trait` when they reduce duplication
   without hiding intent.
-- Run these checks after substantive changes:
-
-  ```bash
-  cargo fmt
-  cargo test
-  cargo clippy --all-targets --all-features
-  ```
-
 - Do not use `unwrap()` or `expect()` in library code. Preserve the existing lint
   stance in `Cargo.toml`.
 - Keep public APIs documented. `missing_docs` is currently a warning, but treat
@@ -147,6 +150,15 @@ not copy TigerBeetle-specific constraints blindly.
 - Avoid `unsafe` unless there is a measurable need. If used, keep the unsafe
   block minimal, document the invariants that make it safe, and test boundary
   conditions.
+
+## Rust Project Standards
+
+- Use Cargo for all Rust workflows.
+- Lock the tech stack to Rust, Cargo, rustfmt, Clippy, rustdoc, and cargo-nextest unless the user asks for alternatives.
+- Preserve the pinned Rust toolchain in `rust-toolchain.toml` unless asked to change it.
+- Match the existing strict lint style in `Cargo.toml`.
+- Prefer clear public APIs, useful documentation, and focused tests.
+- Do not weaken lint levels, release profiles, or CI checks without calling it out first.
 
 ## Comments And Naming
 
@@ -178,6 +190,122 @@ not copy TigerBeetle-specific constraints blindly.
   deterministic resets, and invalid physical states.
 - Avoid tests that rely on timing or flaky behavior.
 
+## Project Memory
+
+- Read `MEMORY.md` before making architectural or convention changes.
+- After significant decisions, update `MEMORY.md` with what was decided, why, and what was rejected.
+- Check `ERRORS.md` before retrying similar failed approaches.
+- When an approach takes more than two attempts, update `ERRORS.md` with what failed and what worked instead.
+
+## Architecture Documentation
+
+`docs/architecture.md` is the living architecture reference: layer boundaries,
+simulation vs physics concepts, data flow, and open design questions.
+
+### Before Starting Significant Work
+
+- Read `docs/architecture.md` when the task touches scenarios, propagators,
+  termination, events, controls, environments, or other simulation-layer APIs.
+- Read `ROADMAP.md` for prioritized unimplemented work in the same area.
+
+### After Major Work
+
+Keep `docs/architecture.md` in sync in the same change set when work:
+
+- adds or changes public simulation-layer types or module boundaries
+- implements items from the Simulation Layer roadmap category
+- resolves an open design question listed in the architecture doc
+- shifts what is "implemented today" vs planned
+
+Updates should be concise: adjust the layered model, "what exists today",
+planned concepts, or open questions — not a changelog of every commit.
+
+When an architectural decision is made, record it in `MEMORY.md` and reflect the
+outcome in `docs/architecture.md` (remove or rewrite stale open questions).
+
+### Review Expectations
+
+- Treat a stale architecture doc as a bug when the crate's public shape or
+  layer boundaries no longer match the document.
+- Mention architecture doc updates in the task summary when they were part of
+  the change.
+
+## Roadmap Maintenance
+
+`ROADMAP.md` is the living plan for recommended, not-yet-done work. Keep it
+current in the same change set as the code or decision it reflects.
+
+### Before Starting Significant Work
+
+- Read `ROADMAP.md` to see whether the task is already planned, deprioritized,
+  or scoped with explicit deferrals.
+- If the work is not on the roadmap but is a durable simulator capability,
+  add it before or as part of the implementation PR unless the user asked for a
+  one-off experiment.
+
+### When Adding New Items
+
+- Place the item under the best-fit category. Create a new category section only
+  when the work does not fit an existing one.
+- Assign exactly one priority: **P1** (next), **P2** (soon after), or **P3**
+  (later). Do not use finer-grained priority numbers.
+- Include **What**, **Why**, **How it helps**, **First version scope**, and
+  **Defer** when the item is non-trivial.
+- Run the design checklist at the bottom of `ROADMAP.md` before adding force
+  models or other hot-path features.
+- Do not add speculative items the project has not decided to pursue. If
+  something belongs in "avoid for now", leave it off the roadmap.
+
+### When Completing Work
+
+- Remove the finished item from its category section.
+- Add a concise bullet to the **Implemented baseline** list at the top of
+  `ROADMAP.md`.
+- If completion only covers the first-version scope, add follow-on work as new
+  P2/P3 items under the same or a related category rather than leaving a stale
+  entry.
+- If priorities shift because something else is now more important, rebalance
+  P1/P2/P3 within the affected category.
+- If the finished work changes what is implemented or planned at the layer level,
+  update `docs/architecture.md` accordingly.
+
+### When Scope Changes
+
+- If an item is rejected or postponed, remove or rewrite it rather than leaving
+  outdated text.
+- Record the decision in `MEMORY.md` when it affects architecture, conventions,
+  or long-term direction.
+
+### Review Expectations
+
+- Treat a stale roadmap as a bug. Finished features should not remain listed as
+  unimplemented; planned work should not be missing after a substantive merge.
+- Mention roadmap updates in the task summary when they were part of the change.
+
+## Verification
+
+After substantive code changes, run the relevant checks:
+
+```bash
+cargo fmt --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo doc --no-deps --all-features
+cargo test
+```
+
+If `cargo nextest` is installed, also run:
+
+```bash
+cargo nextest run --all-targets --all-features
+```
+
+## Communication
+
+- Never open with filler phrases like "Great question", "Of course", or "Certainly". Start with the answer or action.
+- Match length to the task. Be concise for small tasks and more detailed for design/debugging work.
+- Summarize what changed and how it was verified.
+- Mention useful follow-ups, but do not implement them without being asked.
+
 ## Review Checklist
 
 - Is the ownership and borrowing model minimal and correct?
@@ -188,3 +316,6 @@ not copy TigerBeetle-specific constraints blindly.
 - Is this the simplest correct solution for the current repo, not imagined
   future infrastructure?
 - Would `cargo fmt`, `cargo test`, or strict Clippy complain?
+- If this change completes or introduces planned work, is `ROADMAP.md` updated?
+- If this change affects layers, boundaries, or resolved design questions, is
+  `docs/architecture.md` updated?

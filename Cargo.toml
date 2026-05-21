@@ -2,6 +2,7 @@
 name = "space-sim"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.95.0"
 authors = ["Landon Gingerich"]
 description = "Astrodynamics simulator"
 readme = "README.md"
@@ -45,6 +46,11 @@ lto = true
 panic = "abort"
 strip = "debuginfo"
 
+[profile.release-profiling]
+inherits = "release"
+debug = "line-tables-only"
+strip = "none"
+
 [profile.dev]
 codegen-units = 256
 debug = 2
@@ -55,20 +61,100 @@ lto = false
 panic = "unwind"
 strip = false
 
-[lints.rust]
+[workspace.lints.rust]
 missing_docs = "warn"
+unexpected_cfgs = { level = "warn" }
+unsafe_code = "deny"
+unsafe_op_in_unsafe_fn = "deny"
+dead_code = "deny"
+unused_imports = "deny"
+unused_variables = "deny"
+unused_mut = "deny"
+unused_assignments = "deny"
+unused_macros = "deny"
+unused_qualifications = "deny"
+unreachable_pub = "deny"
+unreachable_code = "deny"
+unreachable_patterns = "deny"
 
-[lints.clippy]
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -2 }
+
+# == provenance-safe pointer casts ==
+# Prefer `.cast::<T>()` / `.cast_const()` / `.cast_mut()` / `ptr::from_ref` /
+# `ptr::from_mut` over `as *const T` / `as *mut T`. The method forms cannot
+# accidentally change mutability or perform a ref→raw coercion in one step,
+# and they preserve provenance under Strict Provenance.
+ptr_as_ptr = "deny"
+ptr_cast_constness = "deny"
+ref_as_ptr = "deny"
+borrow_as_ptr = "deny"
+
+# == soundness / leak prevention ==
+undocumented_unsafe_blocks = "deny"
+not_unsafe_ptr_arg_deref = "deny"
+mem_forget = "deny"
+cast_ptr_alignment = "deny"
+transmute_ptr_to_ptr = "deny"
+as_ptr_cast_mut = "deny"
+drop_non_drop = "deny"
+uninit_vec = "deny"
+
+# == performance ==
+redundant_clone = "deny"
+unnecessary_to_owned = "deny"
+inefficient_to_string = "deny"
+unnecessary_lazy_evaluations = "deny"
+needless_collect = "deny"
+or_fun_call = "deny"
+assigning_clones = "deny"
+implicit_clone = "deny"
+iter_overeager_cloned = "deny"
+map_clone = "deny"
+trivially_copy_pass_by_ref = "deny"
+large_types_passed_by_value = "deny"
+large_enum_variant = "deny"
+large_stack_frames = "deny"
+large_futures = "deny"
+vec_init_then_push = "deny"
+format_collect = "deny"
+manual_memcpy = "deny"
+needless_pass_by_value = "deny"
+
+# == clarity / api hygiene ==
 type_complexity = "allow"
-redundant_clone = "warn"
-unnecessary_to_owned = "warn"
-inefficient_to_string = "warn"
-large_enum_variant = "warn"
-box_collection = "warn"
-or_fun_call = "warn"
-expect_fun_call = "warn"
-single_char_pattern = "warn"
-string_add_assign = "warn"
-vec_init_then_push = "warn"
+unnecessary_unwrap = "deny"
 expect_used = "deny"
 unwrap_used = "deny"
+derive_partial_eq_without_eq = "deny"
+derivable_impls = "deny"
+clone_on_ref_ptr = "deny"
+expect_fun_call = "deny"
+if_same_then_else = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+print_stdout = "warn"
+print_stderr = "warn"
+exit = "deny"
+clone_on_copy = "deny"
+useless_conversion = "deny"
+box_collection = "deny"
+vec_box = "deny"
+boxed_local = "deny"
+arc_with_non_send_sync = "deny"
+manual_swap = "deny"
+mem_replace_option_with_none = "deny"
+redundant_locals = "deny"
+manual_c_str_literals = "deny"
+precedence = "deny"
+uninlined_format_args = "deny"
+used_underscore_binding = "deny"
+allow_attributes = "warn"
+empty_drop = "deny"
+debug_assert_with_mut_call = "deny"
+unused_peekable = "deny"
+single_char_pattern = "deny"
+string_add_assign = "deny"
+implicit_saturating_sub = "deny"
+ptr_eq = "deny"
