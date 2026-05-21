@@ -27,56 +27,6 @@ environments) is planned — see the architecture doc and roadmap.
 cargo run --example orbit_viz
 ```
 
-## Near-Term Milestones
-
-### Tier 1: Make Orbits Inspectable
-
-- Add pause, reset, time-scale, and step controls.
-- Draw velocity and acceleration vectors.
-- Display radius, altitude, speed, and orbital period.
-- Add tests for circular orbit setup and gravity direction.
-
-### Tier 2: Teach Numerical Methods
-
-- Add RK4 integration.
-- Track orbital energy and angular momentum.
-- Compare Euler, semi-implicit Euler, and RK4 visually.
-- Make time step error obvious in the UI.
-
-### Tier 3: Add Spacecraft Behavior
-
-- Add thrust acceleration.
-- Add finite burns and impulsive burns.
-- Add action interfaces for maneuver experiments.
-- Add collision or surface impact detection.
-
-### Tier 4: Shape Environments
-
-- Add resettable scenarios.
-- Add observations, actions, rewards, and termination conditions.
-- Add deterministic seeds.
-- Add trajectory history and export.
-
-### Tier 5: Expand the World
-
-- Add multiple bodies.
-- Add configurable central bodies.
-- Add rendezvous and landing scenarios.
-- Add configurable environment parameters.
-
-### Tier 6: Build Toward Scale
-
-- Separate simulation stepping from rendering.
-- Introduce data layouts suitable for many bodies.
-- Explore batched and parallel stepping.
-- Add benchmarks for integrators and force models.
-
-## Open Questions
-
-- Should the first-class public API focus on spacecraft environments or general body simulation?
-- Should 2D become a first-class type, or should the simulator keep using 3D vectors with `z = 0` for now?
-- Should visualization stay native with `macroquad`, or eventually split into a separate frontend?
-
 ## License
 
 [TBD]
