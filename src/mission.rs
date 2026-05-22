@@ -617,6 +617,55 @@ fn parse_stop_config(
     }
 }
 
+/// Analytical two-body bi-elliptic transfer delta-vs between circular orbits.
+///
+/// Returns `(departure_burn, apoapsis_burn, arrival_burn)` in meters per second.
+/// The arrival burn is negative when the transfer reaches the target radius
+/// faster than circular speed; use [`BurnSpec::Circularize`] at that boundary.
+#[must_use]
+pub fn bielliptic_delta_v_mps(
+    mu: f64,
+    departure_radius_m: f64,
+    arrival_radius_m: f64,
+    intermediate_radius_m: f64,
+) -> Option<(f64, f64, f64)> {
+    if !mu.is_finite() || mu <= 0.0 {
+        return None;
+    }
+    for radius in [
+        departure_radius_m,
+        arrival_radius_m,
+        intermediate_radius_m,
+    ] {
+        if !radius.is_finite() || radius <= 0.0 {
+            return None;
+        }
+    }
+    if intermediate_radius_m <= departure_radius_m.max(arrival_radius_m) {
+        return None;
+    }
+
+    let first_semi_major_axis = 0.5 * (departure_radius_m + intermediate_radius_m);
+    let departure_circular_speed = (mu / departure_radius_m).sqrt();
+    let departure_transfer_speed =
+        (mu * (2.0 / departure_radius_m - 1.0 / first_semi_major_axis)).sqrt();
+    let first_transfer_speed_at_intermediate =
+        (mu * (2.0 / intermediate_radius_m - 1.0 / first_semi_major_axis)).sqrt();
+
+    let second_semi_major_axis = 0.5 * (arrival_radius_m + intermediate_radius_m);
+    let second_transfer_speed_at_intermediate =
+        (mu * (2.0 / intermediate_radius_m - 1.0 / second_semi_major_axis)).sqrt();
+    let arrival_transfer_speed =
+        (mu * (2.0 / arrival_radius_m - 1.0 / second_semi_major_axis)).sqrt();
+    let arrival_circular_speed = (mu / arrival_radius_m).sqrt();
+
+    Some((
+        departure_transfer_speed - departure_circular_speed,
+        second_transfer_speed_at_intermediate - first_transfer_speed_at_intermediate,
+        arrival_circular_speed - arrival_transfer_speed,
+    ))
+}
+
 /// Analytical two-body Hohmann transfer delta-vs between circular orbits.
 #[must_use]
 pub fn hohmann_delta_v_mps(
@@ -777,5 +826,142 @@ mod tests {
         };
         let built = config.build().expect("built mission");
         assert_eq!(built.segments.len(), 2);
+    }
+
+    #[test]
+    fn bielliptic_delta_v_rejects_invalid_intermediate_radius() {
+        assert!(bielliptic_delta_v_mps(MU_EARTH, R_EARTH + 400_000.0, R_EARTH + 35_786_000.0, R_EARTH
+            + 400_000.0)
+        .is_none());
+    }
+
+    #[test]
+    fn bielliptic_transfer_reaches_target_altitude() {
+        let departure_altitude_m = 400_000.0;
+        let arrival_altitude_m = 35_786_000.0;
+        let departure_radius_m = R_EARTH + departure_altitude_m;
+        let arrival_radius_m = R_EARTH + arrival_altitude_m;
+        let intermediate_radius_m = 10.0 * arrival_radius_m;
+        let (dv1, dv2, _dv3) = bielliptic_delta_v_mps(
+            MU_EARTH,
+            departure_radius_m,
+            arrival_radius_m,
+            intermediate_radius_m,
+        )
+        .expect("bi-elliptic delta-v");
+
+        let dt_s = 30.0_f64;
+        let first_leg_steps = (493_332.6 / dt_s).round() as usize;
+        let second_leg_steps = (555_699.3 / dt_s).round() as usize;
+        let phasing_half_orbit_steps = (43_082.0 / dt_s).round() as usize;
+        let on_station_steps = (86_400.0 / dt_s).round() as usize;
+
+        let config = MissionScenarioConfig {
+            name: "bielliptic".to_string(),
+            kind: "mission".to_string(),
+            initial_orbit: InitialOrbitConfig::Classical {
+                semi_major_axis_m: departure_radius_m,
+                eccentricity: 0.0,
+                inclination_deg: 28.5,
+                raan_deg: 45.0,
+                arg_periapsis_deg: 0.0,
+                true_anomaly_deg: 0.0,
+            },
+            propagation: PropagationConfig {
+                dt_s,
+                integrator: "rk4".to_string(),
+                force_model: "two_body".to_string(),
+                sample_every_steps: 60,
+            },
+            initial_burns: vec![BurnConfig {
+                delta_v_mps: None,
+                prograde_delta_v_mps: Some(dv1),
+                circularize: false,
+            }],
+            segments: vec![
+                MissionSegmentConfig {
+                    stop: StopConfig::Table(StopTable {
+                        duration_s: None,
+                        steps: Some(first_leg_steps),
+                    }),
+                    burns: vec![BurnConfig {
+                        delta_v_mps: None,
+                        prograde_delta_v_mps: Some(dv2),
+                        circularize: false,
+                    }],
+                },
+                MissionSegmentConfig {
+                    stop: StopConfig::Table(StopTable {
+                        duration_s: None,
+                        steps: Some(second_leg_steps),
+                    }),
+                    burns: vec![BurnConfig {
+                        delta_v_mps: None,
+                        prograde_delta_v_mps: None,
+                        circularize: true,
+                    }],
+                },
+                MissionSegmentConfig {
+                    stop: StopConfig::Table(StopTable {
+                        duration_s: None,
+                        steps: Some(phasing_half_orbit_steps),
+                    }),
+                    burns: vec![],
+                },
+                MissionSegmentConfig {
+                    stop: StopConfig::Table(StopTable {
+                        duration_s: None,
+                        steps: Some(on_station_steps),
+                    }),
+                    burns: vec![],
+                },
+            ],
+        };
+
+        let mut built = config.build().expect("built mission");
+        let result = MissionRunner::run(&mut built).expect("mission run");
+        let final_radius = result.final_state.position.vector().norm();
+
+        let seg0_radius = result.segments[0]
+            .propagation
+            .final_state
+            .position
+            .vector()
+            .norm();
+        assert!(
+            (seg0_radius - intermediate_radius_m).abs() / intermediate_radius_m < 0.03,
+            "segment 0 should stop near transfer apoapsis, got {seg0_radius}"
+        );
+        let seg1_radius = result.segments[1]
+            .propagation
+            .final_state
+            .position
+            .vector()
+            .norm();
+        assert!(
+            (seg1_radius - arrival_radius_m).abs() / arrival_radius_m < 0.03,
+            "segment 1 should stop near GEO periapsis, got {seg1_radius}"
+        );
+        assert!(
+            (final_radius - arrival_radius_m).abs() / arrival_radius_m < 0.02,
+            "expected GEO radius, got {final_radius}"
+        );
+        assert_eq!(result.segments.len(), 4);
+        assert_eq!(result.segments[0].stop_reason, StopReason::StepCountMet);
+        assert_eq!(result.segments[1].stop_reason, StopReason::StepCountMet);
+    }
+
+    #[test]
+    fn loads_bielliptic_transfer_scenario_file() {
+        let loaded = LoadedScenario::from_file(std::path::Path::new(
+            "scenarios/bielliptic_leo_to_geo.toml",
+        ))
+        .expect("loaded scenario");
+        let LoadedScenario::Mission(config) = loaded else {
+            panic!("expected mission scenario");
+        };
+        let built = config.build().expect("built mission");
+        assert_eq!(built.segments.len(), 4);
+        assert_eq!(built.initial_burns.len(), 1);
     }
 }

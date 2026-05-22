@@ -40,7 +40,7 @@ pub use mission::{
     BuiltMissionScenario, BurnConfig, BurnSpec, InitialOrbitConfig, LoadedScenario, MissionResult,
     MissionRunner, MissionScenarioConfig, MissionSegment, MissionSegmentConfig,
     MissionSegmentResult, PropagationConfig as MissionPropagationConfig, StopConfig, StopTable,
-    hohmann_delta_v_mps,
+    bielliptic_delta_v_mps, hohmann_delta_v_mps,
 };
 pub use orbits::{CircularOrbit, CircularOrbitOrientation, Orbit, OrbitDirection};
 pub use propagator::{

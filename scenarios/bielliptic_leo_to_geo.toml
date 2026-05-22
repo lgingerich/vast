@@ -1,0 +1,53 @@
+# Three-impulse bi-elliptic LEO → GEO transfer with phasing coasts.
+#
+# Segment flow:
+#   1. Inclined circular LEO (classical IC, 28.5°)
+#   2. Departure burn onto high-apoapsis transfer ellipse
+#   3. Coast one half-orbit to intermediate apoapsis (~415,000 km altitude)
+#   4. Apoapsis burn onto GEO-altitude transfer ellipse
+#   5. Coast one half-orbit to GEO periapsis
+#   6. Circularize at GEO
+#   7. Half-orbit phasing wait, then one-day on-station coast
+#
+# Step stops are used for the long transfer legs because fixed-step coasting
+# over this extreme apoapsis needs tighter energy conservation (RK4) and
+# timed half-orbit coasts. Delta-v values target a two-body transfer with
+# intermediate radius 10× GEO (421,641 km from Earth center).
+name = "bielliptic_leo_to_geo"
+kind = "mission"
+
+[initial_orbit]
+kind = "classical"
+semi_major_axis_m = 6_778_137.0
+eccentricity = 0.0
+inclination_deg = 28.5
+raan_deg = 45.0
+arg_periapsis_deg = 0.0
+true_anomaly_deg = 0.0
+
+[propagation]
+dt_s = 30.0
+integrator = "rk4"
+force_model = "two_body"
+sample_every_steps = 60
+
+[[initial_burns]]
+prograde_delta_v_mps = 3090.3
+
+[[segments]]
+stop = { steps = 16444 }
+
+[[segments.burns]]
+prograde_delta_v_mps = 241.6
+
+[[segments]]
+stop = { steps = 18523 }
+
+[[segments.burns]]
+circularize = true
+
+[[segments]]
+stop = { steps = 1436 }
+
+[[segments]]
+stop = { steps = 2880 }
