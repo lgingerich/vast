@@ -30,16 +30,34 @@ scale to massive batch training and later validate precisely elsewhere.
 - **[Architecture](docs/architecture.md)** — layered simulator model, physics vs simulation boundaries, and design targets
 - **[Roadmap](ROADMAP.md)** — prioritized unimplemented work
 
-The physics core (state, dynamics, integrators) is implemented today. The
-simulation and environment layers (scenario, propagator, termination, low-thrust
-control, observations, rewards) are the active product path — see the
-architecture doc and roadmap.
+The physics core and an **RL Ops MVP** are implemented: scenario TOML,
+propagator, termination, `LeoCircularEnv`, run artifacts, the `runner` CLI/API,
+and a React replay UI. Low-thrust control, multi-step horizons, and batch
+training are next — see the architecture doc and roadmap.
 
 ## Running
+
+### Visualization example
 
 ```bash
 cargo run --example orbit_viz
 ```
+
+### RL Ops MVP (rollouts + replay UI)
+
+```bash
+# 1. Run headless episodes → writes runs/<run_id>/
+cargo run --bin runner -- run --scenario scenarios/leo_circular.toml --episodes 3
+
+# 2. Serve run artifacts to the UI
+cargo run --bin runner -- serve --runs runs --port 3001
+
+# 3. Start the web UI (proxies /api to the runner)
+cd ui && npm install && npm run dev
+```
+
+Open the Vite dev server URL (default `http://localhost:5173`). The UI falls back
+to bundled sample data under `ui/public/sample-run/` when the API is offline.
 
 ## License
 

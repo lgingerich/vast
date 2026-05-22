@@ -309,22 +309,50 @@ observation and reward, and returns `done` from termination/boundary checks.
 
 ## Open Design Questions
 
-Tracked on the roadmap for discussion before large API commits:
+Some MVP decisions are recorded in [MEMORY.md](../MEMORY.md). Remaining questions:
 
-1. **Simulation definition scope** — Is `Scenario` one struct, a builder, or a
-   trait family? How much belongs in P1 propagator config vs a separate scenario
-   type?
-2. **Spacecraft vs generic body** — First-class spacecraft type with mass/drag,
+1. **Spacecraft vs generic body** — First-class spacecraft type with mass/drag,
    or generic bodies with optional property bundles?
-3. **Termination trait vs enum** — Closed enum for batch/GPU friendliness, or
-   extensible trait for custom stops?
-4. **Event model** — Fold into termination (GMAT-style) or separate condition/
+2. **Event model** — Fold into termination (GMAT-style) or separate condition/
    action lists (Basilisk-style)?
-5. **Environment API shape** — Gym-like `step`/`reset`, or lower-level propagator
-   with thin env adapters in examples/tools?
-6. **2D mode** — First-class 2D types vs 3D with `z = 0` constraint?
+3. **Environment API adapters** — Gymnasium/RL crate bindings in core vs
+   examples/tools?
+4. **2D mode** — First-class 2D types vs 3D with `z = 0` constraint?
 
-Decisions should be recorded in [MEMORY.md](../MEMORY.md) when resolved.
+Resolved for MVP: TOML `ScenarioConfig`, closed `TerminationCondition` enum,
+`Environment` trait with flat observation, thrust stubbed above `Dynamics`.
+
+---
+
+## RL Ops MVP (implemented slice)
+
+The first product shell connects scenario files, headless rollouts, on-disk
+artifacts, a local read API, and a web replay UI.
+
+```text
+scenarios/*.toml
+      ↓
+runner run  →  runs/<run_id>/manifest.json
+               runs/<run_id>/metrics.jsonl
+               runs/<run_id>/episodes/0000/trajectory.jsonl
+      ↓
+runner serve  →  GET /api/runs, /api/runs/:id, .../trajectory
+      ↓
+ui/ (React + R3F)  →  run list + 3D replay
+```
+
+### MVP contracts
+
+| Piece | Shape |
+|-------|-------|
+| Scenario | TOML → `ScenarioConfig` |
+| Termination | `Duration` or `StepCount` (closed enum) |
+| Environment | `reset(seed)` / `step(action)`; one full rollout per step |
+| Action | `[f64; 3]` thrust accel (stubbed) |
+| Observation | 8 floats: position, velocity, altitude, speed |
+| Artifacts | JSON manifest + JSONL metrics and trajectories |
+
+Physics stays in the Rust library; the UI reads artifacts only (no JS integrator).
 
 ---
 

@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "run_id": "1779411251-1251",
+  "created_at": "1779411251",
+  "scenario_name": "leo_circular_short",
+  "scenario": {
+    "name": "leo_circular_short",
+    "altitude_m": 400000.0,
+    "dt_s": 10.0,
+    "duration_s": 600.0,
+    "integrator": "leapfrog",
+    "force_model": "two_body",
+    "sample_every_steps": 5
+  },
+  "episode_count": 1
+}

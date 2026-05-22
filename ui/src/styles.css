@@ -1,0 +1,123 @@
+:root {
+  color: #e5e7eb;
+  background: #020617;
+  font-family: Inter, system-ui, sans-serif;
+  line-height: 1.5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+a {
+  color: #93c5fd;
+}
+
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 3rem;
+}
+
+.header {
+  margin-bottom: 1.5rem;
+}
+
+.eyebrow {
+  margin: 0 0 0.25rem;
+  color: #94a3b8;
+  font-size: 0.875rem;
+}
+
+h1,
+h2 {
+  margin: 0;
+}
+
+.muted {
+  color: #94a3b8;
+}
+
+.error {
+  color: #fca5a5;
+}
+
+.runs-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.runs-table th,
+.runs-table td {
+  padding: 0.75rem 0.5rem;
+  border-bottom: 1px solid #1e293b;
+  text-align: left;
+}
+
+.replay-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+  gap: 1rem;
+}
+
+.viewport,
+.panel {
+  min-height: 520px;
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  background: #0f172a;
+}
+
+.viewport {
+  overflow: hidden;
+}
+
+.panel {
+  padding: 1rem 1.25rem;
+}
+
+.stats {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.stats dt {
+  color: #94a3b8;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stats dd {
+  margin: 0.15rem 0 0;
+  font-size: 1.125rem;
+}
+
+.controls {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+button {
+  border: 0;
+  border-radius: 8px;
+  padding: 0.65rem 1rem;
+  background: #2563eb;
+  color: white;
+  cursor: pointer;
+}
+
+input[type="range"] {
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .replay-layout {
+    grid-template-columns: 1fr;
+  }
+}

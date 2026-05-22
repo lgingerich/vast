@@ -3,7 +3,8 @@ use nalgebra::Vector3;
 use crate::errors::StateError;
 pub use crate::types::{Position, Velocity};
 
-/// Position and velocity of a body in an inertial Cartesian frame.
+/// Position in meters (SI), Cartesian frame.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CartesianState {
     /// Position in meters (SI), Cartesian frame.
     pub position: Position,

@@ -2,7 +2,7 @@ use nalgebra::Vector3;
 
 use crate::diagnostics::Eccentricity;
 use crate::state::{CartesianState, CartesianStates};
-use crate::types::{Angle, AngularRate, Distance, GravitationalParameter};
+use crate::types::{Angle, AngularRate, Distance, GravitationalParameter, Position, Velocity};
 
 const DEFAULT_CIRCULAR_ECCENTRICITY_TOLERANCE: f64 = 1.0e-6;
 const DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE_RAD: f64 = 1.0e-10;
@@ -347,6 +347,87 @@ impl OrbitalElements {
             })),
         }
     }
+
+    /// Returns the orbital phase angle used for apoapsis and periapsis detection.
+    #[must_use]
+    pub fn orbital_phase_angle(&self) -> Angle {
+        match self {
+            Self::Classical(elements) => elements.true_anomaly,
+            Self::CircularInclined(elements) => elements.argument_of_latitude,
+            Self::CircularEquatorial(elements) => elements.true_longitude,
+            Self::EquatorialElliptic(elements) => elements.true_anomaly,
+        }
+    }
+}
+
+impl ClassicalOrbitalElements {
+    /// Builds an inertial Cartesian state from classical Keplerian elements.
+    pub fn to_cartesian_state(self, mu: GravitationalParameter) -> Option<CartesianState> {
+        let mu = mu.meters_cubed_per_second_squared();
+        let semi_major_axis = self.semi_major_axis.meters();
+        let eccentricity = self.eccentricity.scalar();
+        let inclination = self.inclination.radians();
+        let raan = self.right_ascension_of_ascending_node.radians();
+        let argument_of_periapsis = self.argument_of_periapsis.radians();
+        let true_anomaly = self.true_anomaly.radians();
+
+        if !mu.is_finite() || mu <= 0.0 {
+            return None;
+        }
+        if !semi_major_axis.is_finite() || semi_major_axis <= 0.0 {
+            return None;
+        }
+        if !eccentricity.is_finite() || !(0.0..1.0).contains(&eccentricity) {
+            return None;
+        }
+
+        let semi_latus_rectum = semi_major_axis * (1.0 - eccentricity * eccentricity);
+        if semi_latus_rectum <= 0.0 {
+            return None;
+        }
+
+        let cos_nu = true_anomaly.cos();
+        let sin_nu = true_anomaly.sin();
+        let radius = semi_latus_rectum / (1.0 + eccentricity * cos_nu);
+        let position_pqw = Vector3::new(radius * cos_nu, radius * sin_nu, 0.0);
+        let speed_factor = (mu / semi_latus_rectum).sqrt();
+        let velocity_pqw = Vector3::new(
+            -speed_factor * sin_nu,
+            speed_factor * (eccentricity + cos_nu),
+            0.0,
+        );
+
+        let rotation = perifocal_to_inertial_rotation(inclination, raan, argument_of_periapsis);
+        let position = rotation * position_pqw;
+        let velocity = rotation * velocity_pqw;
+
+        Some(CartesianState {
+            position: Position::from_vector(position)?,
+            velocity: Velocity::from_vector(velocity)?,
+        })
+    }
+}
+
+fn perifocal_to_inertial_rotation(
+    inclination: f64,
+    raan: f64,
+    argument_of_periapsis: f64,
+) -> nalgebra::Matrix3<f64> {
+    let (sin_i, cos_i) = inclination.sin_cos();
+    let (sin_raan, cos_raan) = raan.sin_cos();
+    let (sin_w, cos_w) = argument_of_periapsis.sin_cos();
+
+    nalgebra::Matrix3::new(
+        cos_raan * cos_w - sin_raan * sin_w * cos_i,
+        -cos_raan * sin_w - sin_raan * cos_w * cos_i,
+        sin_raan * sin_i,
+        sin_raan * cos_w + cos_raan * sin_w * cos_i,
+        -sin_raan * sin_w + cos_raan * cos_w * cos_i,
+        -cos_raan * sin_i,
+        sin_w * sin_i,
+        cos_w * sin_i,
+        cos_i,
+    )
 }
 
 fn is_equatorial_inclination(inclination: Angle, tolerance: Angle) -> bool {
@@ -804,6 +885,50 @@ mod tests {
         assert!(OrbitalElementClassification::new(f64::NAN, zero).is_none());
         assert!(OrbitalElementClassification::new(-1.0, zero).is_none());
         assert!(OrbitalElementClassification::new(1.0e-6, negative).is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn classical_elements_round_trip_cartesian_state() -> TestResult {
+        let mu = earth_mu().ok_or("invalid mu")?;
+        let elements = ClassicalOrbitalElements {
+            semi_major_axis: Distance::from_meters(8_000_000.0).ok_or("invalid sma")?,
+            eccentricity: Eccentricity::from_scalar(0.2).ok_or("invalid eccentricity")?,
+            inclination: Angle::from_radians(0.4).ok_or("invalid inclination")?,
+            right_ascension_of_ascending_node: Angle::from_radians(1.0).ok_or("invalid raan")?,
+            argument_of_periapsis: Angle::from_radians(0.7).ok_or("invalid argp")?,
+            true_anomaly: Angle::from_radians(1.2).ok_or("invalid true anomaly")?,
+        };
+
+        let state = elements
+            .to_cartesian_state(mu)
+            .ok_or("failed to build cartesian state")?;
+        let recovered = OrbitalElements::from_cartesian_state(&state, mu)
+            .ok_or("invalid recovered elements")?;
+        let OrbitalElements::Classical(recovered) = recovered else {
+            return Err("expected classical elements after round trip");
+        };
+
+        assert_close(
+            recovered.semi_major_axis.meters(),
+            elements.semi_major_axis.meters(),
+            1.0e-3,
+        );
+        assert_close(
+            recovered.eccentricity.scalar(),
+            elements.eccentricity.scalar(),
+            1.0e-6,
+        );
+        assert_close(
+            recovered.inclination.radians(),
+            elements.inclination.radians(),
+            1.0e-6,
+        );
+        assert_close(
+            recovered.true_anomaly.radians(),
+            elements.true_anomaly.radians(),
+            1.0e-6,
+        );
         Ok(())
     }
 

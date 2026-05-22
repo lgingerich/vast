@@ -14,122 +14,102 @@ this roadmap implements toward.
 
 Implemented baseline (not listed below): two-body and J2 gravity, exponential
 atmospheric drag, `CompositeDynamics`, fixed-step Euler/RK4/Verlet/Leapfrog
-integrators, orbital diagnostics, classical element conversion (Cartesian →
-elements), J2 secular-rate checks, and SoA Cartesian state stepping.
+integrators, orbital diagnostics, classical element conversion (Cartesian ↔
+elements), J2 secular-rate checks, SoA Cartesian state stepping, **propagator
+with duration/step/orbital termination and trajectory sampling**, **impulsive
+burns**, **TOML scenario config**, **`LeoCircularEnv` (`reset` / `step`)**,
+**mission scenarios (`MissionRunner`, segment stops/burns)**, **run artifact
+recording with segment metadata**, **`runner` CLI (`run`, `serve`)**, and
+**React + R3F replay UI (`ui/`)**.
 
 ---
 
 ## Simulation Layer
 
 The physics core can integrate forces; the simulation layer orchestrates time
-evolution, stopping rules, maneuvers, events, and outputs. This is the main gap
-between the current library and a useful simulator. See
-[docs/architecture.md](docs/architecture.md).
+evolution, stopping rules, maneuvers, events, and outputs. MVP rollout +
+replay is implemented; items below extend it toward full RL training.
 
-### P1 — Simulation Layer Definition (Design)
+### P1 — Controlled Low Thrust
 
-**What:** Decide and document the first-version simulation API: how `Scenario`,
-`Propagator`, termination, and optional control hooks compose; what lives in
-the crate vs examples; naming and module layout.
+**What:** A fixed-step control layer that applies piecewise-constant commanded
+acceleration at step boundaries, e.g. `a_total = gravity + commanded_acceleration`.
 
-**Why:** "Simulation" spans scenario setup, propagation orchestration, stops,
-maneuvers, events, boundaries, and environment wrappers. These pieces interact.
-Committing to propagator-only first without a agreed scenario/termination shape
-risks rework.
+**Why:** Low thrust is the primary force model for RL actions and spacecraft
+behavior. It is local, deterministic when actions are fixed per step, and
+batch-friendly across independent environments.
 
-**How it helps:** Gives a stable target for P1 propagator and P1/P2 control
-work; resolves open questions in the architecture doc before large public API
-surface lands.
+**How it helps:** Exposes a useful control surface for policies, station-keeping
+experiments, and transfer-curve curricula without waiting for full propulsion or
+attitude modeling.
 
 **First version scope:**
 
-- Written decision in `MEMORY.md` covering: scenario config shape, propagator
-  ownership, termination representation (enum vs trait), where burns/thrust
-  attach, and deferrals for environment/mission-sequence APIs.
-- Update `docs/architecture.md` to match.
-- No requirement to implement everything decided — this item is the design gate.
+- Commands applied only at step boundaries.
+- Inertial Cartesian commanded acceleration.
+- Thrust-to-mass or direct acceleration input; no propellant depletion yet.
+- Composed in propagator or a thin `ControlledDynamics` wrapper — not inside
+  individual force models.
 
-**Defer:** mission-script DSL, full environment trait design, multi-spacecraft
-synchronization modes.
+**Defer:** actuator lag, attitude coupling, body-frame or LVLH thrust until frame APIs exist.
 
-**Open questions to resolve:**
+### P2 — Multi-Step RL Horizon
 
-- One `Scenario` struct vs builder vs trait family?
-- Spacecraft-specific type vs generic body with property bundles?
-- Termination as closed enum (batch-friendly) vs extensible trait?
-- Events folded into termination (GMAT-style) vs separate condition/action
-  lists (Basilisk-style)?
+**What:** One environment `step(action)` advances K integrator steps (or a fixed
+simulation sub-interval) instead of a full episode rollout.
 
-### P1 — Propagator API
-
-**What:** A reusable propagation layer that owns the repeated pattern in
-examples: state buffer, epoch, integrator, dynamics, bounded stepping, optional
-final partial timestep, and hooks for termination checks.
-
-**Why:** Examples currently duplicate propagation loops. A shared API is the
-foundation for scenarios, maneuvers, events, diagnostics sampling, and batch
-stepping.
-
-**How it helps:** One place to advance time; examples become thin; future
-simulation features attach at step boundaries without touching `Dynamics`.
+**Why:** MVP runs one full scenario duration per `step`, which is a rollout
+recorder—not yet an RL control loop.
 
 **First version scope:**
 
-- Fixed-step loop over `CartesianStatesMut`.
-- Optional shortened final step when remaining time is less than `dt`.
-- Caller-provided dynamics and integrator; no hidden allocation in the step loop.
-- Optional fixed substep count inside each propagation interval.
-- Step budget limit (max steps) as a safety bound.
-- Callback or return-value hook to evaluate `TerminationCondition` each step.
-- `PropagationResult` with final epoch, state, and stop reason.
+- Configurable steps-per-env-step in scenario or env config.
+- `done` when termination or boundaries hit mid-horizon.
 
-**Defer:** adaptive timestep control, event-time root finding, output
-interpolation, internal event dispatch (initial hook only).
+**Defer:** variable horizon policies, frame stacking in obs.
 
-### P1 — Termination Conditions
+### P2 — Environment Rewards And Seeded Perturbations
 
-**What:** Typed end-state rules for propagation segments: elapsed duration, step
-count, and a composable "first satisfied wins" list.
+**What:** Pluggable reward functions and deterministic IC perturbation from
+`reset(seed)` for training diversity.
 
-**Why:** Every useful simulator stops for a reason. Today examples hard-code
-`while epoch < duration`. GMAT's `Propagate {StopList}` is the reference model.
-
-**How it helps:** Makes "propagate for one period", "propagate 86400 s", and
-later "propagate to apoapsis" the same API surface.
+**Why:** MVP returns zero reward and identical ICs each reset (seed stored only).
 
 **First version scope:**
 
-- `Duration` / target epoch.
-- `StepCount`.
-- `AnyOf([...])` — stop on first match.
-- Integration with propagator; stop reason reported in result.
-- Tests: exact landing on duration via partial final step; step count; AnyOf
-  ordering.
+- Scenario-defined reward kind (e.g. altitude tracking error, fuel penalty stub).
+- Optional small position/velocity noise from seed.
 
-**Defer:** apoapsis, periapsis, altitude thresholds (see Events); backward
-propagation; root finding on stop time.
+**Defer:** learned reward shaping, multi-objective rewards.
 
-### P2 — Scenario Configuration Type
+### P2 — RL Ops UI: Metrics And Run Comparison
 
-**What:** A declarative static setup bundling central body (or raw constants
-initially), initial state, force stack, integrator, `dt`, termination, and
-optional output cadence — constructible without running propagation.
+**What:** Charts on the runs list (reward, episode length, stop reasons) and
+side-by-side run comparison in `ui/`.
 
-**Why:** Examples and future environments currently reassemble physics
-primitives ad hoc. GMAT's Initialization section is the analogue.
-
-**How it helps:** Named, testable, reusable rollouts; propagator constructed
-from scenario; examples shrink to scenario + run + report.
+**Why:** MVP replay UI proves the artifact pipeline; training health needs
+aggregate views.
 
 **First version scope:**
 
-- Builder or struct holding propagator inputs and termination.
-- Validation at build time where possible (positive dt, finite ICs).
-- Earth/two-body example scenario mirroring `orbit_period`.
-- Burns/thrust slots as optional attachments (may be no-op until control items
-  land).
+- Parse `metrics.jsonl` client-side.
+- Simple line/bar charts per run.
 
-**Defer:** serialization/loading, multi-spacecraft scenarios, scenario catalogs.
+**Defer:** hosted job queue UI, scenario editor forms.
+
+### P2 — Scenario Extensions
+
+**What:** Extend `ScenarioConfig` beyond LEO circular two-body: J2, drag,
+integrator defaults, scenario file discovery.
+
+**Why:** MVP scenario covers one reference case for the rollout shell.
+
+**First version scope:**
+
+- `force_model = "j2"` and drag stack fields.
+- Classical element ICs (when element→Cartesian lands).
+
+**Defer:** scenario catalogs, serialization versioning beyond v1 artifacts.
 
 ### P2 — Boundary And Constraint Checks
 
@@ -173,67 +153,6 @@ fixed grid.
 - One-shot vs repeating event semantics documented.
 
 **Defer:** continuous root finding, collision-time substeps, adaptive burn timing.
-
-### P2 — Trajectory And Output Sampling
-
-**What:** Caller-provided or fixed-capacity buffers for state and/or diagnostics
-snapshots at a configured cadence (every N steps or at sample epochs).
-
-**Why:** Visualization and analysis need history; the hot path should not grow
-unbounded `Vec`s. Examples already use local trail buffers (`TRAIL_POINTS_MAX`).
-
-**How it helps:** Separates propagation from recording; supports export and
-viz without allocation in the step loop when capacity is fixed.
-
-**First version scope:**
-
-- Sample every N steps or on propagator sample hook.
-- Store `CartesianState` and/or `OrbitalDiagnostics` in caller buffer.
-- Explicit capacity; drop or stop sampling when full (documented behavior).
-
-**Defer:** unbounded history, interpolation between samples, device-side sampling.
-
-### P2 — Resettable Environment Wrapper
-
-**What:** A thin experiment/RL-oriented layer: `reset(seed) → obs`,
-`step(action) → (obs, reward, done, info)` composing scenario + propagator.
-
-**Why:** README Tier 4 and automated experiments need deterministic reset and a
-stable observation/action contract without polluting the physics core.
-
-**How it helps:** Curriculum learning, parameter sweeps, and policy evaluation
-share the same propagation stack as analysis examples.
-
-**First version scope:**
-
-- Map action to low-thrust command for one step interval.
-- Deterministic reset from scenario + seed (IC perturbation or noise TBD).
-- Typed observation (e.g. position, velocity, diagnostics subset).
-- `done` from termination + boundary checks.
-- Simple reward hook or zero reward placeholder.
-
-**Defer:** multi-agent, vectorized env batching (see Backend), complex reward
-engineering, Gymnasium/RL crate adapters in core.
-
-### P3 — Mission Segments And Propagation Sequences
-
-**What:** Explicit multi-segment propagation: `propagate_until(stop) →
-apply_burn → propagate_until(stop)` as a small Rust API over propagator
-operations.
-
-**Why:** GMAT mission sequences are the user-facing model for transfers and
-rendezvous. A DSL is not required; typed segment runners are enough initially.
-
-**How it helps:** Hohmann transfer, plane change, and rendezvous demos without
-copy-pasted example loops.
-
-**First version scope:**
-
-- Segment result chaining with stop reason per segment.
-- Compose with impulsive burns and termination from earlier items.
-
-**Defer:** script interpreter, GUI mission tree, synchronized multi-spacecraft
-propagation.
 
 ---
 
@@ -325,26 +244,6 @@ environments without leaking body-specific constants into examples.
 
 **Defer:** ephemeris-attached bodies, body catalogs, external SPICE/data files.
 
-### P2 — Orbit Construction From Classical Elements
-
-**What:** Durable orbit setup APIs beyond `CircularOrbit`, using the existing
-`OrbitalElements` conversions for elliptical, inclined, and retrograde cases.
-
-**Why:** Circular orbit helpers are useful for tests and viz, but most real
-scenarios need eccentricity, inclination, RAAN, argument of periapsis, and true
-anomaly.
-
-**How it helps:** Makes scenario setup readable and removes one-off state
-construction from examples and future RL environments.
-
-**First version scope:**
-
-- Keplerian/classical element to `CartesianState` at epoch.
-- Round-trip tests against diagnostics and two-body invariants.
-
-**Defer:** mean anomaly propagation, hyperbolic/parabolic classification APIs,
-coordinate-frame catalogs.
-
 ### P3 — Spacecraft Properties Bundle
 
 **What:** Optional spacecraft metadata (mass, drag area, SRP area, identifiers)
@@ -368,50 +267,9 @@ force models read immutable params per body index.
 ## Control & Maneuvers
 
 Controls and maneuvers live **above** `Dynamics`, applied at step boundaries.
-
-### P1 — Controlled Low Thrust
-
-**What:** A fixed-step control layer that applies piecewise-constant commanded
-acceleration at step boundaries, e.g. `a_total = gravity + commanded_acceleration`.
-
-**Why:** Low thrust is the primary force model for RL actions and spacecraft
-behavior. It is local, deterministic when actions are fixed per step, and
-batch-friendly across independent environments.
-
-**How it helps:** Exposes a useful control surface for policies, station-keeping
-experiments, and transfer-curve curricula without waiting for full propulsion or
-attitude modeling.
-
-**First version scope:**
-
-- Commands applied only at step boundaries.
-- Inertial Cartesian commanded acceleration.
-- Thrust-to-mass or direct acceleration input; no propellant depletion yet.
-- Composed in propagator or a thin `ControlledDynamics` wrapper — not inside
-  individual force models.
-
-**Defer:** mass depletion, thrust pointing constraints, actuator lag, attitude
-coupling, body-frame or LVLH thrust until frame APIs exist.
-
-### P2 — Impulsive Burns
-
-**What:** Step-boundary velocity increments from an explicit bounded burn
-schedule.
-
-**Why:** Essential for maneuver experiments. GMAT models these as `Maneuver` /
-`ImpulsiveBurn`, not as continuous forces.
-
-**How it helps:** Enables Hohmann transfers, plane changes, and rendezvous
-curricula without event-time root finding or finite-burn modeling.
-
-**First version scope:**
-
-- Burns only at fixed step boundaries or at event-triggered step indices.
-- Explicit, bounded burn schedules as scenario/control operations.
-- Separate from the `Dynamics` acceleration path.
-
-**Defer:** event-triggered burns without step grid, Lambert targeting, finite
-burn arcs.
+Low thrust is tracked under **Simulation Layer → P1 Controlled Low Thrust**.
+Impulsive burns and mission segment burns are implemented; finite-burn arcs and
+Lambert targeting remain future work.
 
 ---
 

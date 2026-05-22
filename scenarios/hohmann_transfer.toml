@@ -1,0 +1,24 @@
+name = "hohmann_leo_to_geo"
+kind = "mission"
+
+[initial_orbit]
+kind = "circular"
+altitude_m = 400_000.0
+
+[propagation]
+dt_s = 30.0
+integrator = "leapfrog"
+force_model = "two_body"
+sample_every_steps = 20
+
+[[initial_burns]]
+prograde_delta_v_mps = 2586.2
+
+[[segments]]
+stop = "apoapsis"
+
+[[segments.burns]]
+circularize = true
+
+[[segments]]
+stop = { duration_s = 86400.0 }

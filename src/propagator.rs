@@ -1,0 +1,439 @@
+use crate::dynamics::Dynamics;
+use crate::errors::PropagationError;
+use crate::integrators::Integrator;
+use crate::state::{CartesianState, CartesianStateBuffer};
+use crate::termination::{StopReason, TerminationCondition, TerminationContext};
+use crate::types::{Epoch, GravitationalParameter, TimeStep, Velocity};
+use nalgebra::Vector3;
+
+/// Discrete velocity change applied at a segment boundary (above dynamics).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ImpulsiveBurn {
+    /// Inertial Cartesian delta-v in meters per second.
+    pub delta_v_mps: [f64; 3],
+}
+
+impl ImpulsiveBurn {
+    /// Creates an inertial delta-v burn.
+    #[must_use]
+    pub fn inertial(delta_v_mps: [f64; 3]) -> Self {
+        Self { delta_v_mps }
+    }
+
+    /// Creates a prograde burn with the given speed increment.
+    pub fn prograde(delta_v_mps: f64, state: &CartesianState) -> Result<Self, PropagationError> {
+        let velocity = state.velocity.vector();
+        let speed = velocity.norm();
+        if speed <= 0.0 || !speed.is_finite() {
+            return Err(PropagationError::InvalidBurn);
+        }
+        let direction = velocity / speed;
+        Ok(Self {
+            delta_v_mps: [
+                direction.x * delta_v_mps,
+                direction.y * delta_v_mps,
+                direction.z * delta_v_mps,
+            ],
+        })
+    }
+}
+
+/// One recorded state sample along a propagation.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TrajectorySample {
+    /// Simulation epoch of the sample.
+    pub epoch: Epoch,
+    /// Cartesian state at the sample.
+    pub state: CartesianState,
+    /// Mission segment index when recorded by a mission runner.
+    pub segment_index: Option<usize>,
+}
+
+impl TrajectorySample {
+    /// Creates a sample without segment metadata.
+    #[must_use]
+    pub fn new(epoch: Epoch, state: CartesianState) -> Self {
+        Self {
+            epoch,
+            state,
+            segment_index: None,
+        }
+    }
+}
+
+/// Result of propagating until a termination condition or step budget.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PropagationResult {
+    /// Epoch after the final step.
+    pub final_epoch: Epoch,
+    /// State after the final step.
+    pub final_state: CartesianState,
+    /// Number of integrator steps taken.
+    pub steps: usize,
+    /// Why propagation stopped.
+    pub stop_reason: StopReason,
+    /// Sampled trajectory points collected during propagation.
+    pub samples: Vec<TrajectorySample>,
+}
+
+/// Configuration for trajectory sampling during propagation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SampleConfig {
+    /// Record a sample every N integrator steps (must be >= 1).
+    pub every_steps: usize,
+}
+
+impl SampleConfig {
+    /// Creates a sample config with a positive interval.
+    pub fn every_steps(value: usize) -> Option<Self> {
+        (value >= 1).then_some(Self { every_steps: value })
+    }
+}
+
+/// Fixed-step propagator for a single indexed body in a state buffer.
+pub struct Propagator {
+    epoch: Epoch,
+    start_epoch: Epoch,
+    dt: TimeStep,
+    max_steps: Option<usize>,
+    sample_config: Option<SampleConfig>,
+    states: CartesianStateBuffer<1>,
+}
+
+impl Propagator {
+    /// Creates a propagator starting from `initial_state` at epoch zero.
+    pub fn new(initial_state: CartesianState, dt: TimeStep) -> Result<Self, PropagationError> {
+        let mut states = CartesianStateBuffer::<1>::new();
+        states
+            .write_from_state(0, &initial_state)
+            .map_err(PropagationError::State)?;
+
+        Ok(Self {
+            epoch: Epoch::from_seconds(0.0).ok_or(PropagationError::InvalidEpoch)?,
+            start_epoch: Epoch::from_seconds(0.0).ok_or(PropagationError::InvalidEpoch)?,
+            dt,
+            max_steps: None,
+            sample_config: None,
+            states,
+        })
+    }
+
+    /// Sets an optional safety limit on integrator steps per propagation call.
+    #[must_use]
+    pub fn with_max_steps(mut self, max_steps: usize) -> Self {
+        self.max_steps = Some(max_steps);
+        self
+    }
+
+    /// Enables trajectory sampling every N integrator steps.
+    #[must_use]
+    pub fn with_sampling(mut self, config: SampleConfig) -> Self {
+        self.sample_config = Some(config);
+        self
+    }
+
+    /// Resets epoch and state for a new episode.
+    pub fn reset(&mut self, initial_state: CartesianState) -> Result<(), PropagationError> {
+        self.epoch = self.start_epoch;
+        self.states
+            .write_from_state(0, &initial_state)
+            .map_err(PropagationError::State)
+    }
+
+    /// Reads the current body state at index 0.
+    pub fn current_state(&self) -> Result<CartesianState, PropagationError> {
+        self.states.read_state(0).map_err(PropagationError::State)
+    }
+
+    /// Applies an impulsive delta-v to body index 0.
+    pub fn apply_impulsive_burn(&mut self, burn: ImpulsiveBurn) -> Result<(), PropagationError> {
+        let state = self.states.read_state(0).map_err(PropagationError::State)?;
+        let velocity = state.velocity.vector();
+        let updated = Velocity::from_vector(Vector3::new(
+            velocity.x + burn.delta_v_mps[0],
+            velocity.y + burn.delta_v_mps[1],
+            velocity.z + burn.delta_v_mps[2],
+        ))
+        .ok_or(PropagationError::InvalidBurn)?;
+        let updated_state = CartesianState {
+            position: state.position,
+            velocity: updated,
+        };
+        self.states
+            .write_from_state(0, &updated_state)
+            .map_err(PropagationError::State)
+    }
+
+    /// Propagates until `termination` is met, the step budget is exceeded, or
+    /// no forward progress remains.
+    pub fn propagate_until<I, D>(
+        &mut self,
+        integrator: &I,
+        dynamics: &D,
+        termination: TerminationCondition,
+        mu: GravitationalParameter,
+    ) -> Result<PropagationResult, PropagationError>
+    where
+        I: Integrator,
+        D: Dynamics,
+    {
+        self.propagate_until_with_segment(integrator, dynamics, termination, mu, None)
+    }
+
+    /// Propagates until `termination` is met, tagging samples with `segment_index`.
+    pub fn propagate_until_with_segment<I, D>(
+        &mut self,
+        integrator: &I,
+        dynamics: &D,
+        termination: TerminationCondition,
+        mu: GravitationalParameter,
+        segment_index: Option<usize>,
+    ) -> Result<PropagationResult, PropagationError>
+    where
+        I: Integrator,
+        D: Dynamics,
+    {
+        let mut steps = 0_usize;
+        let mut samples = Vec::new();
+        let mut previous_orbital_angle_rad = orbital_phase_angle_rad(&self.current_state()?, mu);
+        let mut previous_radial_velocity_mps = Some(radial_velocity_mps(&self.current_state()?));
+
+        if self.sample_config.is_some() {
+            let state = self.states.read_state(0).map_err(PropagationError::State)?;
+            samples.push(TrajectorySample {
+                epoch: self.epoch,
+                state,
+                segment_index,
+            });
+        }
+
+        loop {
+            let state = self.states.read_state(0).map_err(PropagationError::State)?;
+            let context = TerminationContext {
+                start_epoch: self.start_epoch,
+                current_epoch: self.epoch,
+                steps,
+                state: &state,
+                previous_orbital_angle_rad,
+                previous_radial_velocity_mps,
+            };
+
+            if let Some(reason) = termination.stop_reason(context) {
+                return Ok(PropagationResult {
+                    final_epoch: self.epoch,
+                    final_state: state,
+                    steps,
+                    stop_reason: reason,
+                    samples,
+                });
+            }
+
+            if let Some(max_steps) = self.max_steps
+                && steps >= max_steps
+            {
+                return Ok(PropagationResult {
+                    final_epoch: self.epoch,
+                    final_state: state,
+                    steps,
+                    stop_reason: StopReason::StepBudgetExceeded,
+                    samples,
+                });
+            }
+
+            let step_seconds = match termination.remaining_seconds(self.start_epoch, self.epoch) {
+                Some(remaining) => self.dt.seconds().min(remaining),
+                None => self.dt.seconds(),
+            };
+
+            let step = TimeStep::from_seconds(step_seconds).ok_or(PropagationError::InvalidStep)?;
+
+            integrator
+                .step(dynamics, &mut self.states.view_mut(), 0, self.epoch, step)
+                .map_err(PropagationError::Integration)?;
+
+            self.epoch = self
+                .epoch
+                .advance_by(step)
+                .ok_or(PropagationError::InvalidEpoch)?;
+            steps += 1;
+
+            let state = self.states.read_state(0).map_err(PropagationError::State)?;
+            previous_orbital_angle_rad = orbital_phase_angle_rad(&state, mu);
+            previous_radial_velocity_mps = Some(radial_velocity_mps(&state));
+
+            if let Some(config) = self.sample_config
+                && steps.is_multiple_of(config.every_steps)
+            {
+                samples.push(TrajectorySample {
+                    epoch: self.epoch,
+                    state,
+                    segment_index,
+                });
+            }
+        }
+    }
+}
+
+fn orbital_phase_angle_rad(state: &CartesianState, mu: GravitationalParameter) -> Option<f64> {
+    crate::elements::OrbitalElements::from_cartesian_state(state, mu)
+        .map(|elements| elements.orbital_phase_angle().radians())
+}
+
+fn radial_velocity_mps(state: &CartesianState) -> f64 {
+    let position = state.position.vector();
+    let velocity = state.velocity.vector();
+    let radius = position.norm();
+    if radius <= 0.0 {
+        return 0.0;
+    }
+    position.dot(&velocity) / radius
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        Angle, CircularOrbit, CircularOrbitOrientation, Distance, GravitationalParameter,
+        LeapfrogIntegrator, MU_EARTH, OrbitDirection, R_EARTH, StopReason, TerminationCondition,
+        TwoBodyGravity,
+    };
+
+    fn leo_initial_state() -> CartesianState {
+        let mu =
+            GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu");
+        let orbit = CircularOrbit {
+            radius: Distance::from_meters(R_EARTH + 400_000.0).expect("radius"),
+            mu,
+            orientation: CircularOrbitOrientation::equatorial(),
+            phase: Angle::from_radians(0.0).expect("phase"),
+            direction: OrbitDirection::Prograde,
+        };
+        orbit.to_cartesian_state().expect("state")
+    }
+
+    #[test]
+    fn propagates_exactly_one_period() {
+        let mu =
+            GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu");
+        let orbit = CircularOrbit {
+            radius: Distance::from_meters(R_EARTH + 400_000.0).expect("radius"),
+            mu,
+            orientation: CircularOrbitOrientation::equatorial(),
+            phase: Angle::from_radians(0.0).expect("phase"),
+            direction: OrbitDirection::Prograde,
+        };
+        let period = orbit.period().expect("period");
+        let dt = TimeStep::from_seconds(10.0).expect("dt");
+        let gravity = TwoBodyGravity { mu };
+        let integrator = LeapfrogIntegrator;
+
+        let mut propagator = Propagator::new(leo_initial_state(), dt).expect("propagator");
+        let result = propagator
+            .propagate_until(
+                &integrator,
+                &gravity,
+                TerminationCondition::Duration(period),
+                mu,
+            )
+            .expect("propagation");
+
+        assert_eq!(result.stop_reason, StopReason::DurationMet);
+        assert!((result.final_epoch.seconds() - period.seconds()).abs() < 1e-9);
+        assert!(result.steps > 0);
+    }
+
+    #[test]
+    fn respects_step_count_termination() {
+        let mu =
+            GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu");
+        let gravity = TwoBodyGravity { mu };
+        let integrator = LeapfrogIntegrator;
+        let dt = TimeStep::from_seconds(10.0).expect("dt");
+
+        let mut propagator = Propagator::new(leo_initial_state(), dt).expect("propagator");
+        let result = propagator
+            .propagate_until(
+                &integrator,
+                &gravity,
+                TerminationCondition::StepCount(3),
+                mu,
+            )
+            .expect("propagation");
+
+        assert_eq!(result.stop_reason, StopReason::StepCountMet);
+        assert_eq!(result.steps, 3);
+        assert!((result.final_epoch.seconds() - 30.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn collects_samples_on_interval() {
+        let mu =
+            GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu");
+        let gravity = TwoBodyGravity { mu };
+        let integrator = LeapfrogIntegrator;
+        let dt = TimeStep::from_seconds(10.0).expect("dt");
+
+        let mut propagator = Propagator::new(leo_initial_state(), dt)
+            .expect("propagator")
+            .with_sampling(SampleConfig::every_steps(2).expect("sample config"));
+
+        let result = propagator
+            .propagate_until(
+                &integrator,
+                &gravity,
+                TerminationCondition::StepCount(4),
+                mu,
+            )
+            .expect("propagation");
+
+        assert!(result.samples.len() >= 2);
+    }
+
+    #[test]
+    fn stops_on_apoapsis_of_transfer_orbit() {
+        let mu =
+            GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu");
+        let departure_radius_m = R_EARTH + 400_000.0;
+        let arrival_radius_m = R_EARTH + 35_786_000.0;
+        let (dv1, _) =
+            crate::mission::hohmann_delta_v_mps(MU_EARTH, departure_radius_m, arrival_radius_m)
+                .expect("delta-v");
+
+        let orbit = CircularOrbit {
+            radius: Distance::from_meters(departure_radius_m).expect("radius"),
+            mu,
+            orientation: CircularOrbitOrientation::equatorial(),
+            phase: Angle::from_radians(0.0).expect("phase"),
+            direction: OrbitDirection::Prograde,
+        };
+        let mut propagator = Propagator::new(
+            orbit.to_cartesian_state().expect("state"),
+            TimeStep::from_seconds(30.0).expect("dt"),
+        )
+        .expect("propagator");
+        propagator
+            .apply_impulsive_burn(
+                ImpulsiveBurn::prograde(dv1, &propagator.current_state().expect("state"))
+                    .expect("burn"),
+            )
+            .expect("burn");
+
+        let gravity = TwoBodyGravity { mu };
+        let integrator = LeapfrogIntegrator;
+        let result = propagator
+            .propagate_until(
+                &integrator,
+                &gravity,
+                TerminationCondition::apoapsis(mu),
+                mu,
+            )
+            .expect("propagation");
+
+        assert_eq!(result.stop_reason, StopReason::ApoapsisMet);
+        let final_radius = result.final_state.position.vector().norm();
+        assert!(
+            (final_radius - arrival_radius_m).abs() / arrival_radius_m < 0.03,
+            "expected transfer apoapsis near GEO, got {final_radius}"
+        );
+    }
+}

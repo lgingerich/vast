@@ -49,7 +49,7 @@ impl AngularRate {
 ///
 /// `Epoch` represents an absolute point on the simulation timeline.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Epoch(f64);
 
 impl Epoch {
@@ -92,7 +92,7 @@ impl TimeStep {
 
 /// Non-negative elapsed simulation time, measured in seconds.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Duration(f64);
 
 impl Duration {
@@ -188,7 +188,7 @@ impl Speed {
 
 /// Standard gravitational parameter, measured in cubic meters per second squared.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GravitationalParameter(f64);
 
 impl GravitationalParameter {
@@ -206,7 +206,7 @@ impl GravitationalParameter {
 
 /// Position vector in a Cartesian frame, measured in meters.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Position(Vector3<f64>);
 
 impl Position {
@@ -224,7 +224,7 @@ impl Position {
 
 /// Velocity vector in a Cartesian frame, measured in meters per second.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Velocity(Vector3<f64>);
 
 impl Velocity {

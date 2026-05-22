@@ -29,9 +29,20 @@ path = "examples/j2_precession.rs"
 name = "drag_decay"
 path = "examples/drag_decay.rs"
 
+[[bin]]
+name = "runner"
+path = "src/bin/runner.rs"
+
 [dependencies]
 nalgebra = "0.34.2"
 thiserror = "2.0.18"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+toml = "0.8.23"
+clap = { version = "4.5.39", features = ["derive"] }
+axum = "0.8.4"
+tower-http = { version = "0.6.6", features = ["cors"] }
+tokio = { version = "1.45.1", features = ["macros", "rt-multi-thread"] }
 
 [dev-dependencies]
 macroquad = "0.4.14"

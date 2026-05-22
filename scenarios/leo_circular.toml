@@ -1,0 +1,7 @@
+name = "leo_circular"
+altitude_m = 400_000.0
+dt_s = 10.0
+duration_s = 5400.0
+integrator = "leapfrog"
+force_model = "two_body"
+sample_every_steps = 10
