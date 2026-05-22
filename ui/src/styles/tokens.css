@@ -1,0 +1,76 @@
+:root {
+  /* Surface palette (near-black to slate) */
+  --bg-0: #05070d;
+  --bg-1: #0b1020;
+  --bg-2: #111a2e;
+  --bg-3: #182238;
+  --panel-bg: rgb(10 16 32 / 0.78);
+  --panel-bg-solid: #0b1020;
+  --panel-bg-strong: rgb(5 7 13 / 0.88);
+
+  /* Borders */
+  --border-subtle: rgb(148 163 184 / 0.12);
+  --border: rgb(148 163 184 / 0.22);
+  --border-strong: rgb(148 163 184 / 0.4);
+
+  /* Text */
+  --text-0: #f8fafc;
+  --text-1: #cbd5e1;
+  --text-2: #94a3b8;
+  --text-muted: #64748b;
+
+  /* Accents (modern dashboard) */
+  --accent-blue: #3b82f6;
+  --accent-blue-soft: rgb(59 130 246 / 0.18);
+  --accent-violet: #8b5cf6;
+  --accent-violet-soft: rgb(139 92 246 / 0.18);
+  --accent-green: #34d399;
+  --accent-red: #fb7185;
+  --accent-yellow: #fbbf24;
+
+  /* Mission-control instrument accents (HUD only) */
+  --instrument-amber: #f59e0b;
+  --instrument-amber-bright: #fbbf24;
+  --instrument-cyan: #22d3ee;
+  --instrument-cyan-bright: #67e8f9;
+  --instrument-mute: #475569;
+  --instrument-bg: rgb(2 6 23 / 0.82);
+  --instrument-border: rgb(34 211 238 / 0.18);
+  --instrument-border-strong: rgb(34 211 238 / 0.35);
+
+  /* Typography */
+  --font-sans:
+    Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  --font-mono:
+    "JetBrains Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Spacing scale */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  /* Shadows / glows */
+  --shadow-1: 0 6px 24px rgb(2 6 23 / 0.45);
+  --shadow-2: 0 12px 40px rgb(2 6 23 / 0.6);
+  --glow-instrument: 0 0 0 1px rgb(34 211 238 / 0.08), 0 8px 24px rgb(2 6 23 / 0.55);
+
+  /* Layout */
+  --overlay-gap: 0.85rem;
+
+  color: var(--text-1);
+  background: var(--bg-0);
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv11";
+  line-height: 1.5;
+}

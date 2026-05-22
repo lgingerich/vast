@@ -1,0 +1,633 @@
+/* Replay shell + viewport overlays */
+
+.replay-shell {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  background: var(--bg-0);
+  z-index: 1;
+}
+
+.replay-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  padding: clamp(0.5rem, 1.2vw, 0.75rem) clamp(0.75rem, 1.8vw, 1rem);
+  border-bottom: 1px solid var(--border-subtle);
+  background: rgb(8 12 24 / 0.85);
+  backdrop-filter: blur(8px);
+  flex-shrink: 0;
+  z-index: 2;
+}
+
+.replay-toolbar-main {
+  min-width: 0;
+}
+
+.replay-toolbar-main .eyebrow {
+  margin-bottom: 0.15rem;
+  font-size: 0.6875rem;
+}
+
+.replay-error {
+  padding: var(--space-2) var(--space-4);
+  background: rgb(190 18 60 / 0.12);
+  border-bottom: 1px solid rgb(251 113 133 / 0.3);
+  color: var(--accent-red);
+  font-size: 0.8125rem;
+}
+
+.replay-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  background: var(--bg-0);
+  overflow: hidden;
+}
+
+.replay-stage canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Viewport HUD (mission-control instrument groups) */
+.viewport-hud {
+  position: absolute;
+  top: var(--overlay-gap);
+  left: var(--overlay-gap);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  width: min(380px, calc(100% - 12rem));
+  max-width: calc(100% - 1.3rem);
+  pointer-events: none;
+}
+
+.hud-stripe {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--instrument-border);
+  border-radius: var(--radius-md);
+  background: var(--instrument-bg);
+  backdrop-filter: blur(10px);
+  color: var(--text-2);
+  font-size: 0.6875rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.hud-stripe-scenario {
+  color: var(--instrument-cyan-bright);
+  font-weight: 600;
+}
+
+.hud-stripe-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--instrument-mute);
+}
+
+.hud-instrument-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.instrument {
+  border: 1px solid var(--instrument-border);
+  border-radius: var(--radius-md);
+  padding: 0.45rem 0.6rem 0.55rem;
+  background: var(--instrument-bg);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--glow-instrument);
+}
+
+.instrument-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.35rem;
+  color: var(--instrument-cyan);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.instrument-header-trailing {
+  color: var(--text-muted);
+  font-size: 0.625rem;
+  letter-spacing: 0.12em;
+}
+
+.instrument-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem 0.85rem;
+}
+
+.instrument-grid.single {
+  grid-template-columns: 1fr;
+}
+
+.instrument-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.instrument-label {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.instrument-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.95rem;
+  color: var(--instrument-amber-bright);
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+
+.instrument-value.cyan {
+  color: var(--instrument-cyan-bright);
+}
+
+.instrument-unit {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+}
+
+.instrument-segment {
+  margin-top: 0.35rem;
+  padding-top: 0.35rem;
+  border-top: 1px dashed var(--border-subtle);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--instrument-cyan);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Camera toolbar (top-right) */
+.camera-toolbar {
+  position: absolute;
+  top: var(--overlay-gap);
+  right: var(--overlay-gap);
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: end;
+  gap: 0.4rem;
+  max-width: calc(100% - 1.3rem);
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem;
+  border: 1px solid var(--instrument-border);
+  border-radius: var(--radius-md);
+  background: var(--instrument-bg);
+  backdrop-filter: blur(10px);
+}
+
+.toolbar-group .icon-button {
+  padding: 0.4rem;
+  border-radius: var(--radius-sm);
+  color: var(--text-1);
+  cursor: pointer;
+}
+
+.toolbar-group .icon-button.active {
+  background: var(--instrument-border-strong);
+  color: var(--instrument-cyan-bright);
+  border-color: var(--instrument-border-strong);
+}
+
+.toolbar-group .icon-button:hover:not(:disabled) {
+  background: rgb(34 211 238 / 0.15);
+  color: var(--instrument-cyan-bright);
+  border-color: var(--instrument-border-strong);
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+}
+
+/* Keyboard shortcut popover */
+.shortcut-popover {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.4rem 0.85rem;
+  padding: var(--space-3) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel-bg-strong);
+  backdrop-filter: blur(12px);
+  font-size: 0.75rem;
+  box-shadow: var(--shadow-2);
+}
+
+.shortcut-popover-title {
+  grid-column: 1 / -1;
+  margin-bottom: 0.15rem;
+  color: var(--text-2);
+  font-size: 0.625rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.shortcut-popover dt {
+  display: flex;
+  gap: 0.25rem;
+  color: var(--text-1);
+}
+
+.shortcut-popover dd {
+  margin: 0;
+  color: var(--text-2);
+}
+
+/* Instrumentation dock */
+.instrumentation-dock {
+  position: absolute;
+  left: var(--overlay-gap);
+  right: var(--overlay-gap);
+  bottom: var(--overlay-gap);
+  z-index: 3;
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(280px, 1.5fr);
+  gap: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--panel-bg-strong);
+  backdrop-filter: blur(14px);
+  max-width: calc(100% - 1.3rem);
+  padding: var(--space-3);
+  box-shadow: var(--shadow-2);
+}
+
+.instrumentation-dock.collapsed {
+  display: inline-flex;
+  width: auto;
+  right: auto;
+  padding: 0;
+  background: var(--instrument-bg);
+}
+
+.dock-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.75rem;
+  background: transparent;
+  color: var(--text-1);
+  font-size: 0.75rem;
+  border-radius: var(--radius-md);
+  border: 0;
+}
+
+.dock-toggle:hover {
+  background: rgb(148 163 184 / 0.16);
+  color: var(--text-0);
+}
+
+.instrumentation-dock:not(.collapsed) .dock-toggle {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.55rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.6875rem;
+  color: var(--text-2);
+}
+
+.dock-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.dock-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* Telemetry charts */
+.telemetry-charts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.sparkline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.65rem;
+  background: rgb(11 16 32 / 0.7);
+}
+
+.sparkline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.sparkline-label {
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.sparkline-current {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8125rem;
+  color: var(--text-0);
+}
+
+.sparkline-current .unit {
+  color: var(--text-muted);
+  font-size: 0.6875rem;
+  margin-left: 0.15rem;
+}
+
+.sparkline svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.sparkline-footer {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.06em;
+}
+
+/* Mission timeline */
+.mission-timeline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.35rem;
+}
+
+.mission-timeline-header h3 {
+  margin: 0;
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.segment-track {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.segment-chip {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.55rem;
+  background: transparent;
+  color: var(--text-1);
+  cursor: pointer;
+  text-align: left;
+  transition: background 120ms ease, transform 120ms ease;
+}
+
+.segment-chip:hover {
+  background: rgb(148 163 184 / 0.14);
+  transform: translateY(-1px);
+}
+
+.segment-chip.active {
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
+.segment-chip-label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.segment-chip-meta {
+  display: block;
+  margin-top: 0.1rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+}
+
+/* Replay controls */
+.replay-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.transport {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.transport .icon-button {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: var(--radius-md);
+  background: var(--bg-2);
+  border: 1px solid var(--border-subtle);
+}
+
+.transport .icon-button:hover:not(:disabled) {
+  background: var(--bg-3);
+}
+
+.transport .icon-button.primary {
+  width: 44px;
+  height: 44px;
+  background: var(--accent-blue);
+  border-color: var(--accent-blue);
+  color: white;
+}
+
+.transport .icon-button.primary:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.transport-hints {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--text-muted);
+  font-size: 0.625rem;
+}
+
+.scrubber {
+  position: relative;
+  width: 100%;
+}
+
+.scrubber-rail {
+  position: relative;
+  height: 18px;
+}
+
+.scrubber-rail input[type="range"] {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  z-index: 2;
+  background: transparent;
+}
+
+.scrubber-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 4px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: var(--bg-3);
+  overflow: hidden;
+}
+
+.scrubber-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, var(--accent-blue), var(--accent-violet));
+  border-radius: 999px;
+}
+
+.scrubber-ticks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.scrubber-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  opacity: 0.65;
+}
+
+.scrubber-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.35rem;
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+}
+
+.speed-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--text-2);
+  font-size: 0.75rem;
+}
+
+.episode-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-2);
+  font-size: 0.75rem;
+}
+
+/* Compact layout */
+.replay-shell.compact .instrumentation-dock:not(.collapsed) {
+  grid-template-columns: 1fr;
+}
+
+.replay-shell.compact .telemetry-charts {
+  grid-template-columns: 1fr;
+}
+
+.replay-shell.compact .viewport-hud {
+  width: min(300px, calc(100% - 9rem));
+}
+
+.replay-shell.compact .instrument-value {
+  font-size: 0.85rem;
+}
+
+.replay-shell.compact .toolbar-group .icon-button {
+  padding: 0.3rem;
+}
+
+@media (max-width: 900px), (max-height: 900px) {
+  .replay-shell {
+    --overlay-gap: 0.55rem;
+  }
+
+  .instrumentation-dock:not(.collapsed) {
+    grid-template-columns: 1fr;
+  }
+
+  .telemetry-charts {
+    grid-template-columns: 1fr;
+  }
+
+  .viewport-hud {
+    width: min(280px, calc(100% - 8.5rem));
+  }
+}

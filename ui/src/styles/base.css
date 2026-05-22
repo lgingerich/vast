@@ -1,0 +1,235 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(
+      ellipse at top,
+      rgb(20 27 51 / 0.6),
+      transparent 60%
+    ),
+    var(--bg-0);
+  color: var(--text-1);
+  overflow: auto;
+}
+
+a {
+  color: var(--accent-blue);
+  text-decoration: none;
+  transition: color 120ms ease;
+}
+
+a:hover {
+  color: #93c5fd;
+  text-decoration: underline;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  color: var(--text-0);
+  letter-spacing: -0.01em;
+}
+
+h1 {
+  font-size: clamp(1.05rem, 1.3vw, 1.35rem);
+  font-weight: 600;
+}
+
+h2 {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+h3 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+p {
+  margin: 0;
+}
+
+.muted {
+  color: var(--text-2);
+}
+
+.error {
+  color: var(--accent-red);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  background: var(--bg-2);
+  padding: 0.1rem 0.35rem;
+  border-radius: var(--radius-sm);
+  color: var(--text-1);
+}
+
+button {
+  border: 0;
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.85rem;
+  background: var(--accent-blue);
+  color: white;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease,
+    transform 120ms ease;
+}
+
+button:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+select {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.45rem 0.7rem;
+  background: var(--bg-2);
+  color: var(--text-1);
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent-blue);
+}
+
+.eyebrow {
+  margin: 0 0 var(--space-2);
+  color: var(--text-2);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.eyebrow a {
+  color: var(--text-1);
+  border-bottom: 1px dotted transparent;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+
+.eyebrow a:hover {
+  color: var(--accent-blue);
+  border-bottom-color: var(--accent-blue);
+  text-decoration: none;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* Reusable segmented control */
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 2px;
+  background: var(--bg-2);
+  gap: 2px;
+}
+
+.segmented > button {
+  border-radius: calc(var(--radius-md) - 3px);
+  padding: 0.35rem 0.6rem;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.segmented > button:hover:not(:disabled) {
+  background: rgb(148 163 184 / 0.08);
+  color: var(--text-1);
+}
+
+.segmented > button.active {
+  background: var(--accent-blue-soft);
+  color: #dbeafe;
+  box-shadow: inset 0 0 0 1px rgb(59 130 246 / 0.4);
+}
+
+.segmented > button.active:hover:not(:disabled) {
+  background: rgb(59 130 246 / 0.28);
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0.45rem 0.55rem;
+  background: transparent;
+  color: var(--text-1);
+  border: 1px solid transparent;
+}
+
+.icon-button:hover:not(:disabled) {
+  background: rgb(148 163 184 / 0.08);
+}
+
+.icon-button.active {
+  background: var(--accent-blue-soft);
+  color: #dbeafe;
+  border-color: rgb(59 130 246 / 0.4);
+}
+
+.kbd {
+  display: inline-block;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 5px;
+  background: var(--bg-2);
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  line-height: 1.5;
+}
+
+/* Loading / empty states */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-6);
+  color: var(--text-2);
+  font-size: 0.875rem;
+  text-align: center;
+}

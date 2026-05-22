@@ -20,7 +20,9 @@ with duration/step/orbital termination and trajectory sampling**, **impulsive
 burns**, **TOML scenario config**, **`LeoCircularEnv` (`reset` / `step`)**,
 **mission scenarios (`MissionRunner`, segment stops/burns)**, **run artifact
 recording with segment metadata**, **`runner` CLI (`run`, `serve`)**, and
-**React + R3F replay UI (`ui/`)**.
+**React + R3F replay UI (`ui/`)**, **RL ops dashboard with per-run metrics
+(reward, episode length, stop reasons, final altitude) and synchronized
+multi-episode comparison view**.
 
 ---
 
@@ -82,20 +84,25 @@ recorder—not yet an RL control loop.
 
 **Defer:** learned reward shaping, multi-objective rewards.
 
-### P2 — RL Ops UI: Metrics And Run Comparison
+### P2 — RL Ops UI: Cross-Run Comparison And Event Markers
 
-**What:** Charts on the runs list (reward, episode length, stop reasons) and
-side-by-side run comparison in `ui/`.
+**What:** Build on the in-place per-run dashboard and synchronized
+multi-episode compare view by adding cross-run comparison (two or more policies'
+aggregate metrics side by side), burn/event markers on the replay scrubber, and
+jump-to-next-event controls.
 
-**Why:** MVP replay UI proves the artifact pipeline; training health needs
-aggregate views.
+**Why:** The single-run dashboard answers "how did this policy perform?"; the
+next gap is "how do two policies compare?" and "what happened when?".
 
 **First version scope:**
 
-- Parse `metrics.jsonl` client-side.
-- Simple line/bar charts per run.
+- Multi-run selector on the runs page that opens a `/compare?runs=a,b` route.
+- Overlay reward / length / stop-reason histograms across runs.
+- Burn and segment-transition tick layer on the replay scrubber with
+  next/prev-event keyboard shortcuts.
 
-**Defer:** hosted job queue UI, scenario editor forms.
+**Defer:** hosted job queue UI, scenario editor forms, ECI ↔ ECEF view toggle
+(separate roadmap item), WebSocket streaming of in-progress runs.
 
 ### P2 — Scenario Extensions
 

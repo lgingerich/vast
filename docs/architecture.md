@@ -336,9 +336,9 @@ runner run  →  runs/<run_id>/manifest.json
                runs/<run_id>/metrics.jsonl
                runs/<run_id>/episodes/0000/trajectory.jsonl
       ↓
-runner serve  →  GET /api/runs, /api/runs/:id, .../trajectory
+runner serve  →  GET /api/runs, /api/runs/:id, .../metrics, .../trajectory
       ↓
-ui/ (React + R3F)  →  run list + 3D replay
+ui/ (React + R3F)  →  runs dashboard + per-run metrics + 3D replay + compare
 ```
 
 ### MVP contracts

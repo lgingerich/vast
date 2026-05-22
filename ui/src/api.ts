@@ -1,4 +1,4 @@
-import type { RunManifest, TrajectoryPoint } from "./types";
+import type { EpisodeMetric, RunManifest, TrajectoryPoint } from "./types";
 
 const SAMPLE_MANIFEST_URL = "/sample-run/manifest.json";
 
@@ -31,6 +31,38 @@ export async function getRun(runId: string): Promise<RunManifest> {
   }
 }
 
+function parseJsonLines<T>(text: string): T[] {
+  return text
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as T);
+}
+
+export async function getMetrics(runId: string): Promise<EpisodeMetric[]> {
+  try {
+    const response = await fetch(`/api/runs/${runId}/metrics`);
+    if (!response.ok) {
+      throw new Error(`Request failed: ${response.status}`);
+    }
+    const contentType = response.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      return (await response.json()) as EpisodeMetric[];
+    }
+    return parseJsonLines<EpisodeMetric>(await response.text());
+  } catch {
+    const sample = await fetchJson<RunManifest>(SAMPLE_MANIFEST_URL);
+    if (sample.run_id !== runId) {
+      throw new Error("Run not found");
+    }
+    const response = await fetch("/sample-run/metrics.jsonl");
+    if (!response.ok) {
+      return [];
+    }
+    return parseJsonLines<EpisodeMetric>(await response.text());
+  }
+}
+
 export async function getTrajectory(
   runId: string,
   episodeIndex: number,
@@ -50,25 +82,6 @@ export async function getTrajectory(
     if (!response.ok) {
       throw new Error("Trajectory not found");
     }
-    const text = await response.text();
-    return text
-      .trim()
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => JSON.parse(line) as TrajectoryPoint);
+    return parseJsonLines<TrajectoryPoint>(await response.text());
   }
 }
-
-export function altitudeMeters(point: TrajectoryPoint, earthRadiusM: number): number {
-  const [x, y, z] = point.pos;
-  return Math.hypot(x, y, z) - earthRadiusM;
-}
-
-export function speedMetersPerSecond(point: TrajectoryPoint): number {
-  const [x, y, z] = point.vel;
-  return Math.hypot(x, y, z);
-}
-
-const EARTH_RADIUS_M = 6_371_000;
-
-export { EARTH_RADIUS_M };
