@@ -1,13 +1,40 @@
 # Agent Guidance
 
-Space Sim is an idiomatic Rust astrodynamics simulator. It is growing from a
-small, readable physics core into reusable simulation APIs for scenarios,
-environments, visualization, and automated experiments.
+Space Sim is an idiomatic Rust astrodynamics simulator whose **primary product
+goal is an RL training environment** for space: massively parallel,
+deterministic, loose- to medium-fidelity orbital rollouts with a
+`reset` / `step(action)` environment contract. Engineers use it to train and
+screen control policies at scale, then move promising results to high-fidelity
+mission-analysis tools such as GMAT for detailed validation.
+
+The codebase grows from a readable physics core into reusable simulation APIs —
+scenarios, propagators, controls, observations, rewards, termination, and batch
+stepping — with examples and visualization as thin consumers.
 
 These instructions describe how to work in this repository. They are influenced
 by Tiger Style, but adapted to this project: keep work bounded, make invalid
 states hard to ignore, and design for performance without hiding correctness. Do
 not copy TigerBeetle-specific constraints blindly.
+
+## Product Direction
+
+- **RL env is the north star.** When choosing between features, prefer work that
+  completes the environment loop: scenario setup, propagation step, action
+  application, observation/reward, and `done` signals.
+- **Loose fidelity on purpose.** Two-body, J2, drag, and simple low thrust are
+  in scope for training. High-fidelity gravity, adaptive integrators, ephemeris
+  files, and mission-script tooling are for offline validation or later — not
+  blockers for RL rollouts.
+- **Batch and determinism matter.** Fixed timesteps, SoA layout, bounded work,
+  and future `step_many` paths exist to run huge numbers of independent envs
+  reliably.
+- **GMAT-class tools are downstream.** Space Sim trains and filters; external
+  tools confirm. Do not optimize the core roadmap to replace mission-analysis
+  software.
+- **Design durable contracts early** for observations, actions, rewards,
+  termination, and scenario config once the environment API is in active
+  development. Do not introduce these speculatively before the propagator path
+  exists.
 
 ## Core Behavior
 
@@ -59,6 +86,9 @@ not copy TigerBeetle-specific constraints blindly.
 - When concrete scenario or environment APIs need them, design trajectories,
   observations, rewards, events, and diagnostics as durable data contracts rather
   than ad hoc UI strings. Do not introduce these contracts speculatively.
+- Prioritize RL-relevant boundaries: low-thrust actions belong above `Dynamics`;
+  impulsive burns and mission-segment scripting are secondary to the environment
+  step loop unless a task explicitly targets them.
 
 ## Invariants And Assertions
 
