@@ -14,14 +14,13 @@ pub use physics::{
     },
     elements::{
         CircularEquatorialElements, CircularInclinedElements, ClassicalOrbitalElements,
-        EquatorialEllipticElements, J2SecularRates, OrbitalElementClassification, OrbitalElements,
-        j2_circular_raan_rate, j2_circular_secular_rates,
+        EquatorialEllipticElements, OrbitalElementClassification, OrbitalElements,
     },
     integrators::{
         EulerIntegrator, Integrator, LeapfrogIntegrator, RungeKutta4Integrator,
         VelocityVerletIntegrator,
     },
-    orbits::{CircularOrbit, CircularOrbitOrientation, Orbit, OrbitDirection},
+    orbits::{CircularOrbit, CircularOrbitOrientation, OrbitDirection},
     state::{
         CartesianAccelerationComponents, CartesianPositionComponents, CartesianState,
         CartesianStateBuffer, CartesianStateComponents, CartesianStates, CartesianStatesMut,
@@ -43,8 +42,7 @@ pub use sim::{
     mission::{
         BuiltMissionScenario, BurnConfig, BurnSpec, InitialOrbitConfig, LoadedScenario,
         MissionResult, MissionRunner, MissionScenarioConfig, MissionSegment, MissionSegmentConfig,
-        MissionSegmentResult, PropagationConfig as MissionPropagationConfig, StopConfig, StopTable,
-        bielliptic_delta_v_mps, hohmann_delta_v_mps,
+        MissionSegmentResult, StopConfig, StopTable,
     },
     propagator::{ImpulsiveBurn, PropagationResult, Propagator, SampleConfig, TrajectorySample},
     scenario::{BuiltScenario, IntegratorKind, ScenarioConfig},

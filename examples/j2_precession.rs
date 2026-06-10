@@ -4,14 +4,13 @@ use space_sim::{
     Angle, CartesianStateBuffer, CircularOrbit, CircularOrbitOrientation, Distance, Duration,
     Epoch, GravitationalParameter, Integrator, J2_EARTH, MU_EARTH, OblateBodyGravity,
     OrbitDirection, OrbitalElements, R_EARTH, TimeStep, TwoBodyGravity, VelocityVerletIntegrator,
-    j2_circular_raan_rate,
 };
 
 const ALTITUDE_M: f64 = 600_000.0;
 const INCLINATION_DEG: f64 = 51.6;
 const RAAN_DEG: f64 = 32.0;
 const STEP_SECONDS: f64 = 30.0;
-const PROPAGATION_DAYS: f64 = 3.0;
+const PROPAGATION_DAYS: f64 = 300.0;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)
@@ -39,14 +38,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dt = TimeStep::from_seconds(STEP_SECONDS).ok_or("invalid time step")?;
     let duration = Duration::from_seconds(PROPAGATION_DAYS * 86_400.0)
         .ok_or("invalid propagation duration")?;
-    let analytical_raan_rate = j2_circular_raan_rate(
-        orbit.radius,
-        orbit.orientation.inclination,
-        mu,
-        Distance::from_meters(R_EARTH).ok_or("invalid equatorial radius")?,
-        J2_EARTH,
-    )
-    .ok_or("invalid analytical RAAN rate")?;
+    // First-order J2 secular RAAN drift for comparison.
+    let mean_motion = (mu.meters_cubed_per_second_squared() / orbit.radius.meters().powi(3)).sqrt();
+    let radius_ratio = R_EARTH / orbit.radius.meters();
+    let analytical_raan_rad_per_sec = -1.5
+        * J2_EARTH
+        * mean_motion
+        * radius_ratio
+        * radius_ratio
+        * INCLINATION_DEG.to_radians().cos();
+    let analytical_drift_per_day = analytical_raan_rad_per_sec.to_degrees() * 86_400.0;
     let mut two_body_states = CartesianStateBuffer::<1>::new();
     let mut j2_states = CartesianStateBuffer::<1>::new();
     two_body_states.write_from_state(0, &initial_state)?;
@@ -79,7 +80,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     .ok_or("final J2 RAAN is undefined")?;
     let two_body_drift = angle_delta_degrees(final_two_body_raan, initial_raan);
     let j2_drift = angle_delta_degrees(final_j2_raan, initial_raan);
-    let analytical_drift_per_day = analytical_raan_rate.degrees_per_day();
     let simulated_drift_per_day = j2_drift / PROPAGATION_DAYS;
 
     println!(

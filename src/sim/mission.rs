@@ -617,6 +617,7 @@ fn parse_stop_config(
     }
 }
 
+#[cfg(test)]
 /// Analytical two-body bi-elliptic transfer delta-vs between circular orbits.
 ///
 /// Returns `(departure_burn, apoapsis_burn, arrival_burn)` in meters per second.
@@ -662,6 +663,7 @@ pub fn bielliptic_delta_v_mps(
     ))
 }
 
+#[cfg(test)]
 /// Analytical two-body Hohmann transfer delta-vs between circular orbits.
 #[must_use]
 pub fn hohmann_delta_v_mps(

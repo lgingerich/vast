@@ -15,7 +15,9 @@ this roadmap implements toward.
 Implemented baseline (not listed below): two-body and J2 gravity, exponential
 atmospheric drag, `CompositeDynamics`, fixed-step Euler/RK4/Verlet/Leapfrog
 integrators, orbital diagnostics, classical element conversion (Cartesian ↔
-elements), J2 secular-rate checks, SoA Cartesian state stepping, **propagator
+elements), J2 secular-rate checks, SoA Cartesian state stepping, **circular
+and elliptic orbit initial-condition construction (`CircularOrbit`,
+`EllipticOrbit`)**, **propagator
 with duration/step/orbital termination and trajectory sampling**, **impulsive
 burns**, **TOML scenario config**, **`LeoCircularEnv` (`reset` / `step`)**,
 **mission scenarios (`MissionRunner`, segment stops/burns)**, **run artifact
