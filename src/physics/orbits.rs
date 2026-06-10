@@ -54,6 +54,10 @@ impl CircularOrbitOrientation {
         );
         let q_hat = h_hat.cross(&p_hat);
 
+        // The basis vectors are derived through trigonometry and cross
+        // products rather than constructed from domain-typed inputs.
+        // Verify orthonormality here because no domain type enforces
+        // this invariant downstream.
         debug_assert!((p_hat.norm() - 1.0).abs() <= 1.0e-12);
         debug_assert!((q_hat.norm() - 1.0).abs() <= 1.0e-12);
         debug_assert!((h_hat.norm() - 1.0).abs() <= 1.0e-12);
@@ -109,13 +113,6 @@ impl CircularOrbit {
             OrbitDirection::Prograde => prograde_velocity,
             OrbitDirection::Retrograde => -prograde_velocity,
         };
-
-        debug_assert!(position.x.is_finite());
-        debug_assert!(position.y.is_finite());
-        debug_assert!(position.z.is_finite());
-        debug_assert!(velocity.x.is_finite());
-        debug_assert!(velocity.y.is_finite());
-        debug_assert!(velocity.z.is_finite());
 
         Some(CartesianState::new(
             Position::from_vector(position)?,

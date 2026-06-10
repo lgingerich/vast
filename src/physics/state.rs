@@ -66,7 +66,7 @@ impl CartesianPositionComponents {
     }
 
     fn to_position(self) -> Result<Position, StateError> {
-        Position::from_vector(self.vector()).ok_or(StateError::InvalidPosition)
+        Ok(Position::from_vector_unchecked(self.vector()))
     }
 }
 
@@ -124,7 +124,7 @@ impl CartesianVelocityComponents {
     }
 
     fn to_velocity(self) -> Result<Velocity, StateError> {
-        Velocity::from_vector(self.vector()).ok_or(StateError::InvalidVelocity)
+        Ok(Velocity::from_vector_unchecked(self.vector()))
     }
 }
 

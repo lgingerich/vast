@@ -97,6 +97,16 @@ impl TerminationCondition {
             Self::StepCount(_) | Self::Apoapsis { .. } | Self::Periapsis { .. } => None,
         }
     }
+
+    /// Whether this condition requires orbital phase angle computation.
+    #[must_use]
+    pub fn needs_orbital_phase(&self) -> bool {
+        match self {
+            Self::Duration(_) | Self::StepCount(_) => false,
+            Self::Apoapsis { .. } | Self::Periapsis { .. } => true,
+            Self::AnyOf(conditions) => conditions.iter().any(|c| c.needs_orbital_phase()),
+        }
+    }
 }
 
 /// Inputs for evaluating a termination condition at a step boundary.
@@ -114,6 +124,11 @@ pub struct TerminationContext<'a> {
     pub previous_orbital_angle_rad: Option<f64>,
     /// Previous radial velocity in meters per second, if known.
     pub previous_radial_velocity_mps: Option<f64>,
+    /// Pre-computed current orbital phase angle in radians, if available.
+    ///
+    /// When supplied by the caller, `orbital_crossing` uses this value
+    /// instead of re-computing `OrbitalElements::from_cartesian_state`.
+    pub current_orbital_phase_angle_rad: Option<f64>,
 }
 
 fn apoapsis_met(
@@ -171,8 +186,14 @@ fn orbital_crossing(
     context: TerminationContext<'_>,
     target_rad: f64,
 ) -> bool {
-    let Some(current_angle) = orbital_phase_angle_rad(context.state, mu) else {
-        return false;
+    let current_angle = match context.current_orbital_phase_angle_rad {
+        Some(angle) => angle,
+        None => {
+            let Some(computed) = orbital_phase_angle_rad(context.state, mu) else {
+                return false;
+            };
+            computed
+        }
     };
     let Some(previous_angle) = context.previous_orbital_angle_rad else {
         return angle_near(current_angle, target_rad);
@@ -237,6 +258,7 @@ mod tests {
                 state: &state,
                 previous_orbital_angle_rad: None,
                 previous_radial_velocity_mps: None,
+                current_orbital_phase_angle_rad: None,
             }),
             Some(StopReason::DurationMet)
         );
@@ -257,6 +279,7 @@ mod tests {
                 state: &state,
                 previous_orbital_angle_rad: None,
                 previous_radial_velocity_mps: None,
+                current_orbital_phase_angle_rad: None,
             }),
             None
         );
@@ -268,6 +291,7 @@ mod tests {
                 state: &state,
                 previous_orbital_angle_rad: None,
                 previous_radial_velocity_mps: None,
+                current_orbital_phase_angle_rad: None,
             }),
             Some(StopReason::StepCountMet)
         );

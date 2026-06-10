@@ -195,7 +195,13 @@ impl Propagator {
     {
         let mut steps = 0_usize;
         let mut samples = Vec::new();
-        let mut previous_orbital_angle_rad = orbital_phase_angle_rad(&self.current_state()?, mu);
+        let needs_orbital_phase = termination.needs_orbital_phase();
+        let mut current_orbital_phase_angle_rad = if needs_orbital_phase {
+            orbital_phase_angle_rad(&self.current_state()?, mu)
+        } else {
+            None
+        };
+        let mut previous_orbital_angle_rad = current_orbital_phase_angle_rad;
         let mut previous_radial_velocity_mps = Some(radial_velocity_mps(&self.current_state()?));
 
         if self.sample_config.is_some() {
@@ -216,6 +222,7 @@ impl Propagator {
                 state: &state,
                 previous_orbital_angle_rad,
                 previous_radial_velocity_mps,
+                current_orbital_phase_angle_rad,
             };
 
             if let Some(reason) = termination.stop_reason(context) {
@@ -240,12 +247,12 @@ impl Propagator {
                 });
             }
 
-            let step_seconds = match termination.remaining_seconds(self.start_epoch, self.epoch) {
-                Some(remaining) => self.dt.seconds().min(remaining),
-                None => self.dt.seconds(),
+            let step = match termination.remaining_seconds(self.start_epoch, self.epoch) {
+                Some(remaining) if remaining < self.dt.seconds() => {
+                    TimeStep::from_seconds(remaining).ok_or(PropagationError::InvalidStep)?
+                }
+                _ => self.dt,
             };
-
-            let step = TimeStep::from_seconds(step_seconds).ok_or(PropagationError::InvalidStep)?;
 
             integrator
                 .step(dynamics, &mut self.states.view_mut(), 0, self.epoch, step)
@@ -258,7 +265,10 @@ impl Propagator {
             steps += 1;
 
             let state = self.states.read_state(0).map_err(PropagationError::State)?;
-            previous_orbital_angle_rad = orbital_phase_angle_rad(&state, mu);
+            if needs_orbital_phase {
+                current_orbital_phase_angle_rad = orbital_phase_angle_rad(&state, mu);
+            }
+            previous_orbital_angle_rad = current_orbital_phase_angle_rad;
             previous_radial_velocity_mps = Some(radial_velocity_mps(&state));
 
             if let Some(config) = self.sample_config

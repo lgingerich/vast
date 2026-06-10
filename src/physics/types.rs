@@ -233,6 +233,15 @@ impl Position {
         vector_is_finite(value).then_some(Self(value))
     }
 
+    /// Creates a position without finite-value checks.
+    ///
+    /// Callers must guarantee all components are finite. In release builds,
+    /// the write path (`write_components`) enforces this before values land
+    /// in a state buffer.
+    pub(crate) const fn from_vector_unchecked(value: Vector3<f64>) -> Self {
+        Self(value)
+    }
+
     /// Returns this position as a Cartesian vector.
     #[inline]
     pub const fn vector(self) -> Vector3<f64> {
@@ -249,6 +258,15 @@ impl Velocity {
     /// Creates a velocity from a finite Cartesian vector.
     pub fn from_vector(value: Vector3<f64>) -> Option<Self> {
         vector_is_finite(value).then_some(Self(value))
+    }
+
+    /// Creates a velocity without finite-value checks.
+    ///
+    /// Callers must guarantee all components are finite. In release builds,
+    /// the write path (`write_components`) enforces this before values land
+    /// in a state buffer.
+    pub(crate) const fn from_vector_unchecked(value: Vector3<f64>) -> Self {
+        Self(value)
     }
 
     /// Returns this velocity as a Cartesian vector.
