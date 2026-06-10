@@ -1,12 +1,11 @@
 use nalgebra::Vector3;
 
+use super::constants::{
+    DEFAULT_CIRCULAR_ECCENTRICITY_TOLERANCE, DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE_RAD, TWO_PI,
+};
 use super::diagnostics::Eccentricity;
 use super::state::{CartesianState, CartesianStates};
 use super::types::{Angle, AngularRate, Distance, GravitationalParameter, Position, Velocity};
-
-const DEFAULT_CIRCULAR_ECCENTRICITY_TOLERANCE: f64 = 1.0e-6;
-const DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE_RAD: f64 = 1.0e-10;
-const TWO_PI: f64 = 2.0 * std::f64::consts::PI;
 
 /// Policy for classifying singular orbital-element cases.
 ///

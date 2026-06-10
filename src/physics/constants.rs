@@ -20,3 +20,12 @@ pub const R_EARTH: f64 = 6378137.0;
 ///
 /// <https://earth-info.nga.mil/index.php?dir=wgs84&action=wgs84#egm2008>
 pub const J2_EARTH: f64 = 1.08262668e-3;
+
+/// Default tolerance for classifying an orbit as circular, dimensionless.
+pub const DEFAULT_CIRCULAR_ECCENTRICITY_TOLERANCE: f64 = 1.0e-6;
+
+/// Default tolerance for classifying an orbit as equatorial, in radians.
+pub const DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE_RAD: f64 = 1.0e-10;
+
+/// Two pi.
+pub const TWO_PI: f64 = 2.0 * std::f64::consts::PI;
