@@ -1,8 +1,8 @@
 use nalgebra::Vector3;
 
-use crate::diagnostics::Eccentricity;
-use crate::state::{CartesianState, CartesianStates};
-use crate::types::{Angle, AngularRate, Distance, GravitationalParameter, Position, Velocity};
+use super::diagnostics::Eccentricity;
+use super::state::{CartesianState, CartesianStates};
+use super::types::{Angle, AngularRate, Distance, GravitationalParameter, Position, Velocity};
 
 const DEFAULT_CIRCULAR_ECCENTRICITY_TOLERANCE: f64 = 1.0e-6;
 const DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE_RAD: f64 = 1.0e-10;
@@ -462,12 +462,12 @@ fn normalize_angle(radians: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::constants::{J2_EARTH, MU_EARTH, R_EARTH};
-    use crate::dynamics::{OblateBodyGravity, TwoBodyGravity};
-    use crate::integrators::{Integrator, VelocityVerletIntegrator};
-    use crate::orbits::{CircularOrbit, CircularOrbitOrientation, OrbitDirection};
-    use crate::state::CartesianStateBuffer;
-    use crate::types::{Duration, Epoch, Position, TimeStep, Velocity};
+    use crate::physics::constants::{J2_EARTH, MU_EARTH, R_EARTH};
+    use crate::physics::dynamics::{OblateBodyGravity, TwoBodyGravity};
+    use crate::physics::integrators::{Integrator, VelocityVerletIntegrator};
+    use crate::physics::orbits::{CircularOrbit, CircularOrbitOrientation, OrbitDirection};
+    use crate::physics::state::CartesianStateBuffer;
+    use crate::physics::types::{Duration, Epoch, Position, TimeStep, Velocity};
 
     type TestResult = Result<(), &'static str>;
 

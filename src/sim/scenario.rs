@@ -1,16 +1,16 @@
 use serde::{Deserialize, Serialize};
 
-use crate::constants::{MU_EARTH, R_EARTH};
-use crate::dynamics::TwoBodyGravity;
+use super::propagator::{Propagator, SampleConfig};
+use super::termination::TerminationCondition;
 use crate::errors::ScenarioError;
-use crate::integrators::{
+use crate::physics::constants::{MU_EARTH, R_EARTH};
+use crate::physics::dynamics::TwoBodyGravity;
+use crate::physics::integrators::{
     EulerIntegrator, LeapfrogIntegrator, RungeKutta4Integrator, VelocityVerletIntegrator,
 };
-use crate::orbits::{CircularOrbit, CircularOrbitOrientation, OrbitDirection};
-use crate::propagator::{Propagator, SampleConfig};
-use crate::state::CartesianState;
-use crate::termination::TerminationCondition;
-use crate::types::{Angle, Distance, Duration, GravitationalParameter, TimeStep};
+use crate::physics::orbits::{CircularOrbit, CircularOrbitOrientation, OrbitDirection};
+use crate::physics::state::CartesianState;
+use crate::physics::types::{Angle, Distance, Duration, GravitationalParameter, TimeStep};
 
 /// Serializable scenario definition loaded from TOML.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -197,7 +197,7 @@ impl IntegratorKind {
     pub fn propagate(
         self,
         scenario: &mut BuiltScenario,
-    ) -> Result<crate::propagator::PropagationResult, crate::errors::PropagationError> {
+    ) -> Result<crate::sim::propagator::PropagationResult, crate::errors::PropagationError> {
         match self {
             Self::Leapfrog => scenario.propagator.propagate_until(
                 &LeapfrogIntegrator,

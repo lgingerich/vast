@@ -1,7 +1,7 @@
 use nalgebra::Vector3;
 
-use crate::state::CartesianState;
-use crate::types::{Angle, Distance, Duration, GravitationalParameter, Position, Speed, Velocity};
+use super::state::CartesianState;
+use super::types::{Angle, Distance, Duration, GravitationalParameter, Position, Speed, Velocity};
 
 /// Direction of motion around an orbital plane.
 pub enum OrbitDirection {
@@ -161,7 +161,7 @@ impl Orbit {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::constants::{MU_EARTH, R_EARTH};
+    use crate::physics::constants::{MU_EARTH, R_EARTH};
 
     type TestResult = Result<(), &'static str>;
 

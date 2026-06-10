@@ -1,6 +1,6 @@
-use crate::elements::OrbitalElements;
-use crate::state::CartesianState;
-use crate::types::{Duration, Epoch, GravitationalParameter};
+use crate::physics::elements::OrbitalElements;
+use crate::physics::state::CartesianState;
+use crate::physics::types::{Duration, Epoch, GravitationalParameter};
 
 const DEFAULT_ORBITAL_MIN_STEPS: usize = 1;
 const ORBITAL_ANGLE_TOLERANCE_RAD: f64 = 0.05;

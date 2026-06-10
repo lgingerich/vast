@@ -1,8 +1,8 @@
+use super::propagator::PropagationResult;
+use super::scenario::{BuiltScenario, ScenarioConfig};
+use super::termination::StopReason;
 use crate::errors::EnvironmentError;
-use crate::propagator::PropagationResult;
-use crate::scenario::{BuiltScenario, ScenarioConfig};
-use crate::state::CartesianState;
-use crate::termination::StopReason;
+use crate::physics::state::CartesianState;
 
 /// Inertial thrust acceleration action in meters per second squared.
 ///
@@ -100,7 +100,7 @@ impl Environment for LeoCircularEnv {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::scenario::ScenarioConfig;
+    use crate::sim::scenario::ScenarioConfig;
 
     #[test]
     fn reset_and_step_one_episode() {

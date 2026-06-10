@@ -1,9 +1,9 @@
-use crate::dynamics::Dynamics;
+use super::termination::{StopReason, TerminationCondition, TerminationContext};
 use crate::errors::PropagationError;
-use crate::integrators::Integrator;
-use crate::state::{CartesianState, CartesianStateBuffer};
-use crate::termination::{StopReason, TerminationCondition, TerminationContext};
-use crate::types::{Epoch, GravitationalParameter, TimeStep, Velocity};
+use crate::physics::dynamics::Dynamics;
+use crate::physics::integrators::Integrator;
+use crate::physics::state::{CartesianState, CartesianStateBuffer};
+use crate::physics::types::{Epoch, GravitationalParameter, TimeStep, Velocity};
 use nalgebra::Vector3;
 
 /// Discrete velocity change applied at a segment boundary (above dynamics).
@@ -275,7 +275,7 @@ impl Propagator {
 }
 
 fn orbital_phase_angle_rad(state: &CartesianState, mu: GravitationalParameter) -> Option<f64> {
-    crate::elements::OrbitalElements::from_cartesian_state(state, mu)
+    crate::physics::elements::OrbitalElements::from_cartesian_state(state, mu)
         .map(|elements| elements.orbital_phase_angle().radians())
 }
 
@@ -395,9 +395,12 @@ mod tests {
             GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu");
         let departure_radius_m = R_EARTH + 400_000.0;
         let arrival_radius_m = R_EARTH + 35_786_000.0;
-        let (dv1, _) =
-            crate::mission::hohmann_delta_v_mps(MU_EARTH, departure_radius_m, arrival_radius_m)
-                .expect("delta-v");
+        let (dv1, _) = crate::sim::mission::hohmann_delta_v_mps(
+            MU_EARTH,
+            departure_radius_m,
+            arrival_radius_m,
+        )
+        .expect("delta-v");
 
         let orbit = CircularOrbit {
             radius: Distance::from_meters(departure_radius_m).expect("radius"),

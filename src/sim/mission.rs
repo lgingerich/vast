@@ -1,19 +1,19 @@
 use serde::{Deserialize, Serialize};
 
-use crate::constants::R_EARTH;
-use crate::dynamics::TwoBodyGravity;
-use crate::errors::{MissionError, ScenarioError};
-use crate::integrators::{
-    EulerIntegrator, LeapfrogIntegrator, RungeKutta4Integrator, VelocityVerletIntegrator,
-};
-use crate::orbits::{CircularOrbit, CircularOrbitOrientation, OrbitDirection};
-use crate::propagator::{
+use super::propagator::{
     ImpulsiveBurn, PropagationResult, Propagator, SampleConfig, TrajectorySample,
 };
-use crate::scenario::{IntegratorKind, parse_force_model, parse_integrator};
-use crate::state::CartesianState;
-use crate::termination::{StopReason, TerminationCondition};
-use crate::types::{Angle, Distance, Duration, GravitationalParameter, TimeStep};
+use super::scenario::{IntegratorKind, parse_force_model, parse_integrator};
+use super::termination::{StopReason, TerminationCondition};
+use crate::errors::{MissionError, ScenarioError};
+use crate::physics::constants::R_EARTH;
+use crate::physics::dynamics::TwoBodyGravity;
+use crate::physics::integrators::{
+    EulerIntegrator, LeapfrogIntegrator, RungeKutta4Integrator, VelocityVerletIntegrator,
+};
+use crate::physics::orbits::{CircularOrbit, CircularOrbitOrientation, OrbitDirection};
+use crate::physics::state::CartesianState;
+use crate::physics::types::{Angle, Distance, Duration, GravitationalParameter, TimeStep};
 
 /// Serializable mission scenario loaded from TOML.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -122,7 +122,7 @@ pub struct BurnConfig {
 #[derive(Debug, Clone, PartialEq)]
 pub enum LoadedScenario {
     /// Single-rollout RL scenario.
-    Rollout(crate::scenario::ScenarioConfig),
+    Rollout(crate::sim::scenario::ScenarioConfig),
     /// Multi-segment mission scenario.
     Mission(MissionScenarioConfig),
 }
@@ -152,9 +152,9 @@ impl LoadedScenario {
                 .map_err(|error: toml::de::Error| ScenarioError::ParseFile(error.to_string()))?;
             Ok(Self::Mission(mission))
         } else {
-            Ok(Self::Rollout(crate::scenario::ScenarioConfig::from_toml(
-                contents,
-            )?))
+            Ok(Self::Rollout(
+                crate::sim::scenario::ScenarioConfig::from_toml(contents)?,
+            ))
         }
     }
 }
@@ -294,7 +294,7 @@ pub struct MissionResult {
     /// Final Cartesian state after all segments and burns.
     pub final_state: CartesianState,
     /// Final simulation epoch.
-    pub final_epoch: crate::types::Epoch,
+    pub final_epoch: crate::physics::types::Epoch,
 }
 
 /// Executes multi-segment mission plans using the shared propagator.
@@ -340,7 +340,7 @@ impl MissionRunner {
         let final_epoch = segment_results
             .last()
             .map(|segment| segment.propagation.final_epoch)
-            .unwrap_or_else(|| crate::types::Epoch::from_seconds(0.0).expect("epoch"));
+            .unwrap_or_else(|| crate::physics::types::Epoch::from_seconds(0.0).expect("epoch"));
 
         Ok(MissionResult {
             segments: segment_results,
@@ -489,8 +489,8 @@ fn build_initial_state(
             arg_periapsis_deg,
             true_anomaly_deg,
         } => {
-            use crate::diagnostics::Eccentricity;
-            use crate::elements::ClassicalOrbitalElements;
+            use crate::physics::diagnostics::Eccentricity;
+            use crate::physics::elements::ClassicalOrbitalElements;
 
             let elements = ClassicalOrbitalElements {
                 semi_major_axis: Distance::from_meters(*semi_major_axis_m).ok_or_else(|| {
@@ -632,11 +632,7 @@ pub fn bielliptic_delta_v_mps(
     if !mu.is_finite() || mu <= 0.0 {
         return None;
     }
-    for radius in [
-        departure_radius_m,
-        arrival_radius_m,
-        intermediate_radius_m,
-    ] {
+    for radius in [departure_radius_m, arrival_radius_m, intermediate_radius_m] {
         if !radius.is_finite() || radius <= 0.0 {
             return None;
         }
@@ -699,9 +695,9 @@ pub fn hohmann_delta_v_mps(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::constants::{MU_EARTH, R_EARTH};
-    use crate::elements::OrbitalElements;
-    use crate::types::GravitationalParameter;
+    use crate::physics::constants::{MU_EARTH, R_EARTH};
+    use crate::physics::elements::OrbitalElements;
+    use crate::physics::types::GravitationalParameter;
 
     fn elements_semi_major_axis_m(elements: &OrbitalElements) -> f64 {
         match elements {
@@ -830,9 +826,15 @@ mod tests {
 
     #[test]
     fn bielliptic_delta_v_rejects_invalid_intermediate_radius() {
-        assert!(bielliptic_delta_v_mps(MU_EARTH, R_EARTH + 400_000.0, R_EARTH + 35_786_000.0, R_EARTH
-            + 400_000.0)
-        .is_none());
+        assert!(
+            bielliptic_delta_v_mps(
+                MU_EARTH,
+                R_EARTH + 400_000.0,
+                R_EARTH + 35_786_000.0,
+                R_EARTH + 400_000.0
+            )
+            .is_none()
+        );
     }
 
     #[test]
@@ -953,10 +955,9 @@ mod tests {
 
     #[test]
     fn loads_bielliptic_transfer_scenario_file() {
-        let loaded = LoadedScenario::from_file(std::path::Path::new(
-            "scenarios/bielliptic_leo_to_geo.toml",
-        ))
-        .expect("loaded scenario");
+        let loaded =
+            LoadedScenario::from_file(std::path::Path::new("scenarios/bielliptic_leo_to_geo.toml"))
+                .expect("loaded scenario");
         let LoadedScenario::Mission(config) = loaded else {
             panic!("expected mission scenario");
         };

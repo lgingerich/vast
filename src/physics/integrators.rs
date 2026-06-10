@@ -1,10 +1,10 @@
-use crate::dynamics::Dynamics;
-use crate::errors::IntegrationError;
-use crate::state::{
+use super::dynamics::Dynamics;
+use super::state::{
     CartesianPositionComponents, CartesianStateComponents, CartesianStatesMut,
     CartesianVelocityComponents,
 };
-use crate::types::{Epoch, TimeStep};
+use super::types::{Epoch, TimeStep};
+use crate::errors::IntegrationError;
 use nalgebra::Vector3;
 
 /// Semi-implicit Euler time integrator.
@@ -300,13 +300,17 @@ fn components_from_vectors(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::constants::{MU_EARTH, R_EARTH};
-    use crate::diagnostics::OrbitalDiagnostics;
-    use crate::dynamics::TwoBodyGravity;
     use crate::errors::{DynamicsError, StateError};
-    use crate::orbits::{CircularOrbit, CircularOrbitOrientation, OrbitDirection};
-    use crate::state::{CartesianAccelerationComponents, CartesianState, CartesianStateBuffer};
-    use crate::types::{Acceleration, Angle, Distance, GravitationalParameter, Position, Velocity};
+    use crate::physics::constants::{MU_EARTH, R_EARTH};
+    use crate::physics::diagnostics::OrbitalDiagnostics;
+    use crate::physics::dynamics::TwoBodyGravity;
+    use crate::physics::orbits::{CircularOrbit, CircularOrbitOrientation, OrbitDirection};
+    use crate::physics::state::{
+        CartesianAccelerationComponents, CartesianState, CartesianStateBuffer,
+    };
+    use crate::physics::types::{
+        Acceleration, Angle, Distance, GravitationalParameter, Position, Velocity,
+    };
     use nalgebra::Vector3;
 
     type TestResult = Result<(), &'static str>;
@@ -862,5 +866,125 @@ mod tests {
     #[test]
     fn time_step_rejects_nan() {
         assert!(TimeStep::from_seconds(f64::NAN).is_none());
+    }
+
+    // ── angular momentum conservation ──────────────────────────────
+
+    fn specific_angular_momentum_after_one_period<I: Integrator>(integrator: I) -> TestResult {
+        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)
+            .ok_or("invalid earth mu")?;
+        let gravity = TwoBodyGravity { mu };
+        let orbit = circular_orbit(R_EARTH + 400_000.0, 0.0, mu).ok_or("invalid circular orbit")?;
+        let mut states = CartesianStateBuffer::<1>::new();
+        states
+            .write_from_state(
+                0,
+                &orbit.to_cartesian_state().ok_or("invalid initial state")?,
+            )
+            .map_err(|_| "failed to write state")?;
+
+        let initial_h = OrbitalDiagnostics::from_states(&states.view(), 0, mu)
+            .ok_or("invalid initial diagnostics")?
+            .specific_angular_momentum
+            .square_meters_per_second();
+
+        let mut epoch = Epoch::from_seconds(0.0).ok_or("invalid epoch")?;
+        let period_s = orbit.period().ok_or("invalid period")?.seconds();
+        let dt = TimeStep::from_seconds(30.0).ok_or("invalid time step")?;
+
+        while epoch.seconds() < period_s {
+            let remaining_s = period_s - epoch.seconds();
+            let step =
+                TimeStep::from_seconds(dt.seconds().min(remaining_s)).ok_or("invalid step")?;
+            integrator
+                .step(&gravity, &mut states.view_mut(), 0, epoch, step)
+                .map_err(|_| "integration failed")?;
+            epoch = epoch.advance_by(step).ok_or("invalid next epoch")?;
+        }
+
+        let final_h = OrbitalDiagnostics::from_states(&states.view(), 0, mu)
+            .ok_or("invalid final diagnostics")?
+            .specific_angular_momentum
+            .square_meters_per_second();
+
+        assert!(final_h.is_finite(), "angular momentum is non-finite");
+        assert_close((final_h - initial_h).abs(), 0.0, 0.1);
+        Ok(())
+    }
+
+    #[test]
+    fn velocity_verlet_conserves_angular_momentum() -> TestResult {
+        specific_angular_momentum_after_one_period(VelocityVerletIntegrator)
+    }
+
+    #[test]
+    fn leapfrog_conserves_angular_momentum() -> TestResult {
+        specific_angular_momentum_after_one_period(LeapfrogIntegrator)
+    }
+
+    #[test]
+    fn rk4_preserves_angular_momentum() -> TestResult {
+        specific_angular_momentum_after_one_period(RungeKutta4Integrator)
+    }
+
+    #[test]
+    fn euler_preserves_angular_momentum() -> TestResult {
+        specific_angular_momentum_after_one_period(EulerIntegrator)
+    }
+
+    // ── integrator energy fidelity ordering ────────────────────────
+
+    fn energy_error_after_one_period<I: Integrator>(integrator: I) -> Result<f64, &'static str> {
+        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)
+            .ok_or("invalid earth mu")?;
+        let gravity = TwoBodyGravity { mu };
+        let orbit = circular_orbit(R_EARTH + 400_000.0, 0.0, mu).ok_or("invalid circular orbit")?;
+        let mut states = CartesianStateBuffer::<1>::new();
+        states
+            .write_from_state(
+                0,
+                &orbit.to_cartesian_state().ok_or("invalid initial state")?,
+            )
+            .map_err(|_| "failed to write state")?;
+
+        let initial_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)
+            .ok_or("invalid initial diagnostics")?
+            .specific_energy
+            .square_meters_per_square_second();
+
+        let mut epoch = Epoch::from_seconds(0.0).ok_or("invalid epoch")?;
+        let period_s = orbit.period().ok_or("invalid period")?.seconds();
+        let dt = TimeStep::from_seconds(30.0).ok_or("invalid time step")?;
+
+        while epoch.seconds() < period_s {
+            let remaining_s = period_s - epoch.seconds();
+            let step =
+                TimeStep::from_seconds(dt.seconds().min(remaining_s)).ok_or("invalid step")?;
+            integrator
+                .step(&gravity, &mut states.view_mut(), 0, epoch, step)
+                .map_err(|_| "integration failed")?;
+            epoch = epoch.advance_by(step).ok_or("invalid next epoch")?;
+        }
+
+        let final_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)
+            .ok_or("invalid final diagnostics")?
+            .specific_energy
+            .square_meters_per_square_second();
+
+        Ok((final_energy - initial_energy).abs())
+    }
+
+    #[test]
+    fn rk4_conserves_energy_better_than_euler() -> TestResult {
+        let euler_error = energy_error_after_one_period(EulerIntegrator)
+            .map_err(|_| "failed querying euler energy error")?;
+        let rk4_error = energy_error_after_one_period(RungeKutta4Integrator)
+            .map_err(|_| "failed querying rk4 energy error")?;
+
+        assert!(
+            rk4_error < euler_error,
+            "RK4 energy error {rk4_error} should be less than Euler error {euler_error}",
+        );
+        Ok(())
     }
 }

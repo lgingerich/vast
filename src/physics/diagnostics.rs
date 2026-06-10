@@ -1,7 +1,7 @@
 use nalgebra::Vector3;
 
-use crate::state::{CartesianState, CartesianStates};
-use crate::types::{Distance, GravitationalParameter, Speed};
+use super::state::{CartesianState, CartesianStates};
+use super::types::{Distance, GravitationalParameter, Speed};
 
 /// Specific orbital energy, measured in square meters per square second.
 #[repr(transparent)]
@@ -168,10 +168,10 @@ fn bound_semi_major_axis(mu: f64, specific_energy: f64) -> Option<Distance> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::constants::{MU_EARTH, R_EARTH};
-    use crate::orbits::{CircularOrbit, CircularOrbitOrientation, OrbitDirection};
-    use crate::state::CartesianStateBuffer;
-    use crate::types::{Angle, Position, Velocity};
+    use crate::{
+        Angle, CartesianStateBuffer, CircularOrbit, CircularOrbitOrientation, MU_EARTH,
+        OrbitDirection, Position, R_EARTH, Velocity,
+    };
 
     type TestResult = Result<(), &'static str>;
 

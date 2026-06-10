@@ -1,7 +1,7 @@
 use nalgebra::Vector3;
 
+pub use super::types::{Position, Velocity};
 use crate::errors::StateError;
-pub use crate::types::{Position, Velocity};
 
 /// Position in meters (SI), Cartesian frame.
 #[derive(Debug, Clone, Copy, PartialEq)]

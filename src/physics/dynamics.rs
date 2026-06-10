@@ -1,8 +1,8 @@
-use crate::errors::DynamicsError;
-pub use crate::state::{CartesianAccelerationComponents, CartesianStateComponents};
-pub use crate::types::{
+pub use super::state::{CartesianAccelerationComponents, CartesianStateComponents};
+pub use super::types::{
     AngularRate, AreaPerMass, Distance, Epoch, GravitationalParameter, MassDensity,
 };
+use crate::errors::DynamicsError;
 
 /// Point-mass gravity model for a single central body.
 pub struct TwoBodyGravity {
@@ -215,14 +215,14 @@ impl<A: Dynamics, B: Dynamics> Dynamics for CompositeDynamics<A, B> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::constants::{J2_EARTH, MU_EARTH, R_EARTH};
-    use crate::diagnostics::OrbitalDiagnostics;
-    use crate::integrators::{Integrator, RungeKutta4Integrator};
-    use crate::orbits::{CircularOrbit, CircularOrbitOrientation, OrbitDirection};
-    use crate::state::{
+    use crate::physics::constants::{J2_EARTH, MU_EARTH, R_EARTH};
+    use crate::physics::diagnostics::OrbitalDiagnostics;
+    use crate::physics::integrators::{Integrator, RungeKutta4Integrator};
+    use crate::physics::orbits::{CircularOrbit, CircularOrbitOrientation, OrbitDirection};
+    use crate::physics::state::{
         CartesianPositionComponents, CartesianStateBuffer, CartesianVelocityComponents,
     };
-    use crate::types::{Angle, Position, TimeStep};
+    use crate::physics::types::{Angle, Position, TimeStep};
     use nalgebra::Vector3;
 
     type TestResult = Result<(), &'static str>;
@@ -762,6 +762,78 @@ mod tests {
             .square_meters_per_square_second();
 
         assert!(final_energy < initial_energy);
+        Ok(())
+    }
+
+    #[test]
+    fn drag_decay_energy_loss_matches_physical_expectation() -> TestResult {
+        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)
+            .ok_or("invalid mu")?;
+        let radius = R_EARTH + 250_000.0;
+        let orbit = CircularOrbit {
+            radius: Distance::from_meters(radius).ok_or("invalid radius")?,
+            mu,
+            orientation: CircularOrbitOrientation::equatorial(),
+            phase: Angle::from_radians(0.0).ok_or("invalid phase")?,
+            direction: OrbitDirection::Prograde,
+        };
+        let mut states = CartesianStateBuffer::<1>::new();
+        states
+            .write_from_state(
+                0,
+                &orbit.to_cartesian_state().ok_or("invalid initial state")?,
+            )
+            .map_err(|_| "failed to write state")?;
+        let initial_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)
+            .ok_or("invalid initial diagnostics")?
+            .specific_energy
+            .square_meters_per_square_second();
+        let initial_altitude_m = OrbitalDiagnostics::from_states(&states.view(), 0, mu)
+            .ok_or("invalid initial diagnostics")?
+            .radius
+            .meters()
+            - R_EARTH;
+        let dynamics = CompositeDynamics {
+            first: TwoBodyGravity { mu },
+            second: drag_model(0.1).ok_or("invalid drag")?,
+        };
+        let integrator = RungeKutta4Integrator;
+        let dt = TimeStep::from_seconds(10.0).ok_or("invalid time step")?;
+        let mut epoch = Epoch::from_seconds(0.0).ok_or("invalid epoch")?;
+        let period_s = orbit.period().ok_or("invalid period")?.seconds();
+
+        while epoch.seconds() < period_s {
+            let remaining_s = period_s - epoch.seconds();
+            let step =
+                TimeStep::from_seconds(dt.seconds().min(remaining_s)).ok_or("invalid step")?;
+            integrator
+                .step(&dynamics, &mut states.view_mut(), 0, epoch, step)
+                .map_err(|_| "integration failed")?;
+            epoch = epoch.advance_by(step).ok_or("invalid next epoch")?;
+        }
+
+        let diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, mu)
+            .ok_or("invalid final diagnostics")?;
+        let final_energy = diagnostics
+            .specific_energy
+            .square_meters_per_square_second();
+        let final_altitude_m = diagnostics.radius.meters() - R_EARTH;
+        let energy_loss = initial_energy - final_energy;
+
+        let min_energy_loss = 1.0;
+        let max_energy_loss = 100_000.0;
+        assert!(
+            energy_loss > min_energy_loss,
+            "expected energy loss > {min_energy_loss} m²/s², got {energy_loss}",
+        );
+        assert!(
+            energy_loss < max_energy_loss,
+            "energy loss {energy_loss} exceeds sanity bound {max_energy_loss} m²/s²",
+        );
+        assert!(
+            final_altitude_m < initial_altitude_m,
+            "drag should reduce altitude: initial {initial_altitude_m} m, final {final_altitude_m} m",
+        );
         Ok(())
     }
 }
