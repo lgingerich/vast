@@ -3,9 +3,10 @@ use nalgebra::Vector3;
 use super::constants::{
     DEFAULT_CIRCULAR_ECCENTRICITY_TOLERANCE, DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE_RAD, TWO_PI,
 };
-use super::diagnostics::Eccentricity;
 use super::state::{CartesianState, CartesianStates};
-use super::types::{Angle, AngularRate, Distance, GravitationalParameter, Position, Velocity};
+use super::types::{
+    Angle, AngularRate, Distance, Eccentricity, GravitationalParameter, Position, Velocity,
+};
 
 /// Policy for classifying singular orbital-element cases.
 ///
@@ -158,14 +159,6 @@ pub fn j2_circular_raan_rate(
         return None;
     }
 
-    debug_assert!(semi_major_axis.is_finite());
-    debug_assert!(semi_major_axis > 0.0);
-    debug_assert!(inclination.is_finite());
-    debug_assert!(mu.is_finite());
-    debug_assert!(mu > 0.0);
-    debug_assert!(equatorial_radius.is_finite());
-    debug_assert!(equatorial_radius > 0.0);
-
     let mean_motion = (mu / semi_major_axis.powi(3)).sqrt();
     let radius_ratio = equatorial_radius / semi_major_axis;
     AngularRate::from_radians_per_second(
@@ -269,44 +262,31 @@ impl OrbitalElements {
             return None;
         }
 
-        let mu = mu.meters_cubed_per_second_squared();
-        let radius = position.norm();
-        let speed_sq = velocity.norm_squared();
+        let diagnostics =
+            super::diagnostics::OrbitalDiagnostics::from_components(position, velocity, mu)?;
 
-        if radius == 0.0 {
+        if diagnostics
+            .specific_energy
+            .square_meters_per_square_second()
+            >= 0.0
+        {
             return None;
         }
 
-        let h = position.cross(&velocity);
-        let h_norm = h.norm();
+        let semi_major_axis = diagnostics.semi_major_axis?;
+        let eccentricity = diagnostics.eccentricity;
+        let eccentricity_scalar = eccentricity.scalar();
+        let eccentricity_vector = diagnostics.eccentricity_vector;
+        let h = diagnostics.specific_angular_momentum_vector;
+        let h_norm = diagnostics
+            .specific_angular_momentum
+            .square_meters_per_second();
         if h_norm == 0.0 {
             return None;
         }
 
-        debug_assert!(position.x.is_finite());
-        debug_assert!(position.y.is_finite());
-        debug_assert!(position.z.is_finite());
-        debug_assert!(velocity.x.is_finite());
-        debug_assert!(velocity.y.is_finite());
-        debug_assert!(velocity.z.is_finite());
-        debug_assert!(mu.is_finite());
-        debug_assert!(mu > 0.0);
-        debug_assert!(radius.is_finite());
-        debug_assert!(radius > 0.0);
-        debug_assert!(h_norm.is_finite());
-        debug_assert!(h_norm > 0.0);
-
-        let specific_energy = 0.5 * speed_sq - mu / radius;
-        if specific_energy >= 0.0 {
-            return None;
-        }
-
-        let semi_major_axis = Distance::from_meters(-mu / (2.0 * specific_energy))?;
         let h_hat = h / h_norm;
         let node = Vector3::new(-h.y, h.x, 0.0);
-        let eccentricity_vector = velocity.cross(&h) / mu - position / radius;
-        let eccentricity_scalar = eccentricity_vector.norm();
-        let eccentricity = Eccentricity::from_scalar(eccentricity_scalar)?;
         let inclination = angle_from_radians((h.z / h_norm).clamp(-1.0, 1.0).acos())?;
 
         let is_circular = eccentricity_scalar <= classification.circular_eccentricity_tolerance;

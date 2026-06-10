@@ -489,8 +489,8 @@ fn build_initial_state(
             arg_periapsis_deg,
             true_anomaly_deg,
         } => {
-            use crate::physics::diagnostics::Eccentricity;
             use crate::physics::elements::ClassicalOrbitalElements;
+            use crate::physics::types::Eccentricity;
 
             let elements = ClassicalOrbitalElements {
                 semi_major_axis: Distance::from_meters(*semi_major_axis_m).ok_or_else(|| {

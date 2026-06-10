@@ -7,7 +7,7 @@ pub(crate) mod sim;
 
 pub use physics::{
     constants::{J2_EARTH, MU_EARTH, R_EARTH},
-    diagnostics::{Eccentricity, OrbitalDiagnostics, SpecificAngularMomentum, SpecificEnergy},
+    diagnostics::{OrbitalDiagnostics, SpecificAngularMomentum, SpecificEnergy},
     dynamics::{
         AtmosphericDrag, CompositeDynamics, Dynamics, ExponentialAtmosphere, OblateBodyGravity,
         TwoBodyGravity,
@@ -28,7 +28,7 @@ pub use physics::{
         CartesianVelocityComponents,
     },
     types::{
-        Acceleration, Angle, AngularRate, AreaPerMass, Distance, Duration, Epoch,
+        Acceleration, Angle, AngularRate, AreaPerMass, Distance, Duration, Eccentricity, Epoch,
         GravitationalParameter, MassDensity, Position, Speed, TimeStep, Velocity,
     },
 };

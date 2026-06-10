@@ -204,6 +204,24 @@ impl GravitationalParameter {
     }
 }
 
+/// Orbital eccentricity, dimensionless.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct Eccentricity(f64);
+
+impl Eccentricity {
+    /// Creates an eccentricity from a dimensionless scalar.
+    pub fn from_scalar(value: f64) -> Option<Self> {
+        (value.is_finite() && value >= 0.0).then_some(Self(value))
+    }
+
+    /// Returns this eccentricity as a dimensionless scalar.
+    #[inline]
+    pub const fn scalar(self) -> f64 {
+        self.0
+    }
+}
+
 /// Position vector in a Cartesian frame, measured in meters.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq)]

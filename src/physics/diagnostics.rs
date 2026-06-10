@@ -1,7 +1,7 @@
 use nalgebra::Vector3;
 
 use super::state::{CartesianState, CartesianStates};
-use super::types::{Distance, GravitationalParameter, Speed};
+use super::types::{Distance, Eccentricity, GravitationalParameter, Speed};
 
 /// Specific orbital energy, measured in square meters per square second.
 #[repr(transparent)]
@@ -35,24 +35,6 @@ impl SpecificAngularMomentum {
     /// Returns this specific angular momentum in square meters per second.
     #[inline]
     pub const fn square_meters_per_second(self) -> f64 {
-        self.0
-    }
-}
-
-/// Orbital eccentricity, dimensionless.
-#[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
-pub struct Eccentricity(f64);
-
-impl Eccentricity {
-    /// Creates an eccentricity from a dimensionless scalar.
-    pub fn from_scalar(value: f64) -> Option<Self> {
-        (value.is_finite() && value >= 0.0).then_some(Self(value))
-    }
-
-    /// Returns this eccentricity as a dimensionless scalar.
-    #[inline]
-    pub const fn scalar(self) -> f64 {
         self.0
     }
 }
@@ -101,7 +83,7 @@ impl OrbitalDiagnostics {
         )
     }
 
-    fn from_components(
+    pub(crate) fn from_components(
         position: Vector3<f64>,
         velocity: Vector3<f64>,
         mu: GravitationalParameter,
@@ -113,19 +95,6 @@ impl OrbitalDiagnostics {
         if radius == 0.0 {
             return None;
         }
-
-        debug_assert!(position.x.is_finite());
-        debug_assert!(position.y.is_finite());
-        debug_assert!(position.z.is_finite());
-        debug_assert!(velocity.x.is_finite());
-        debug_assert!(velocity.y.is_finite());
-        debug_assert!(velocity.z.is_finite());
-        debug_assert!(mu.is_finite());
-        debug_assert!(mu > 0.0);
-        debug_assert!(radius.is_finite());
-        debug_assert!(radius > 0.0);
-        debug_assert!(speed.is_finite());
-        debug_assert!(speed >= 0.0);
 
         let specific_energy = 0.5 * speed * speed - mu / radius;
         let specific_angular_momentum_vector = position.cross(&velocity);
