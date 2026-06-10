@@ -78,11 +78,6 @@ impl Dynamics for TwoBodyGravity {
             return Err(DynamicsError::PositionAtGravityCenter);
         }
 
-        debug_assert!(radius_m.is_finite());
-        debug_assert!(radius_m > 0.0);
-        debug_assert!(mu.is_finite());
-        debug_assert!(mu > 0.0);
-
         let scale = -mu / (radius_sq_m * radius_m);
         CartesianAccelerationComponents::from_meters_per_second_squared(
             scale * px,
@@ -111,13 +106,6 @@ impl Dynamics for OblateBodyGravity {
         if radius_m == 0.0 {
             return Err(DynamicsError::PositionAtGravityCenter);
         }
-
-        debug_assert!(radius_m.is_finite());
-        debug_assert!(radius_m > 0.0);
-        debug_assert!(mu.is_finite());
-        debug_assert!(mu > 0.0);
-        debug_assert!(equatorial_radius.is_finite());
-        debug_assert!(equatorial_radius > 0.0);
 
         let central_scale = -mu / (radius_sq_m * radius_m);
         let z_sq_over_r_sq = pz * pz / radius_sq_m;
@@ -164,12 +152,6 @@ impl Dynamics for AtmosphericDrag {
         if radius_m == 0.0 {
             return Err(DynamicsError::PositionAtGravityCenter);
         }
-
-        debug_assert!(radius_m.is_finite());
-        debug_assert!(radius_m > 0.0);
-        debug_assert!(velocity.x.is_finite());
-        debug_assert!(velocity.y.is_finite());
-        debug_assert!(velocity.z.is_finite());
 
         let density = self
             .atmosphere

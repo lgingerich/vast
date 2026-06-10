@@ -46,9 +46,6 @@ impl CircularOrbitOrientation {
         let (sin_inclination, cos_inclination) = inclination.sin_cos();
         let (sin_raan, cos_raan) = raan.sin_cos();
 
-        debug_assert!(inclination.is_finite());
-        debug_assert!(raan.is_finite());
-
         let p_hat = Vector3::new(cos_raan, sin_raan, 0.0);
         let h_hat = Vector3::new(
             sin_inclination * sin_raan,
@@ -85,11 +82,6 @@ impl CircularOrbit {
         let mu = self.mu.meters_cubed_per_second_squared();
         let radius = self.radius.meters();
 
-        debug_assert!(mu.is_finite());
-        debug_assert!(mu > 0.0);
-        debug_assert!(radius.is_finite());
-        debug_assert!(radius > 0.0);
-
         Speed::from_meters_per_second((mu / radius).sqrt())
     }
 
@@ -97,11 +89,6 @@ impl CircularOrbit {
     pub fn period(&self) -> Option<Duration> {
         let mu = self.mu.meters_cubed_per_second_squared();
         let radius = self.radius.meters();
-
-        debug_assert!(mu.is_finite());
-        debug_assert!(mu > 0.0);
-        debug_assert!(radius.is_finite());
-        debug_assert!(radius > 0.0);
 
         Duration::from_seconds(2.0 * std::f64::consts::PI * (radius.powi(3) / mu).sqrt())
     }
@@ -111,12 +98,6 @@ impl CircularOrbit {
         let radius = self.radius.meters();
         let speed = self.speed()?.meters_per_second();
         let phase = self.phase.radians();
-
-        debug_assert!(radius.is_finite());
-        debug_assert!(radius > 0.0);
-        debug_assert!(speed.is_finite());
-        debug_assert!(speed >= 0.0);
-        debug_assert!(phase.is_finite());
 
         let (sin_phase, cos_phase) = phase.sin_cos();
 

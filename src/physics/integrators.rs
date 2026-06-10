@@ -77,18 +77,6 @@ impl Integrator for EulerIntegrator {
         let velocity = state.velocity.vector();
         let acceleration = acceleration.vector();
 
-        debug_assert!(dt_s.is_finite());
-        debug_assert!(dt_s > 0.0);
-        debug_assert!(position.x.is_finite());
-        debug_assert!(position.y.is_finite());
-        debug_assert!(position.z.is_finite());
-        debug_assert!(velocity.x.is_finite());
-        debug_assert!(velocity.y.is_finite());
-        debug_assert!(velocity.z.is_finite());
-        debug_assert!(acceleration.x.is_finite());
-        debug_assert!(acceleration.y.is_finite());
-        debug_assert!(acceleration.z.is_finite());
-
         let new_vel = velocity + acceleration * dt_s;
         let new_pos = position + new_vel * dt_s;
 
@@ -118,18 +106,6 @@ impl Integrator for VelocityVerletIntegrator {
         let velocity = state.velocity.vector();
         let acceleration = dynamics.acceleration_at(state, t)?.vector();
         let next_t = t.advance_by(dt).ok_or(IntegrationError::InvalidEpoch)?;
-
-        debug_assert!(dt_s.is_finite());
-        debug_assert!(dt_s > 0.0);
-        debug_assert!(position.x.is_finite());
-        debug_assert!(position.y.is_finite());
-        debug_assert!(position.z.is_finite());
-        debug_assert!(velocity.x.is_finite());
-        debug_assert!(velocity.y.is_finite());
-        debug_assert!(velocity.z.is_finite());
-        debug_assert!(acceleration.x.is_finite());
-        debug_assert!(acceleration.y.is_finite());
-        debug_assert!(acceleration.z.is_finite());
 
         let new_pos = position + velocity * dt_s + acceleration * (0.5 * dt_s * dt_s);
         let new_position =
@@ -177,18 +153,6 @@ impl Integrator for LeapfrogIntegrator {
         let acceleration = dynamics.acceleration_at(state, t)?.vector();
         let next_t = t.advance_by(dt).ok_or(IntegrationError::InvalidEpoch)?;
 
-        debug_assert!(dt_s.is_finite());
-        debug_assert!(dt_s > 0.0);
-        debug_assert!(position.x.is_finite());
-        debug_assert!(position.y.is_finite());
-        debug_assert!(position.z.is_finite());
-        debug_assert!(velocity.x.is_finite());
-        debug_assert!(velocity.y.is_finite());
-        debug_assert!(velocity.z.is_finite());
-        debug_assert!(acceleration.x.is_finite());
-        debug_assert!(acceleration.y.is_finite());
-        debug_assert!(acceleration.z.is_finite());
-
         let half_velocity = velocity + acceleration * (0.5 * dt_s);
         let new_pos = position + half_velocity * dt_s;
         let new_position =
@@ -233,15 +197,6 @@ impl Integrator for RungeKutta4Integrator {
         let dt_s = dt.seconds();
         let position = state.position.vector();
         let velocity = state.velocity.vector();
-
-        debug_assert!(dt_s.is_finite());
-        debug_assert!(dt_s > 0.0);
-        debug_assert!(position.x.is_finite());
-        debug_assert!(position.y.is_finite());
-        debug_assert!(position.z.is_finite());
-        debug_assert!(velocity.x.is_finite());
-        debug_assert!(velocity.y.is_finite());
-        debug_assert!(velocity.z.is_finite());
 
         let k1 = StateDerivative::at(dynamics, position, velocity, t)?;
         let k2 = StateDerivative::at(
