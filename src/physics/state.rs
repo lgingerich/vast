@@ -1,7 +1,7 @@
 use nalgebra::Vector3;
 
 pub use super::types::{Position, Velocity};
-use crate::errors::{DomainError, StateError};
+use crate::errors::{NumericalError, StateError};
 
 /// Position in meters (SI), Cartesian frame.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -30,11 +30,11 @@ pub struct CartesianPositionComponents {
 
 impl CartesianPositionComponents {
     /// Creates finite Cartesian position components from meters.
-    pub fn from_meters(x_m: f64, y_m: f64, z_m: f64) -> Result<Self, DomainError> {
+    pub fn from_meters(x_m: f64, y_m: f64, z_m: f64) -> Result<Self, NumericalError> {
         if components_are_finite(x_m, y_m, z_m) {
             Ok(Self { x_m, y_m, z_m })
         } else {
-            Err(DomainError::NotFinite)
+            Err(NumericalError::NotFinite { field: "position components" })
         }
     }
 
@@ -71,7 +71,7 @@ impl CartesianPositionComponents {
     }
 
     fn to_position(self) -> Result<Position, StateError> {
-        Position::from_vector(self.vector()).map_err(|_| StateError::InvalidPosition)
+        Ok(Position::from_vector(self.vector())?)
     }
 }
 
@@ -85,7 +85,7 @@ pub struct CartesianVelocityComponents {
 
 impl CartesianVelocityComponents {
     /// Creates finite Cartesian velocity components from meters per second.
-    pub fn from_meters_per_second(x_mps: f64, y_mps: f64, z_mps: f64) -> Result<Self, DomainError> {
+    pub fn from_meters_per_second(x_mps: f64, y_mps: f64, z_mps: f64) -> Result<Self, NumericalError> {
         if components_are_finite(x_mps, y_mps, z_mps) {
             Ok(Self {
                 x_mps,
@@ -93,7 +93,7 @@ impl CartesianVelocityComponents {
                 z_mps,
             })
         } else {
-            Err(DomainError::NotFinite)
+            Err(NumericalError::NotFinite { field: "velocity components" })
         }
     }
 
@@ -130,7 +130,7 @@ impl CartesianVelocityComponents {
     }
 
     fn to_velocity(self) -> Result<Velocity, StateError> {
-        Velocity::from_vector(self.vector()).map_err(|_| StateError::InvalidVelocity)
+        Ok(Velocity::from_vector(self.vector())?)
     }
 }
 
@@ -148,7 +148,7 @@ impl CartesianAccelerationComponents {
         x_mps2: f64,
         y_mps2: f64,
         z_mps2: f64,
-    ) -> Result<Self, DomainError> {
+    ) -> Result<Self, NumericalError> {
         if components_are_finite(x_mps2, y_mps2, z_mps2) {
             Ok(Self {
                 x_mps2,
@@ -156,7 +156,7 @@ impl CartesianAccelerationComponents {
                 z_mps2,
             })
         } else {
-            Err(DomainError::NotFinite)
+            Err(NumericalError::NotFinite { field: "acceleration components" })
         }
     }
 
@@ -394,14 +394,12 @@ impl<'a> CartesianStates<'a> {
                 self.pos_x[index],
                 self.pos_y[index],
                 self.pos_z[index],
-            )
-            .map_err(|_| StateError::InvalidPosition)?,
+            )?,
             velocity: CartesianVelocityComponents::from_meters_per_second(
                 self.vel_x[index],
                 self.vel_y[index],
                 self.vel_z[index],
-            )
-            .map_err(|_| StateError::InvalidVelocity)?,
+            )?,
         })
     }
 
@@ -501,10 +499,10 @@ impl<'a> CartesianStatesMut<'a> {
         let velocity = components.velocity;
 
         if !components_are_finite(position.x_m, position.y_m, position.z_m) {
-            return Err(StateError::InvalidPosition);
+            return Err(NumericalError::NotFinite { field: "position" }.into());
         }
         if !components_are_finite(velocity.x_mps, velocity.y_mps, velocity.z_mps) {
-            return Err(StateError::InvalidVelocity);
+            return Err(NumericalError::NotFinite { field: "velocity" }.into());
         }
 
         self.pos_x[index] = position.x_m;

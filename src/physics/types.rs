@@ -1,6 +1,6 @@
 use std::ops::{Add, Div, Mul, Sub};
 
-use crate::errors::DomainError;
+use crate::errors::NumericalError;
 use nalgebra::Vector3;
 
 /// Angle, measured in radians.
@@ -13,11 +13,11 @@ impl Angle {
     pub const ZERO: Self = Self(0.0);
 
     /// Creates an angle from radians.
-    pub fn from_radians(value: f64) -> Result<Self, DomainError> {
+    pub fn from_radians(value: f64) -> Result<Self, NumericalError> {
         if value.is_finite() {
             Ok(Self(value))
         } else {
-            Err(DomainError::NotFinite)
+            Err(NumericalError::NotFinite { field: "angle" })
         }
     }
 
@@ -55,11 +55,11 @@ pub struct AngularRate(f64);
 
 impl AngularRate {
     /// Creates an angular rate from radians per second.
-    pub fn from_radians_per_second(value: f64) -> Result<Self, DomainError> {
+    pub fn from_radians_per_second(value: f64) -> Result<Self, NumericalError> {
         if value.is_finite() {
             Ok(Self(value))
         } else {
-            Err(DomainError::NotFinite)
+            Err(NumericalError::NotFinite { field: "angular rate" })
         }
     }
 
@@ -85,16 +85,16 @@ pub struct Epoch(f64);
 
 impl Epoch {
     /// Creates an epoch from seconds since the simulation epoch.
-    pub fn from_seconds(value: f64) -> Result<Self, DomainError> {
+    pub fn from_seconds(value: f64) -> Result<Self, NumericalError> {
         if value.is_finite() {
             Ok(Self(value))
         } else {
-            Err(DomainError::NotFinite)
+            Err(NumericalError::NotFinite { field: "epoch" })
         }
     }
 
     /// Advances this epoch by a positive time step.
-    pub fn advance_by(self, dt: TimeStep) -> Result<Self, DomainError> {
+    pub fn advance_by(self, dt: TimeStep) -> Result<Self, NumericalError> {
         Self::from_seconds(self.seconds() + dt.seconds())
     }
 
@@ -124,12 +124,12 @@ pub struct TimeStep(f64);
 
 impl TimeStep {
     /// Creates a positive time step from seconds.
-    pub fn from_seconds(value: f64) -> Result<Self, DomainError> {
+    pub fn from_seconds(value: f64) -> Result<Self, NumericalError> {
         if !value.is_finite() {
-            return Err(DomainError::NotFinite);
+            return Err(NumericalError::NotFinite { field: "time step" });
         }
         if value <= 0.0 {
-            return Err(DomainError::NonPositive);
+            return Err(NumericalError::NonPositive { field: "time step" });
         }
         Ok(Self(value))
     }
@@ -167,12 +167,12 @@ pub struct Duration(f64);
 
 impl Duration {
     /// Creates a non-negative duration from seconds.
-    pub fn from_seconds(value: f64) -> Result<Self, DomainError> {
+    pub fn from_seconds(value: f64) -> Result<Self, NumericalError> {
         if !value.is_finite() {
-            return Err(DomainError::NotFinite);
+            return Err(NumericalError::NotFinite { field: "duration" });
         }
         if value < 0.0 {
-            return Err(DomainError::Negative);
+            return Err(NumericalError::Negative { field: "duration" });
         }
         Ok(Self(value))
     }
@@ -217,9 +217,9 @@ impl Add for Duration {
 }
 
 impl Sub for Duration {
-    type Output = Result<Duration, DomainError>;
+    type Output = Result<Duration, NumericalError>;
 
-    fn sub(self, rhs: Duration) -> Result<Duration, DomainError> {
+    fn sub(self, rhs: Duration) -> Result<Duration, NumericalError> {
         Duration::from_seconds(self.0 - rhs.0)
     }
 }
@@ -231,12 +231,12 @@ pub struct Distance(f64);
 
 impl Distance {
     /// Creates a positive distance from meters.
-    pub fn from_meters(value: f64) -> Result<Self, DomainError> {
+    pub fn from_meters(value: f64) -> Result<Self, NumericalError> {
         if !value.is_finite() {
-            return Err(DomainError::NotFinite);
+            return Err(NumericalError::NotFinite { field: "distance" });
         }
         if value <= 0.0 {
-            return Err(DomainError::NonPositive);
+            return Err(NumericalError::NonPositive { field: "distance" });
         }
         Ok(Self(value))
     }
@@ -260,17 +260,17 @@ impl Add for Distance {
 }
 
 impl Mul<f64> for Distance {
-    type Output = Result<Distance, DomainError>;
+    type Output = Result<Distance, NumericalError>;
 
-    fn mul(self, rhs: f64) -> Result<Distance, DomainError> {
+    fn mul(self, rhs: f64) -> Result<Distance, NumericalError> {
         Distance::from_meters(self.0 * rhs)
     }
 }
 
 impl Div<f64> for Distance {
-    type Output = Result<Distance, DomainError>;
+    type Output = Result<Distance, NumericalError>;
 
-    fn div(self, rhs: f64) -> Result<Distance, DomainError> {
+    fn div(self, rhs: f64) -> Result<Distance, NumericalError> {
         Distance::from_meters(self.0 / rhs)
     }
 }
@@ -290,12 +290,12 @@ pub struct MassDensity(f64);
 
 impl MassDensity {
     /// Creates a non-negative mass density from kilograms per cubic meter.
-    pub fn from_kilograms_per_cubic_meter(value: f64) -> Result<Self, DomainError> {
+    pub fn from_kilograms_per_cubic_meter(value: f64) -> Result<Self, NumericalError> {
         if !value.is_finite() {
-            return Err(DomainError::NotFinite);
+            return Err(NumericalError::NotFinite { field: "mass density" });
         }
         if value < 0.0 {
-            return Err(DomainError::Negative);
+            return Err(NumericalError::Negative { field: "mass density" });
         }
         Ok(Self(value))
     }
@@ -314,12 +314,12 @@ pub struct AreaPerMass(f64);
 
 impl AreaPerMass {
     /// Creates a non-negative area per mass from square meters per kilogram.
-    pub fn from_square_meters_per_kilogram(value: f64) -> Result<Self, DomainError> {
+    pub fn from_square_meters_per_kilogram(value: f64) -> Result<Self, NumericalError> {
         if !value.is_finite() {
-            return Err(DomainError::NotFinite);
+            return Err(NumericalError::NotFinite { field: "area per mass" });
         }
         if value < 0.0 {
-            return Err(DomainError::Negative);
+            return Err(NumericalError::Negative { field: "area per mass" });
         }
         Ok(Self(value))
     }
@@ -338,12 +338,12 @@ pub struct Speed(f64);
 
 impl Speed {
     /// Creates a non-negative speed from meters per second.
-    pub fn from_meters_per_second(value: f64) -> Result<Self, DomainError> {
+    pub fn from_meters_per_second(value: f64) -> Result<Self, NumericalError> {
         if !value.is_finite() {
-            return Err(DomainError::NotFinite);
+            return Err(NumericalError::NotFinite { field: "speed" });
         }
         if value < 0.0 {
-            return Err(DomainError::Negative);
+            return Err(NumericalError::Negative { field: "speed" });
         }
         Ok(Self(value))
     }
@@ -367,17 +367,17 @@ impl Add for Speed {
 }
 
 impl Mul<f64> for Speed {
-    type Output = Result<Speed, DomainError>;
+    type Output = Result<Speed, NumericalError>;
 
-    fn mul(self, rhs: f64) -> Result<Speed, DomainError> {
+    fn mul(self, rhs: f64) -> Result<Speed, NumericalError> {
         Speed::from_meters_per_second(self.0 * rhs)
     }
 }
 
 impl Div<f64> for Speed {
-    type Output = Result<Speed, DomainError>;
+    type Output = Result<Speed, NumericalError>;
 
-    fn div(self, rhs: f64) -> Result<Speed, DomainError> {
+    fn div(self, rhs: f64) -> Result<Speed, NumericalError> {
         Speed::from_meters_per_second(self.0 / rhs)
     }
 }
@@ -397,12 +397,12 @@ pub struct GravitationalParameter(f64);
 
 impl GravitationalParameter {
     /// Creates a positive gravitational parameter from cubic meters per second squared.
-    pub fn from_meters_cubed_per_second_squared(value: f64) -> Result<Self, DomainError> {
+    pub fn from_meters_cubed_per_second_squared(value: f64) -> Result<Self, NumericalError> {
         if !value.is_finite() {
-            return Err(DomainError::NotFinite);
+            return Err(NumericalError::NotFinite { field: "gravitational parameter" });
         }
         if value <= 0.0 {
-            return Err(DomainError::NonPositive);
+            return Err(NumericalError::NonPositive { field: "gravitational parameter" });
         }
         Ok(Self(value))
     }
@@ -415,17 +415,17 @@ impl GravitationalParameter {
 }
 
 impl Mul<f64> for GravitationalParameter {
-    type Output = Result<GravitationalParameter, DomainError>;
+    type Output = Result<GravitationalParameter, NumericalError>;
 
-    fn mul(self, rhs: f64) -> Result<GravitationalParameter, DomainError> {
+    fn mul(self, rhs: f64) -> Result<GravitationalParameter, NumericalError> {
         GravitationalParameter::from_meters_cubed_per_second_squared(self.0 * rhs)
     }
 }
 
 impl Div<f64> for GravitationalParameter {
-    type Output = Result<GravitationalParameter, DomainError>;
+    type Output = Result<GravitationalParameter, NumericalError>;
 
-    fn div(self, rhs: f64) -> Result<GravitationalParameter, DomainError> {
+    fn div(self, rhs: f64) -> Result<GravitationalParameter, NumericalError> {
         GravitationalParameter::from_meters_cubed_per_second_squared(self.0 / rhs)
     }
 }
@@ -445,12 +445,12 @@ pub struct Eccentricity(f64);
 
 impl Eccentricity {
     /// Creates an eccentricity from a dimensionless scalar.
-    pub fn from_scalar(value: f64) -> Result<Self, DomainError> {
+    pub fn from_scalar(value: f64) -> Result<Self, NumericalError> {
         if !value.is_finite() {
-            return Err(DomainError::NotFinite);
+            return Err(NumericalError::NotFinite { field: "eccentricity" });
         }
         if value < 0.0 {
-            return Err(DomainError::Negative);
+            return Err(NumericalError::Negative { field: "eccentricity" });
         }
         Ok(Self(value))
     }
@@ -469,11 +469,11 @@ pub struct Position(Vector3<f64>);
 
 impl Position {
     /// Creates a position from a finite Cartesian vector.
-    pub fn from_vector(value: Vector3<f64>) -> Result<Self, DomainError> {
+    pub fn from_vector(value: Vector3<f64>) -> Result<Self, NumericalError> {
         if vector_is_finite(value) {
             Ok(Self(value))
         } else {
-            Err(DomainError::NotFinite)
+            Err(NumericalError::NotFinite { field: "position" })
         }
     }
 
@@ -491,11 +491,11 @@ pub struct Velocity(Vector3<f64>);
 
 impl Velocity {
     /// Creates a velocity from a finite Cartesian vector.
-    pub fn from_vector(value: Vector3<f64>) -> Result<Self, DomainError> {
+    pub fn from_vector(value: Vector3<f64>) -> Result<Self, NumericalError> {
         if vector_is_finite(value) {
             Ok(Self(value))
         } else {
-            Err(DomainError::NotFinite)
+            Err(NumericalError::NotFinite { field: "velocity" })
         }
     }
 
@@ -513,11 +513,11 @@ pub struct Acceleration(Vector3<f64>);
 
 impl Acceleration {
     /// Creates an acceleration from a finite Cartesian vector.
-    pub fn from_vector(value: Vector3<f64>) -> Result<Self, DomainError> {
+    pub fn from_vector(value: Vector3<f64>) -> Result<Self, NumericalError> {
         if vector_is_finite(value) {
             Ok(Self(value))
         } else {
-            Err(DomainError::NotFinite)
+            Err(NumericalError::NotFinite { field: "acceleration" })
         }
     }
 

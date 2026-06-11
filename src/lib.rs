@@ -34,8 +34,8 @@ pub use physics::{
 };
 
 pub use errors::{
-    DynamicsError, EnvironmentError, IntegrationError, MissionError, PropagationError,
-    RecordingError, ScenarioError, StateError,
+    DynamicsError, EnvironmentError, MissionError, PropagationError, RecordingError,
+    ScenarioError, StateError,
 };
 
 pub use sim::{

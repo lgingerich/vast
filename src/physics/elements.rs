@@ -5,7 +5,7 @@ use super::constants::{
 };
 use super::state::{CartesianState, CartesianStates};
 use super::types::{Angle, Distance, Eccentricity, GravitationalParameter, Position, Velocity};
-use crate::errors::DomainError;
+use crate::errors::NumericalError;
 
 /// Policy for classifying singular orbital-element cases.
 ///
@@ -374,13 +374,13 @@ fn angle_between_in_plane(
     from: Vector3<f64>,
     to: Vector3<f64>,
     plane_normal: Vector3<f64>,
-) -> Result<Angle, DomainError> {
+) -> Result<Angle, NumericalError> {
     let x = from.dot(&to);
     let y = from.cross(&to).dot(&plane_normal);
     angle_from_radians(y.atan2(x))
 }
 
-fn angle_from_radians(radians: f64) -> Result<Angle, DomainError> {
+fn angle_from_radians(radians: f64) -> Result<Angle, NumericalError> {
     Angle::from_radians(normalize_angle(radians))
 }
 

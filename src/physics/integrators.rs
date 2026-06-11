@@ -4,7 +4,7 @@ use super::state::{
     CartesianVelocityComponents,
 };
 use super::types::{Epoch, TimeStep};
-use crate::errors::IntegrationError;
+use crate::errors::PropagationError;
 use nalgebra::Vector3;
 
 /// Semi-implicit Euler time integrator.
@@ -37,7 +37,7 @@ impl StateDerivative {
         position: Vector3<f64>,
         velocity: Vector3<f64>,
         t: Epoch,
-    ) -> Result<Self, IntegrationError> {
+    ) -> Result<Self, PropagationError> {
         let state = components_from_vectors(position, velocity)?;
         let acceleration = dynamics.acceleration_at(state, t)?;
 
@@ -58,7 +58,7 @@ pub trait Integrator {
         index: usize,
         t: Epoch,
         dt: TimeStep,
-    ) -> Result<(), IntegrationError>;
+    ) -> Result<(), PropagationError>;
 }
 
 impl Integrator for EulerIntegrator {
@@ -69,7 +69,7 @@ impl Integrator for EulerIntegrator {
         index: usize,
         t: Epoch,
         dt: TimeStep,
-    ) -> Result<(), IntegrationError> {
+    ) -> Result<(), PropagationError> {
         let state = states.components(index)?;
         let acceleration = dynamics.acceleration_at(state, t)?;
         let dt_s = dt.seconds();
@@ -97,7 +97,7 @@ impl Integrator for VelocityVerletIntegrator {
         index: usize,
         t: Epoch,
         dt: TimeStep,
-    ) -> Result<(), IntegrationError> {
+    ) -> Result<(), PropagationError> {
         let state = states.components(index)?;
         let dt_s = dt.seconds();
         let position = state.position.vector();
@@ -140,7 +140,7 @@ impl Integrator for LeapfrogIntegrator {
         index: usize,
         t: Epoch,
         dt: TimeStep,
-    ) -> Result<(), IntegrationError> {
+    ) -> Result<(), PropagationError> {
         let state = states.components(index)?;
         let dt_s = dt.seconds();
         let position = state.position.vector();
@@ -184,7 +184,7 @@ impl Integrator for RungeKutta4Integrator {
         index: usize,
         t: Epoch,
         dt: TimeStep,
-    ) -> Result<(), IntegrationError> {
+    ) -> Result<(), PropagationError> {
         let state = states.components(index)?;
         let dt_s = dt.seconds();
         let position = state.position.vector();
@@ -224,14 +224,14 @@ impl Integrator for RungeKutta4Integrator {
     }
 }
 
-fn advance_epoch(t: Epoch, seconds: f64) -> Result<Epoch, IntegrationError> {
+fn advance_epoch(t: Epoch, seconds: f64) -> Result<Epoch, PropagationError> {
     Ok(Epoch::from_seconds(t.seconds() + seconds)?)
 }
 
 fn components_from_vectors(
     position: Vector3<f64>,
     velocity: Vector3<f64>,
-) -> Result<CartesianStateComponents, IntegrationError> {
+) -> Result<CartesianStateComponents, PropagationError> {
     Ok(CartesianStateComponents {
         position: CartesianPositionComponents::from_meters(position.x, position.y, position.z)?,
 
@@ -244,7 +244,7 @@ fn components_from_vectors(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::errors::{DomainError, DynamicsError, StateError};
+    use crate::errors::{DynamicsError, NumericalError, StateError};
     use crate::physics::constants::{MU_EARTH, R_EARTH};
     use crate::physics::diagnostics::OrbitalDiagnostics;
     use crate::physics::dynamics::TwoBodyGravity;
@@ -272,12 +272,11 @@ mod tests {
             _t: Epoch,
         ) -> Result<CartesianAccelerationComponents, DynamicsError> {
             let acceleration = self.acceleration.vector();
-            CartesianAccelerationComponents::from_meters_per_second_squared(
+            Ok(CartesianAccelerationComponents::from_meters_per_second_squared(
                 acceleration.x,
                 acceleration.y,
                 acceleration.z,
-            )
-            .map_err(|_| DynamicsError::InvalidAcceleration)
+            )?)
         }
     }
 
@@ -364,7 +363,7 @@ mod tests {
                 Epoch::from_seconds(0.0).map_err(|_| "invalid epoch")?,
                 TimeStep::from_seconds(1.0).map_err(|_| "invalid time step")?,
             ),
-            Err(IntegrationError::Dynamics(
+            Err(PropagationError::Dynamics(
                 DynamicsError::PositionAtGravityCenter
             )),
         ));
@@ -392,7 +391,9 @@ mod tests {
                 Epoch::from_seconds(0.0).map_err(|_| "invalid epoch")?,
                 TimeStep::from_seconds(2.0).map_err(|_| "invalid time step")?,
             ),
-            Err(IntegrationError::Domain(DomainError::NotFinite)),
+            Err(PropagationError::Numerical(NumericalError::NotFinite {
+                field: "velocity components"
+            })),
         ));
         Ok(())
     }
@@ -422,7 +423,9 @@ mod tests {
                 Epoch::from_seconds(0.0).map_err(|_| "invalid epoch")?,
                 TimeStep::from_seconds(2.0).map_err(|_| "invalid time step")?,
             ),
-            Err(IntegrationError::Domain(DomainError::NotFinite)),
+            Err(PropagationError::Numerical(NumericalError::NotFinite {
+                field: "position components"
+            })),
         ));
         Ok(())
     }
@@ -550,7 +553,7 @@ mod tests {
                 Epoch::from_seconds(0.0).map_err(|_| "invalid epoch")?,
                 TimeStep::from_seconds(1.0).map_err(|_| "invalid time step")?,
             ),
-            Err(IntegrationError::Dynamics(
+            Err(PropagationError::Dynamics(
                 DynamicsError::PositionAtGravityCenter
             )),
         ));
@@ -574,7 +577,7 @@ mod tests {
                 Epoch::from_seconds(0.0).map_err(|_| "invalid epoch")?,
                 TimeStep::from_seconds(1.0).map_err(|_| "invalid time step")?,
             ),
-            Err(IntegrationError::State(StateError::InvalidBodyIndex)),
+            Err(PropagationError::State(StateError::InvalidBodyIndex)),
         ));
         Ok(())
     }

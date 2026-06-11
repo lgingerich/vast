@@ -1,29 +1,25 @@
 use thiserror::Error;
 
-/// Error returned when a domain value cannot be constructed because it
-/// violates physical finiteness or sign constraints.
+/// Error returned when a numerical value violates physical constraints.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
-pub enum DomainError {
+pub enum NumericalError {
     /// The value is NaN, +infinity, or -infinity.
-    #[error("value must be finite")]
-    NotFinite,
+    #[error("{field} must be finite")]
+    NotFinite { field: &'static str },
     /// The value is zero or negative but must be strictly positive.
-    #[error("value must be positive")]
-    NonPositive,
+    #[error("{field} must be positive")]
+    NonPositive { field: &'static str },
     /// The value is negative but must be non-negative.
-    #[error("value must be non-negative")]
-    Negative,
+    #[error("{field} must be non-negative")]
+    Negative { field: &'static str },
 }
 
 /// Errors produced while evaluating a dynamics model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
 pub enum DynamicsError {
-    /// The computed acceleration was not finite.
-    #[error("computed acceleration was not finite")]
-    InvalidAcceleration,
-    /// A domain value was physically invalid.
+    /// A numerical check failed.
     #[error(transparent)]
-    Domain(#[from] DomainError),
+    Numerical(#[from] NumericalError),
     /// Gravity is undefined at the central body's center of mass.
     #[error("two-body gravity is undefined at zero radius")]
     PositionAtGravityCenter,
@@ -41,55 +37,23 @@ pub enum StateError {
     /// Borrowed state component slices did not have equal lengths.
     #[error("state component slices have mismatched lengths")]
     MismatchedSliceLengths,
-    /// A position component was not finite.
-    #[error("position component was not finite")]
-    InvalidPosition,
-    /// A velocity component was not finite.
-    #[error("velocity component was not finite")]
-    InvalidVelocity,
+    /// A numerical check failed.
+    #[error(transparent)]
+    Numerical(#[from] NumericalError),
 }
 
-/// Errors produced while advancing a simulation state.
+/// Errors produced during propagation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
-pub enum IntegrationError {
+pub enum PropagationError {
     /// The dynamics model could not produce a valid acceleration.
     #[error(transparent)]
     Dynamics(#[from] DynamicsError),
     /// The state storage could not be read or written.
     #[error(transparent)]
     State(#[from] StateError),
-    /// A domain value was physically invalid.
+    /// A numerical check failed.
     #[error(transparent)]
-    Domain(#[from] DomainError),
-    /// The integrated position was not finite.
-    #[error("integrated position was not finite")]
-    InvalidPosition,
-    /// The integrated velocity was not finite.
-    #[error("integrated velocity was not finite")]
-    InvalidVelocity,
-    /// The integration epoch was not finite.
-    #[error("integration epoch was not finite")]
-    InvalidEpoch,
-}
-
-/// Errors produced while propagating a simulation state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
-pub enum PropagationError {
-    /// The state storage could not be read or written.
-    #[error(transparent)]
-    State(#[from] StateError),
-    /// Integration failed during propagation.
-    #[error(transparent)]
-    Integration(#[from] IntegrationError),
-    /// A domain value was physically invalid.
-    #[error(transparent)]
-    Domain(#[from] DomainError),
-    /// The propagation epoch was not finite.
-    #[error("propagation epoch was not finite")]
-    InvalidEpoch,
-    /// A computed integration step was invalid.
-    #[error("integration step was invalid")]
-    InvalidStep,
+    Numerical(#[from] NumericalError),
     /// An impulsive burn could not be applied to the current state.
     #[error("impulsive burn is invalid for the current state")]
     InvalidBurn,

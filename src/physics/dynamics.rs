@@ -2,7 +2,7 @@ pub use super::state::{CartesianAccelerationComponents, CartesianStateComponents
 pub use super::types::{
     AngularRate, AreaPerMass, Distance, Epoch, GravitationalParameter, MassDensity,
 };
-use crate::errors::DynamicsError;
+use crate::errors::{DynamicsError, NumericalError};
 
 /// Point-mass gravity model for a single central body.
 pub struct TwoBodyGravity {
@@ -79,12 +79,11 @@ impl Dynamics for TwoBodyGravity {
         }
 
         let scale = -mu / (radius_sq_m * radius_m);
-        CartesianAccelerationComponents::from_meters_per_second_squared(
+        Ok(CartesianAccelerationComponents::from_meters_per_second_squared(
             scale * px,
             scale * py,
             scale * pz,
-        )
-        .map_err(DynamicsError::from)
+        )?)
     }
 }
 
@@ -114,12 +113,11 @@ impl Dynamics for OblateBodyGravity {
         let xy_j2_scale = j2_factor * (5.0 * z_sq_over_r_sq - 1.0);
         let z_j2_scale = j2_factor * (5.0 * z_sq_over_r_sq - 3.0);
 
-        CartesianAccelerationComponents::from_meters_per_second_squared(
+        Ok(CartesianAccelerationComponents::from_meters_per_second_squared(
             central_scale * px + xy_j2_scale * px,
             central_scale * py + xy_j2_scale * py,
             central_scale * pz + z_j2_scale * pz,
-        )
-        .map_err(DynamicsError::from)
+        )?)
     }
 }
 
@@ -156,7 +154,7 @@ impl Dynamics for AtmosphericDrag {
         let density = self
             .atmosphere
             .density_at_radius_m(radius_m)
-            .ok_or(DynamicsError::InvalidAcceleration)?
+            .ok_or(NumericalError::NotFinite { field: "atmospheric density" })?
             .kilograms_per_cubic_meter();
         let omega = self.atmosphere.angular_rate.radians_per_second();
         let atmosphere_velocity =
@@ -167,12 +165,11 @@ impl Dynamics for AtmosphericDrag {
             -0.5 * density * self.area_per_mass.square_meters_per_kilogram() * relative_speed;
         let acceleration = scale * relative_velocity;
 
-        CartesianAccelerationComponents::from_meters_per_second_squared(
+        Ok(CartesianAccelerationComponents::from_meters_per_second_squared(
             acceleration.x,
             acceleration.y,
             acceleration.z,
-        )
-        .map_err(DynamicsError::from)
+        )?)
     }
 }
 
@@ -185,19 +182,18 @@ impl<A: Dynamics, B: Dynamics> Dynamics for CompositeDynamics<A, B> {
         let first = self.first.acceleration_at(state, t)?;
         let second = self.second.acceleration_at(state, t)?;
 
-        CartesianAccelerationComponents::from_meters_per_second_squared(
+        Ok(CartesianAccelerationComponents::from_meters_per_second_squared(
             first.x_meters_per_second_squared() + second.x_meters_per_second_squared(),
             first.y_meters_per_second_squared() + second.y_meters_per_second_squared(),
             first.z_meters_per_second_squared() + second.z_meters_per_second_squared(),
-        )
-        .map_err(DynamicsError::from)
+        )?)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::errors::DomainError;
+    use crate::errors::NumericalError;
     use crate::physics::constants::{J2_EARTH, MU_EARTH, R_EARTH};
     use crate::physics::diagnostics::OrbitalDiagnostics;
     use crate::physics::integrators::{Integrator, RungeKutta4Integrator};
@@ -426,7 +422,9 @@ mod tests {
                 ),
                 Epoch::from_seconds(0.0).map_err(|_| "invalid epoch")?
             ),
-            Err(DynamicsError::Domain(DomainError::NotFinite)),
+            Err(DynamicsError::Numerical(NumericalError::NotFinite {
+                field: "acceleration components"
+            })),
         ));
         Ok(())
     }
@@ -505,7 +503,9 @@ mod tests {
                 ),
                 Epoch::from_seconds(0.0).map_err(|_| "invalid epoch")?,
             ),
-            Err(DynamicsError::Domain(DomainError::NotFinite)),
+            Err(DynamicsError::Numerical(NumericalError::NotFinite {
+                field: "acceleration components"
+            })),
         ));
         Ok(())
     }
@@ -666,7 +666,9 @@ mod tests {
                 state,
                 Epoch::from_seconds(0.0).map_err(|_| "invalid epoch")?
             ),
-            Err(DynamicsError::Domain(DomainError::NotFinite)),
+            Err(DynamicsError::Numerical(NumericalError::NotFinite {
+                field: "acceleration components"
+            })),
         ));
         Ok(())
     }
