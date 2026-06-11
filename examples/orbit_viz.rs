@@ -99,11 +99,7 @@ impl OrbitVizScenario {
                     eprintln!("simulation state became invalid");
                     return;
                 };
-                let Ok(next_epoch) = self.t.advance_by(self.dt) else {
-                    eprintln!("simulation epoch became invalid");
-                    return;
-                };
-                self.t = next_epoch;
+                self.t = self.t.advance_by(self.dt);
 
                 let Ok(position) = self.states.view().position(0) else {
                     eprintln!("simulation state became invalid");

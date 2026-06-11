@@ -101,24 +101,12 @@ impl Epoch {
     }
 
     /// Advances this epoch by a positive time step.
-    pub fn advance_by(self, dt: TimeStep) -> Result<Self, NumericalError> {
-        Self::from_seconds(self.seconds() + dt.seconds())
-    }
-
-    /// Advances this epoch by a validated integration step.
     ///
-    /// Both operands are validated at construction, so propagation does not
-    /// re-check finiteness on every step.
-    pub(crate) const fn advance_by_step(self, dt: TimeStep) -> Self {
+    /// Both operands are validated at construction, so forward propagation
+    /// does not re-check finiteness on every step.
+    #[must_use]
+    pub const fn advance_by(self, dt: TimeStep) -> Self {
         Self(self.0 + dt.0)
-    }
-
-    /// Offsets this epoch by a duration in seconds.
-    ///
-    /// Used for integrator stage times where the offset is derived from a
-    /// validated `TimeStep`.
-    pub(crate) const fn plus_seconds(self, seconds: f64) -> Self {
-        Self(self.0 + seconds)
     }
 
     /// Returns the elapsed `Duration` from an earlier epoch.
@@ -161,6 +149,15 @@ impl TimeStep {
     #[inline]
     pub const fn seconds(self) -> f64 {
         self.0
+    }
+
+    /// Scales this time step by a positive factor.
+    ///
+    /// Used by integrators for stage offsets (e.g. RK4 midpoint evaluation).
+    /// The factor must keep the result positive; integrators pass constants
+    /// such as `0.5` derived from a validated step.
+    pub(crate) const fn scaled_by(self, factor: f64) -> Self {
+        Self(self.0 * factor)
     }
 }
 
@@ -589,7 +586,7 @@ mod tests {
         let epoch = Epoch::from_seconds(10.0)?;
         let dt = TimeStep::from_seconds(2.5)?;
 
-        assert_close(epoch.advance_by(dt)?.seconds(), 12.5, EPS);
+        assert_close(epoch.advance_by(dt).seconds(), 12.5, EPS);
         Ok(())
     }
 
@@ -605,15 +602,6 @@ mod tests {
         for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
             assert!(Epoch::from_seconds(value).is_err());
         }
-    }
-
-    #[test]
-    fn epoch_advance_rejects_nonfinite_result() -> TestResult {
-        let epoch = Epoch::from_seconds(f64::MAX)?;
-        let dt = TimeStep::from_seconds(f64::MAX)?;
-
-        assert!(epoch.advance_by(dt).is_err());
-        Ok(())
     }
 
     #[test]

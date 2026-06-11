@@ -531,7 +531,7 @@ mod tests {
             let remaining_seconds = duration.seconds() - epoch.seconds();
             let step = TimeStep::from_seconds(dt.seconds().min(remaining_seconds))?;
             integrator.step(&gravity, &mut states.view_mut(), 0, epoch, step)?;
-            epoch = epoch.advance_by(step)?;
+            epoch = epoch.advance_by(step);
         }
 
         let final_raan = raan_degrees(&OrbitalElements::from_states(&states.view(), 0, mu)?)
@@ -616,7 +616,7 @@ mod tests {
             let remaining_seconds = target_seconds - epoch.seconds();
             let step = TimeStep::from_seconds(dt.seconds().min(remaining_seconds))?;
             integrator.step(&gravity, &mut states.view_mut(), 0, epoch, step)?;
-            epoch = epoch.advance_by(step)?;
+            epoch = epoch.advance_by(step);
         }
 
         let elements = OrbitalElements::from_states(&states.view(), 0, orbit.mu)?;
@@ -660,7 +660,7 @@ mod tests {
             let remaining_seconds = target_seconds - epoch.seconds();
             let step = TimeStep::from_seconds(dt.seconds().min(remaining_seconds))?;
             integrator.step(&gravity, &mut states.view_mut(), 0, epoch, step)?;
-            epoch = epoch.advance_by(step)?;
+            epoch = epoch.advance_by(step);
         }
 
         let strict_classification = OrbitalElementClassification::new(

@@ -107,7 +107,7 @@ fn propagate<I: Integrator>(
         let remaining_seconds = target_seconds - epoch.seconds();
         let step = TimeStep::from_seconds(dt.seconds().min(remaining_seconds))?;
         integrator.step(gravity, &mut states.view_mut(), 0, epoch, step)?;
-        epoch = epoch.advance_by(step)?;
+        epoch = epoch.advance_by(step);
         steps += 1;
     }
 

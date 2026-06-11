@@ -109,7 +109,7 @@ fn propagate_one_period<I: Integrator>(
         let step = TimeStep::from_seconds(step_seconds)?;
 
         integrator.step(gravity, &mut states.view_mut(), 0, epoch, step)?;
-        epoch = epoch.advance_by(step)?;
+        epoch = epoch.advance_by(step);
         steps += 1;
     }
 

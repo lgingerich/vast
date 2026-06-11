@@ -90,7 +90,7 @@ impl Integrator for VelocityVerletIntegrator {
         let (position, velocity) = states.as_view().body_vectors(index)?;
         let dt_s = dt.seconds();
         let acceleration = dynamics.acceleration_at(position, velocity, t)?;
-        let next_t = t.advance_by_step(dt);
+        let next_t = t.advance_by(dt);
 
         let new_position = position + velocity * dt_s + acceleration * (0.5 * dt_s * dt_s);
         let predicted_velocity = velocity + acceleration * dt_s;
@@ -115,7 +115,7 @@ impl Integrator for LeapfrogIntegrator {
         let (position, velocity) = states.as_view().body_vectors(index)?;
         let dt_s = dt.seconds();
         let acceleration = dynamics.acceleration_at(position, velocity, t)?;
-        let next_t = t.advance_by_step(dt);
+        let next_t = t.advance_by(dt);
 
         let half_velocity = velocity + acceleration * (0.5 * dt_s);
         let new_position = position + half_velocity * dt_s;
@@ -144,19 +144,19 @@ impl Integrator for RungeKutta4Integrator {
             dynamics,
             position + k1.position * (0.5 * dt_s),
             velocity + k1.velocity * (0.5 * dt_s),
-            t.plus_seconds(0.5 * dt_s),
+            t.advance_by(dt.scaled_by(0.5)),
         )?;
         let k3 = StateDerivative::at(
             dynamics,
             position + k2.position * (0.5 * dt_s),
             velocity + k2.velocity * (0.5 * dt_s),
-            t.plus_seconds(0.5 * dt_s),
+            t.advance_by(dt.scaled_by(0.5)),
         )?;
         let k4 = StateDerivative::at(
             dynamics,
             position + k3.position * dt_s,
             velocity + k3.velocity * dt_s,
-            t.plus_seconds(dt_s),
+            t.advance_by(dt),
         )?;
 
         let new_position = position
@@ -595,7 +595,7 @@ mod tests {
             let remaining_s = period_s - epoch.seconds();
             let step = TimeStep::from_seconds(base_step.seconds().min(remaining_s))?;
             integrator.step(gravity, &mut states.view_mut(), index, epoch, step)?;
-            epoch = epoch.advance_by(step)?;
+            epoch = epoch.advance_by(step);
         }
 
         Ok(())
@@ -633,7 +633,7 @@ mod tests {
             let remaining_s = period_s - epoch.seconds();
             let step = TimeStep::from_seconds(dt.seconds().min(remaining_s))?;
             integrator.step(&gravity, &mut states.view_mut(), 0, epoch, step)?;
-            epoch = epoch.advance_by(step)?;
+            epoch = epoch.advance_by(step);
         }
 
         let final_h = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
@@ -690,7 +690,7 @@ mod tests {
             let remaining_s = period_s - epoch.seconds();
             let step = TimeStep::from_seconds(dt.seconds().min(remaining_s))?;
             integrator.step(&gravity, &mut states.view_mut(), 0, epoch, step)?;
-            epoch = epoch.advance_by(step)?;
+            epoch = epoch.advance_by(step);
         }
 
         let final_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?

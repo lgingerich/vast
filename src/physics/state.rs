@@ -71,7 +71,6 @@ impl CartesianPositionComponents {
     pub(crate) fn vector(self) -> Vector3<f64> {
         Vector3::new(self.x_m, self.y_m, self.z_m)
     }
-
 }
 
 /// Velocity components in an inertial Cartesian frame, measured in meters per second.
@@ -133,7 +132,6 @@ impl CartesianVelocityComponents {
     pub(crate) fn vector(self) -> Vector3<f64> {
         Vector3::new(self.x_mps, self.y_mps, self.z_mps)
     }
-
 }
 
 /// Acceleration components in an inertial Cartesian frame, measured in meters per second squared.
@@ -181,7 +179,6 @@ impl CartesianAccelerationComponents {
     pub const fn z_meters_per_second_squared(self) -> f64 {
         self.z_mps2
     }
-
 }
 
 /// Position and velocity components for one Cartesian state.

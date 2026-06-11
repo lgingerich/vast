@@ -527,7 +527,7 @@ mod tests {
 
         for _ in 0..120 {
             integrator.step(&dynamics, &mut states.view_mut(), 0, epoch, dt)?;
-            epoch = epoch.advance_by(dt)?;
+            epoch = epoch.advance_by(dt);
         }
 
         let final_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
@@ -574,7 +574,7 @@ mod tests {
             let remaining_s = period_s - epoch.seconds();
             let step = TimeStep::from_seconds(dt.seconds().min(remaining_s))?;
             integrator.step(&dynamics, &mut states.view_mut(), 0, epoch, step)?;
-            epoch = epoch.advance_by(step)?;
+            epoch = epoch.advance_by(step);
         }
 
         let diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?;
