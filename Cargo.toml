@@ -1,12 +1,12 @@
 [package]
-name = "space-sim"
+name = "vast"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.95.0"
 authors = ["Landon Gingerich"]
-description = "Astrodynamics simulator"
+description = "Vectorized Astrodynamics Simulation Toolkit"
 readme = "README.md"
-repository = "https://github.com/lgingerich/space-sim"
+repository = "https://github.com/lgingerich/vast"
 
 [[example]]
 name = "orbit_viz"

@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 
-use space_sim::{
+use vast::{
     Angle, AngularRate, AreaPerMass, AtmosphericDrag, CartesianStateBuffer, CompositeDynamics,
     Distance, Duration, Eccentricity, EllipticOrbit, Epoch, ExponentialAtmosphere,
     GravitationalParameter, Integrator, MU_EARTH, MassDensity, OrbitDirection, OrbitalDiagnostics,
@@ -85,7 +85,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn propagate<I: Integrator, D: space_sim::Dynamics>(
+fn propagate<I: Integrator, D: vast::Dynamics>(
     integrator: &I,
     dynamics: &D,
     states: &mut CartesianStateBuffer<1>,

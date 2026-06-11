@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
 
 use macroquad::prelude::*;
-use space_sim::{
+use vast::{
     Angle, CartesianStateBuffer, Distance, Duration, Eccentricity, EllipticOrbit, Epoch,
     GravitationalParameter, Integrator, LeapfrogIntegrator, MU_EARTH, OrbitDirection,
     OrbitalDiagnostics, R_EARTH, Speed, TimeStep, TwoBodyGravity,
@@ -11,7 +11,7 @@ const TRAIL_POINTS_MAX: usize = 2_000;
 
 fn main() {
     let window_config = Conf {
-        window_title: "Space Sim".to_string(),
+        window_title: "VAST".to_string(),
         ..Default::default()
     };
 

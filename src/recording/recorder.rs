@@ -355,7 +355,7 @@ mod tests {
 
     #[test]
     fn writes_manifest_metrics_and_trajectory() {
-        let temp = std::env::temp_dir().join(format!("space-sim-recording-{}", std::process::id()));
+        let temp = std::env::temp_dir().join(format!("vast-recording-{}", std::process::id()));
         let _ = fs::remove_dir_all(&temp);
         fs::create_dir_all(&temp).expect("temp dir");
 

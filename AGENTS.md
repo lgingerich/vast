@@ -1,6 +1,6 @@
 # Agent Guidance
 
-Space Sim is an idiomatic Rust astrodynamics simulator whose **primary product
+VAST is an idiomatic Rust astrodynamics simulator whose **primary product
 goal is an RL training environment** for space: massively parallel,
 deterministic, loose- to medium-fidelity orbital rollouts with a
 `reset` / `step(action)` environment contract. Engineers use it to train and
@@ -28,7 +28,7 @@ not copy TigerBeetle-specific constraints blindly.
 - **Batch and determinism matter.** Fixed timesteps, SoA layout, bounded work,
   and future `step_many` paths exist to run huge numbers of independent envs
   reliably.
-- **GMAT-class tools are downstream.** Space Sim trains and filters; external
+- **GMAT-class tools are downstream.** VAST trains and filters; external
   tools confirm. Do not optimize the core roadmap to replace mission-analysis
   software.
 - **Design durable contracts early** for observations, actions, rewards,

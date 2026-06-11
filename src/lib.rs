@@ -1,4 +1,4 @@
-//! Core physics types and stepping logic for the space simulator.
+//! VAST — Vectorized Astrodynamics Simulation Toolkit.
 
 mod errors;
 mod physics;

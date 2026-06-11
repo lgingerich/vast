@@ -1,6 +1,6 @@
-# Space Sim
+# VAST — Vectorized Astrodynamics Simulation Toolkit
 
-Space Sim is a Rust orbital simulation platform built primarily as a
+VAST is a Rust orbital simulation platform built primarily as a
 **reinforcement-learning training environment**: run large numbers of
 deterministic, loose- to medium-fidelity physics rollouts in parallel, train
 control policies, then hand promising trajectories to high-fidelity tools such as

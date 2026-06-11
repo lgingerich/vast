@@ -1,6 +1,6 @@
 # Roadmap
 
-Unimplemented work recommended for Space Sim, grouped by category. Each item
+Unimplemented work recommended for VAST, grouped by category. Each item
 has a rough priority of **P1** (next), **P2** (soon after), or **P3** (later).
 Only these three levels are used.
 

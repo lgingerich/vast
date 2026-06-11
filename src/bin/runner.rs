@@ -6,7 +6,7 @@ use axum::http::StatusCode;
 use axum::routing::get;
 use axum::{Json, Router};
 use clap::{Parser, Subcommand};
-use space_sim::{
+use vast::{
     Environment, EpisodeRecord, LeoCircularEnv, LoadedScenario, MissionRunner,
     MissionSegmentMetrics, RecordingError, RunManifest, RunRecorder, list_runs, read_trajectory,
     stop_reason_name,
@@ -14,7 +14,7 @@ use space_sim::{
 use tower_http::cors::{Any, CorsLayer};
 
 #[derive(Parser)]
-#[command(name = "runner", about = "Space Sim RL rollout runner and local API")]
+#[command(name = "runner", about = "VAST RL rollout runner and local API")]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -72,7 +72,7 @@ fn run_command(
 }
 
 fn run_rollout(
-    config: &space_sim::ScenarioConfig,
+    config: &vast::ScenarioConfig,
     episodes: usize,
     output_dir: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -100,7 +100,7 @@ fn run_rollout(
 }
 
 fn run_mission(
-    config: &space_sim::MissionScenarioConfig,
+    config: &vast::MissionScenarioConfig,
     episodes: usize,
     output_dir: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -123,7 +123,7 @@ fn run_mission(
             .segments
             .last()
             .map(|segment| segment.stop_reason)
-            .unwrap_or(space_sim::StopReason::DurationMet);
+            .unwrap_or(vast::StopReason::DurationMet);
 
         let mission_segments = result
             .segments
@@ -202,7 +202,7 @@ async fn get_run_handler(
 async fn get_trajectory_handler(
     axum::extract::State(state): axum::extract::State<AppState>,
     AxumPath((run_id, episode_index)): AxumPath<(String, usize)>,
-) -> Result<Json<Vec<space_sim::TrajectoryPoint>>, ApiError> {
+) -> Result<Json<Vec<vast::TrajectoryPoint>>, ApiError> {
     let run_dir = state.runs_dir.join(run_id);
     if !run_dir.exists() {
         return Err(ApiError::NotFound);

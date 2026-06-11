@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 
-use space_sim::{
+use vast::{
     Angle, CartesianStateBuffer, Distance, Duration, Eccentricity, EllipticOrbit, Epoch,
     GravitationalParameter, Integrator, MU_EARTH, OrbitDirection, OrbitalDiagnostics,
     OrbitalElements, R_EARTH, SpecificAngularMomentum, SpecificEnergy, TimeStep, TwoBodyGravity,

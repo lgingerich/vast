@@ -1,6 +1,6 @@
 # Architecture
 
-Living architecture reference for Space Sim. This document describes what the
+Living architecture reference for VAST. This document describes what the
 simulator is today, what it is becoming, and the boundaries between layers.
 
 For planned work, see [ROADMAP.md](../ROADMAP.md). For agent and contribution
@@ -10,7 +10,7 @@ conventions, see [AGENTS.md](../AGENTS.md).
 
 ## Purpose
 
-Space Sim is an idiomatic Rust astrodynamics simulator growing from a readable
+VAST is an idiomatic Rust astrodynamics simulator growing from a readable
 physics core into reusable simulation APIs for scenarios, environments,
 visualization, and automated experiments.
 
@@ -133,7 +133,7 @@ first-class. Maneuvers are discrete operations, not continuous forces.
 passing, hard stop time, and events with condition/action functions and optional
 `terminal` termination.
 
-Space Sim aligns more closely with **GMAT's propagate + stop + maneuver**
+VAST aligns more closely with **GMAT's propagate + stop + maneuver**
 model, adapted for **fixed-step, batch-friendly** execution. Events snap to the
 step grid rather than using adaptive root finding, preserving determinism for
 batched rollouts and future GPU backends.
