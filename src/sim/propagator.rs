@@ -246,10 +246,8 @@ impl Propagator {
                 });
             }
 
-            let step = match termination.remaining_seconds(self.start_epoch, self.epoch) {
-                Some(remaining) if remaining < self.dt.seconds() => {
-                    TimeStep::from_seconds(remaining)?
-                }
+            let step = match termination.remaining(self.start_epoch, self.epoch) {
+                Some(remaining) if remaining.seconds() < self.dt.seconds() => remaining,
                 _ => self.dt,
             };
 

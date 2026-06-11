@@ -1,6 +1,6 @@
 use crate::physics::elements::OrbitalElements;
 use crate::physics::state::CartesianState;
-use crate::physics::types::{Duration, Epoch, GravitationalParameter};
+use crate::physics::types::{Duration, Epoch, GravitationalParameter, TimeStep};
 
 const DEFAULT_ORBITAL_MIN_STEPS: usize = 1;
 const ORBITAL_ANGLE_TOLERANCE_RAD: f64 = 0.05;
@@ -69,8 +69,8 @@ impl TerminationCondition {
     pub fn stop_reason(&self, context: TerminationContext<'_>) -> Option<StopReason> {
         match self {
             Self::Duration(duration) => {
-                let elapsed = context.current_epoch.seconds() - context.start_epoch.seconds();
-                (elapsed >= duration.seconds()).then_some(StopReason::DurationMet)
+                let elapsed = context.current_epoch.duration_since(context.start_epoch);
+                (elapsed >= *duration).then_some(StopReason::DurationMet)
             }
             Self::StepCount(limit) => (context.steps >= *limit).then_some(StopReason::StepCountMet),
             Self::Apoapsis { mu, min_steps } => apoapsis_met(*mu, *min_steps, context),
@@ -81,19 +81,26 @@ impl TerminationCondition {
         }
     }
 
-    /// Remaining simulation time until a duration-based stop, if applicable.
+    /// Remaining time step until a duration-based stop, if applicable.
     #[must_use]
-    pub fn remaining_seconds(&self, start_epoch: Epoch, current_epoch: Epoch) -> Option<f64> {
+    pub fn remaining(&self, start_epoch: Epoch, current_epoch: Epoch) -> Option<TimeStep> {
         match self {
             Self::Duration(duration) => {
-                let remaining =
-                    duration.seconds() - (current_epoch.seconds() - start_epoch.seconds());
-                Some(remaining.max(0.0))
+                let elapsed = current_epoch.duration_since(start_epoch);
+                if elapsed >= *duration {
+                    return None;
+                }
+                let remaining_seconds = duration.seconds() - elapsed.seconds();
+                TimeStep::from_seconds(remaining_seconds).ok()
             }
             Self::AnyOf(conditions) => conditions
                 .iter()
-                .filter_map(|condition| condition.remaining_seconds(start_epoch, current_epoch))
-                .min_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal)),
+                .filter_map(|condition| condition.remaining(start_epoch, current_epoch))
+                .min_by(|left, right| {
+                    left.seconds()
+                        .partial_cmp(&right.seconds())
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                }),
             Self::StepCount(_) | Self::Apoapsis { .. } | Self::Periapsis { .. } => None,
         }
     }

@@ -98,6 +98,16 @@ impl Epoch {
         Self::from_seconds(self.seconds() + dt.seconds())
     }
 
+    /// Returns the elapsed `Duration` from an earlier epoch.
+    ///
+    /// Callers must ensure `earlier <= self` — forward-only propagation
+    /// guarantees this, and debug builds will catch violations.
+    #[must_use]
+    pub fn duration_since(self, earlier: Epoch) -> Duration {
+        debug_assert!(self.seconds() >= earlier.seconds());
+        Duration::from_seconds_unchecked(self.seconds() - earlier.seconds())
+    }
+
     /// Returns seconds since the simulation epoch.
     #[inline]
     pub const fn seconds(self) -> f64 {
@@ -167,10 +177,25 @@ impl Duration {
         Ok(Self(value))
     }
 
+    /// Creates a duration without invariant checks.
+    ///
+    /// Callers must guarantee the value is finite and non-negative.
+    /// Forward-only time arithmetic (e.g., `Epoch::duration_since`)
+    /// satisfies this by construction.
+    pub(crate) const fn from_seconds_unchecked(value: f64) -> Self {
+        Self(value)
+    }
+
     /// Returns this duration in seconds.
     #[inline]
     pub const fn seconds(self) -> f64 {
         self.0
+    }
+}
+
+impl PartialOrd for Duration {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.0.partial_cmp(&other.0)
     }
 }
 
