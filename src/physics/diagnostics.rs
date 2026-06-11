@@ -88,7 +88,7 @@ impl OrbitalDiagnostics {
         velocity: Vector3<f64>,
         mu: GravitationalParameter,
     ) -> Option<Self> {
-        let mu = mu.meters_cubed_per_second_squared();
+        let mu_f64 = mu.meters_cubed_per_second_squared();
         let radius = position.norm();
         let speed = velocity.norm();
 
@@ -96,29 +96,27 @@ impl OrbitalDiagnostics {
             return None;
         }
 
-        let specific_energy = 0.5 * speed * speed - mu / radius;
+        let specific_energy = 0.5 * speed * speed - mu_f64 / radius;
         let specific_angular_momentum_vector = position.cross(&velocity);
         let specific_angular_momentum = specific_angular_momentum_vector.norm();
         let eccentricity_vector =
-            velocity.cross(&specific_angular_momentum_vector) / mu - position / radius;
+            velocity.cross(&specific_angular_momentum_vector) / mu_f64 - position / radius;
         let eccentricity = eccentricity_vector.norm();
 
         let semi_major_axis = bound_semi_major_axis(mu, specific_energy);
-        let periapsis_radius = semi_major_axis
-            .and_then(|axis| Distance::from_meters(axis.meters() * (1.0 - eccentricity)));
-        let apoapsis_radius = semi_major_axis
-            .and_then(|axis| Distance::from_meters(axis.meters() * (1.0 + eccentricity)));
+        let periapsis_radius = semi_major_axis.and_then(|axis| (axis * (1.0 - eccentricity)).ok());
+        let apoapsis_radius = semi_major_axis.and_then(|axis| (axis * (1.0 + eccentricity)).ok());
 
         Some(Self {
-            radius: Distance::from_meters(radius)?,
-            speed: Speed::from_meters_per_second(speed)?,
+            radius: Distance::from_meters(radius).ok()?,
+            speed: Speed::from_meters_per_second(speed).ok()?,
             specific_energy: SpecificEnergy::from_square_meters_per_square_second(specific_energy)?,
             specific_angular_momentum_vector,
             specific_angular_momentum: SpecificAngularMomentum::from_square_meters_per_second(
                 specific_angular_momentum,
             )?,
             eccentricity_vector,
-            eccentricity: Eccentricity::from_scalar(eccentricity)?,
+            eccentricity: Eccentricity::from_scalar(eccentricity).ok()?,
             semi_major_axis,
             periapsis_radius,
             apoapsis_radius,
@@ -126,12 +124,13 @@ impl OrbitalDiagnostics {
     }
 }
 
-fn bound_semi_major_axis(mu: f64, specific_energy: f64) -> Option<Distance> {
+fn bound_semi_major_axis(mu: GravitationalParameter, specific_energy: f64) -> Option<Distance> {
     if specific_energy >= 0.0 {
         return None;
     }
 
-    Distance::from_meters(-mu / (2.0 * specific_energy))
+    let mu_f64 = mu.meters_cubed_per_second_squared();
+    Distance::from_meters(-mu_f64 / (2.0 * specific_energy)).ok()
 }
 
 #[cfg(test)]
@@ -149,19 +148,19 @@ mod tests {
 
     fn circular_orbit() -> Option<EllipticOrbit> {
         Some(EllipticOrbit {
-            semi_major_axis: Distance::from_meters(R_EARTH + ALTITUDE_M)?,
-            eccentricity: Eccentricity::from_scalar(0.0)?,
+            semi_major_axis: Distance::from_meters(R_EARTH + ALTITUDE_M).ok()?,
+            eccentricity: Eccentricity::from_scalar(0.0).ok()?,
             mu: earth_mu()?,
             inclination: Angle::ZERO,
             right_ascension_of_ascending_node: Angle::ZERO,
             argument_of_periapsis: Angle::ZERO,
-            true_anomaly: Angle::from_radians(0.0)?,
+            true_anomaly: Angle::from_radians(0.0).ok()?,
             direction: OrbitDirection::Prograde,
         })
     }
 
     fn earth_mu() -> Option<GravitationalParameter> {
-        GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)
+        GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).ok()
     }
 
     fn assert_close(actual: f64, expected: f64, tolerance: f64) {
@@ -236,8 +235,8 @@ mod tests {
     #[test]
     fn diagnostics_reject_zero_radius() -> TestResult {
         let state = CartesianState::new(
-            Position::from_vector(Vector3::zeros()).ok_or("invalid position")?,
-            Velocity::from_vector(Vector3::zeros()).ok_or("invalid velocity")?,
+            Position::from_vector(Vector3::zeros()).map_err(|_| "invalid position")?,
+            Velocity::from_vector(Vector3::zeros()).map_err(|_| "invalid velocity")?,
         );
         let mut states = CartesianStateBuffer::<1>::new();
         states
@@ -255,8 +254,10 @@ mod tests {
     fn hyperbolic_state_has_no_bound_orbit_radii() -> TestResult {
         let radius = R_EARTH + ALTITUDE_M;
         let state = CartesianState::new(
-            Position::from_vector(Vector3::new(radius, 0.0, 0.0)).ok_or("invalid position")?,
-            Velocity::from_vector(Vector3::new(0.0, 20_000.0, 0.0)).ok_or("invalid velocity")?,
+            Position::from_vector(Vector3::new(radius, 0.0, 0.0))
+                .map_err(|_| "invalid position")?,
+            Velocity::from_vector(Vector3::new(0.0, 20_000.0, 0.0))
+                .map_err(|_| "invalid velocity")?,
         );
 
         let diagnostics = OrbitalDiagnostics::from_state(&state, earth_mu().ok_or("invalid mu")?)

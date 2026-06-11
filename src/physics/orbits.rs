@@ -52,7 +52,7 @@ impl EllipticOrbit {
         let radius = semi_major_axis * (1.0 - eccentricity * eccentricity)
             / (1.0 + eccentricity * true_anomaly.cos());
 
-        Speed::from_meters_per_second((mu * (2.0 / radius - 1.0 / semi_major_axis)).sqrt())
+        Speed::from_meters_per_second((mu * (2.0 / radius - 1.0 / semi_major_axis)).sqrt()).ok()
     }
 
     /// Orbital period from Kepler's third law.
@@ -61,6 +61,7 @@ impl EllipticOrbit {
         let semi_major_axis = self.semi_major_axis.meters();
 
         Duration::from_seconds(2.0 * std::f64::consts::PI * (semi_major_axis.powi(3) / mu).sqrt())
+            .ok()
     }
 
     /// Converts this orbit into an inertial Cartesian state.
@@ -107,8 +108,8 @@ impl EllipticOrbit {
         };
 
         Some(CartesianState::new(
-            Position::from_vector(position)?,
-            Velocity::from_vector(velocity)?,
+            Position::from_vector(position).ok()?,
+            Velocity::from_vector(velocity).ok()?,
         ))
     }
 }
@@ -137,12 +138,12 @@ mod tests {
         direction: OrbitDirection,
     ) -> Option<EllipticOrbit> {
         Some(EllipticOrbit {
-            semi_major_axis: Distance::from_meters(R_EARTH + 1_000_000.0)?,
+            semi_major_axis: Distance::from_meters(R_EARTH + 1_000_000.0).ok()?,
             eccentricity,
-            mu: GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?,
-            inclination: Angle::from_radians(0.0)?,
-            right_ascension_of_ascending_node: Angle::from_radians(0.0)?,
-            argument_of_periapsis: Angle::from_radians(0.0)?,
+            mu: GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).ok()?,
+            inclination: Angle::from_radians(0.0).ok()?,
+            right_ascension_of_ascending_node: Angle::from_radians(0.0).ok()?,
+            argument_of_periapsis: Angle::from_radians(0.0).ok()?,
             true_anomaly,
             direction,
         })
@@ -150,10 +151,10 @@ mod tests {
 
     #[test]
     fn elliptic_orbit_speed_at_periapsis_matches_vis_viva() -> TestResult {
-        let e = Eccentricity::from_scalar(0.3).ok_or("invalid eccentricity")?;
+        let e = Eccentricity::from_scalar(0.3).map_err(|_| "invalid eccentricity")?;
         let orbit = elliptic_orbit(
             e,
-            Angle::from_radians(0.0).ok_or("invalid anomaly")?,
+            Angle::from_radians(0.0).map_err(|_| "invalid phase")?,
             OrbitDirection::Prograde,
         )
         .ok_or("invalid orbit")?;
@@ -172,10 +173,10 @@ mod tests {
 
     #[test]
     fn elliptic_orbit_speed_at_apoapsis_matches_vis_viva() -> TestResult {
-        let e = Eccentricity::from_scalar(0.3).ok_or("invalid eccentricity")?;
+        let e = Eccentricity::from_scalar(0.3).map_err(|_| "invalid eccentricity")?;
         let orbit = elliptic_orbit(
             e,
-            Angle::from_radians(std::f64::consts::PI).ok_or("invalid anomaly")?,
+            Angle::from_radians(std::f64::consts::PI).map_err(|_| "invalid phase")?,
             OrbitDirection::Prograde,
         )
         .ok_or("invalid orbit")?;
@@ -194,10 +195,10 @@ mod tests {
 
     #[test]
     fn elliptic_orbit_period_matches_kepler_third_law() -> TestResult {
-        let e = Eccentricity::from_scalar(0.4).ok_or("invalid eccentricity")?;
+        let e = Eccentricity::from_scalar(0.4).map_err(|_| "invalid eccentricity")?;
         let orbit = elliptic_orbit(
             e,
-            Angle::from_radians(1.0).ok_or("invalid anomaly")?,
+            Angle::from_radians(1.0).map_err(|_| "invalid phase")?,
             OrbitDirection::Prograde,
         )
         .ok_or("invalid orbit")?;
@@ -215,12 +216,12 @@ mod tests {
     #[test]
     fn zero_eccentricity_orbit_produces_circular_cartesian_state() -> TestResult {
         let radius_m = R_EARTH + 400_000.0;
-        let true_anomaly = Angle::from_radians(0.8).ok_or("invalid true anomaly")?;
+        let true_anomaly = Angle::from_radians(0.8).map_err(|_| "invalid phase")?;
         let orbit = EllipticOrbit {
-            semi_major_axis: Distance::from_meters(radius_m).ok_or("invalid semi-major axis")?,
-            eccentricity: Eccentricity::from_scalar(0.0).ok_or("invalid eccentricity")?,
+            semi_major_axis: Distance::from_meters(radius_m).map_err(|_| "invalid radius")?,
+            eccentricity: Eccentricity::from_scalar(0.0).map_err(|_| "invalid eccentricity")?,
             mu: GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)
-                .ok_or("invalid mu")?,
+                .map_err(|_| "invalid mu")?,
             inclination: Angle::ZERO,
             right_ascension_of_ascending_node: Angle::ZERO,
             argument_of_periapsis: Angle::ZERO,
@@ -243,10 +244,10 @@ mod tests {
 
     #[test]
     fn elliptic_orbit_periapsis_velocity_is_perpendicular_to_position() -> TestResult {
-        let e = Eccentricity::from_scalar(0.5).ok_or("invalid eccentricity")?;
+        let e = Eccentricity::from_scalar(0.5).map_err(|_| "invalid eccentricity")?;
         let orbit = elliptic_orbit(
             e,
-            Angle::from_radians(0.0).ok_or("invalid anomaly")?,
+            Angle::from_radians(0.0).map_err(|_| "invalid phase")?,
             OrbitDirection::Prograde,
         )
         .ok_or("invalid orbit")?;
@@ -262,21 +263,21 @@ mod tests {
 
     #[test]
     fn elliptic_orbit_retrograde_reverses_velocity() -> TestResult {
-        let e = Eccentricity::from_scalar(0.3).ok_or("invalid eccentricity")?;
+        let e = Eccentricity::from_scalar(0.3).map_err(|_| "invalid eccentricity")?;
         let prograde = elliptic_orbit(
             e,
-            Angle::from_radians(0.7).ok_or("invalid anomaly")?,
+            Angle::from_radians(0.7).map_err(|_| "invalid phase")?,
             OrbitDirection::Prograde,
         )
-        .ok_or("invalid orbit")?
+        .ok_or("invalid prograde orbit")?
         .to_cartesian_state()
         .ok_or("invalid prograde state")?;
         let retrograde = elliptic_orbit(
             e,
-            Angle::from_radians(0.7).ok_or("invalid anomaly")?,
+            Angle::from_radians(0.7).map_err(|_| "invalid phase")?,
             OrbitDirection::Retrograde,
         )
-        .ok_or("invalid orbit")?
+        .ok_or("invalid retrograde orbit")?
         .to_cartesian_state()
         .ok_or("invalid retrograde state")?;
 
@@ -300,10 +301,10 @@ mod tests {
 
     #[test]
     fn elliptic_orbit_rejects_eccentricity_at_or_above_one() -> TestResult {
-        let e = Eccentricity::from_scalar(1.0).ok_or("invalid eccentricity")?;
+        let e = Eccentricity::from_scalar(1.0).map_err(|_| "invalid eccentricity")?;
         let orbit = elliptic_orbit(
             e,
-            Angle::from_radians(0.0).ok_or("invalid anomaly")?,
+            Angle::from_radians(0.0).map_err(|_| "invalid phase")?,
             OrbitDirection::Prograde,
         )
         .ok_or("invalid orbit")?;
@@ -314,10 +315,10 @@ mod tests {
 
     #[test]
     fn elliptic_orbit_rejects_parabolic_eccentricity() -> TestResult {
-        let e = Eccentricity::from_scalar(2.0).ok_or("invalid eccentricity")?;
+        let e = Eccentricity::from_scalar(2.0).map_err(|_| "invalid eccentricity")?;
         let orbit = elliptic_orbit(
             e,
-            Angle::from_radians(0.0).ok_or("invalid anomaly")?,
+            Angle::from_radians(0.0).map_err(|_| "invalid phase")?,
             OrbitDirection::Prograde,
         )
         .ok_or("invalid orbit")?;
@@ -328,17 +329,18 @@ mod tests {
 
     #[test]
     fn elliptic_orbit_nonzero_inclination_raan_and_argp() -> TestResult {
-        let e = Eccentricity::from_scalar(0.2).ok_or("invalid eccentricity")?;
+        let e = Eccentricity::from_scalar(0.2).map_err(|_| "invalid eccentricity")?;
         let orbit = EllipticOrbit {
             semi_major_axis: Distance::from_meters(R_EARTH + 1_000_000.0)
-                .ok_or("invalid semi-major axis")?,
+                .map_err(|_| "invalid radius")?,
             eccentricity: e,
             mu: GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)
-                .ok_or("invalid mu")?,
-            inclination: Angle::from_radians(0.6).ok_or("invalid inclination")?,
-            right_ascension_of_ascending_node: Angle::from_radians(0.9).ok_or("invalid raan")?,
-            argument_of_periapsis: Angle::from_radians(1.2).ok_or("invalid argp")?,
-            true_anomaly: Angle::from_radians(0.4).ok_or("invalid true anomaly")?,
+                .map_err(|_| "invalid mu")?,
+            inclination: Angle::from_radians(0.6).map_err(|_| "invalid inclination")?,
+            right_ascension_of_ascending_node: Angle::from_radians(0.9)
+                .map_err(|_| "invalid raan")?,
+            argument_of_periapsis: Angle::from_radians(1.2).map_err(|_| "invalid argp")?,
+            true_anomaly: Angle::from_radians(0.4).map_err(|_| "invalid phase")?,
             direction: OrbitDirection::Prograde,
         };
         let state = orbit.to_cartesian_state().ok_or("invalid state")?;
@@ -358,10 +360,10 @@ mod tests {
 
     #[test]
     fn elliptic_orbit_to_cartesian_state_has_correct_radius() -> TestResult {
-        let e = Eccentricity::from_scalar(0.2).ok_or("invalid eccentricity")?;
+        let e = Eccentricity::from_scalar(0.2).map_err(|_| "invalid eccentricity")?;
         let elliptic = elliptic_orbit(
             e,
-            Angle::from_radians(0.7).ok_or("invalid anomaly")?,
+            Angle::from_radians(0.7).map_err(|_| "invalid phase")?,
             OrbitDirection::Prograde,
         )
         .ok_or("invalid orbit")?;
@@ -376,12 +378,12 @@ mod tests {
 
     #[test]
     fn distance_rejects_nonpositive_values() {
-        assert!(Distance::from_meters(0.0).is_none());
-        assert!(Distance::from_meters(-1.0).is_none());
+        assert!(Distance::from_meters(0.0).is_err());
+        assert!(Distance::from_meters(-1.0).is_err());
     }
 
     #[test]
     fn angle_rejects_nan() {
-        assert!(Angle::from_radians(f64::NAN).is_none());
+        assert!(Angle::from_radians(f64::NAN).is_err());
     }
 }
