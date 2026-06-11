@@ -46,7 +46,7 @@ struct OrbitVizScenario {
 impl OrbitVizScenario {
     fn new() -> Option<Self> {
         let earth = TwoBodyGravity {
-            mu: GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?,
+            mu: GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).ok()?,
         };
         let integrator = LeapfrogIntegrator;
 
@@ -54,13 +54,13 @@ impl OrbitVizScenario {
         let earth_radius_m = R_EARTH;
         let orbital_radius_m = earth_radius_m + altitude_m;
         let orbit = EllipticOrbit {
-            semi_major_axis: Distance::from_meters(orbital_radius_m)?,
-            eccentricity: Eccentricity::from_scalar(0.0)?,
+            semi_major_axis: Distance::from_meters(orbital_radius_m).ok()?,
+            eccentricity: Eccentricity::from_scalar(0.0).ok()?,
             mu: earth.mu,
             inclination: Angle::ZERO,
             right_ascension_of_ascending_node: Angle::ZERO,
             argument_of_periapsis: Angle::ZERO,
-            true_anomaly: Angle::from_radians(0.0)?,
+            true_anomaly: Angle::from_radians(0.0).ok()?,
             direction: OrbitDirection::Prograde,
         };
 
@@ -73,8 +73,8 @@ impl OrbitVizScenario {
             earth,
             integrator,
             states,
-            t: Epoch::from_seconds(0.0)?,
-            dt: TimeStep::from_seconds(1.0)?,
+            t: Epoch::from_seconds(0.0).ok()?,
+            dt: TimeStep::from_seconds(1.0).ok()?,
             earth_radius_m,
             ideal_orbital_radius: orbit.semi_major_axis,
             circular_speed: orbit.speed()?,
@@ -99,7 +99,7 @@ impl OrbitVizScenario {
                     eprintln!("simulation state became invalid");
                     return;
                 };
-                let Some(next_epoch) = self.t.advance_by(self.dt) else {
+                let Ok(next_epoch) = self.t.advance_by(self.dt) else {
                     eprintln!("simulation epoch became invalid");
                     return;
                 };

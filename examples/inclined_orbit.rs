@@ -24,19 +24,15 @@ struct PropagationSummary {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)
-        .ok_or("invalid Earth gravitational parameter")?;
+    let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
     let orbit = EllipticOrbit {
-        semi_major_axis: Distance::from_meters(R_EARTH + ALTITUDE_M)
-            .ok_or("invalid orbital radius")?,
-        eccentricity: Eccentricity::from_scalar(0.0).ok_or("invalid eccentricity")?,
+        semi_major_axis: Distance::from_meters(R_EARTH + ALTITUDE_M)?,
+        eccentricity: Eccentricity::from_scalar(0.0)?,
         mu,
-        inclination: Angle::from_radians(INCLINATION_DEG.to_radians())
-            .ok_or("invalid inclination")?,
-        right_ascension_of_ascending_node: Angle::from_radians(RAAN_DEG.to_radians())
-            .ok_or("invalid RAAN")?,
+        inclination: Angle::from_radians(INCLINATION_DEG.to_radians())?,
+        right_ascension_of_ascending_node: Angle::from_radians(RAAN_DEG.to_radians())?,
         argument_of_periapsis: Angle::ZERO,
-        true_anomaly: Angle::from_radians(0.0).ok_or("invalid phase")?,
+        true_anomaly: Angle::from_radians(0.0)?,
         direction: OrbitDirection::Prograde,
     };
     let initial_state = orbit
@@ -46,7 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         OrbitalDiagnostics::from_state(&initial_state, mu).ok_or("invalid initial diagnostics")?;
     let gravity = TwoBodyGravity { mu };
     let integrator = VelocityVerletIntegrator;
-    let dt = TimeStep::from_seconds(STEP_SECONDS).ok_or("invalid time step")?;
+    let dt = TimeStep::from_seconds(STEP_SECONDS)?;
     let period = orbit.period().ok_or("invalid orbital period")?;
 
     let mut states = CartesianStateBuffer::<1>::new();
@@ -108,15 +104,14 @@ fn propagate<I: Integrator>(
     periods: usize,
 ) -> Result<PropagationSummary, Box<dyn std::error::Error>> {
     let target_seconds = period.seconds() * periods as f64;
-    let mut epoch = Epoch::from_seconds(0.0).ok_or("invalid initial epoch")?;
+    let mut epoch = Epoch::from_seconds(0.0)?;
     let mut steps = 0;
 
     while epoch.seconds() < target_seconds {
         let remaining_seconds = target_seconds - epoch.seconds();
-        let step = TimeStep::from_seconds(dt.seconds().min(remaining_seconds))
-            .ok_or("invalid integration step")?;
+        let step = TimeStep::from_seconds(dt.seconds().min(remaining_seconds))?;
         integrator.step(gravity, &mut states.view_mut(), 0, epoch, step)?;
-        epoch = epoch.advance_by(step).ok_or("invalid next epoch")?;
+        epoch = epoch.advance_by(step)?;
         steps += 1;
     }
 
@@ -126,8 +121,7 @@ fn propagate<I: Integrator>(
         (diagnostics.radius.meters() - initial_diagnostics.radius.meters())
             .abs()
             .max(f64::EPSILON),
-    )
-    .ok_or("invalid radius drift")?;
+    )?;
     let specific_energy_error = SpecificEnergy::from_square_meters_per_square_second(
         (diagnostics
             .specific_energy
@@ -151,7 +145,7 @@ fn propagate<I: Integrator>(
     let angular_momentum_direction = diagnostics.specific_angular_momentum_vector.normalize();
 
     Ok(PropagationSummary {
-        elapsed: Duration::from_seconds(epoch.seconds()).ok_or("invalid elapsed duration")?,
+        elapsed: Duration::from_seconds(epoch.seconds())?,
         steps,
         radius_drift,
         specific_energy_error,

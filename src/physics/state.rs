@@ -1,7 +1,7 @@
 use nalgebra::Vector3;
 
 pub use super::types::{Position, Velocity};
-use crate::errors::StateError;
+use crate::errors::{DomainError, StateError};
 
 /// Position in meters (SI), Cartesian frame.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -30,12 +30,22 @@ pub struct CartesianPositionComponents {
 
 impl CartesianPositionComponents {
     /// Creates finite Cartesian position components from meters.
-    pub fn from_meters(x_m: f64, y_m: f64, z_m: f64) -> Option<Self> {
-        components_are_finite(x_m, y_m, z_m).then_some(Self { x_m, y_m, z_m })
+    pub fn from_meters(x_m: f64, y_m: f64, z_m: f64) -> Result<Self, DomainError> {
+        if components_are_finite(x_m, y_m, z_m) {
+            Ok(Self { x_m, y_m, z_m })
+        } else {
+            Err(DomainError::NotFinite)
+        }
     }
 
-    pub(crate) const fn new_unchecked(x_m: f64, y_m: f64, z_m: f64) -> Self {
-        Self { x_m, y_m, z_m }
+    fn from_position(position: Position) -> Self {
+        let v = position.vector();
+        debug_assert!(v.x.is_finite() && v.y.is_finite() && v.z.is_finite());
+        Self {
+            x_m: v.x,
+            y_m: v.y,
+            z_m: v.z,
+        }
     }
 
     /// Returns the x component in meters.
@@ -60,13 +70,8 @@ impl CartesianPositionComponents {
         Vector3::new(self.x_m, self.y_m, self.z_m)
     }
 
-    fn from_position(position: Position) -> Self {
-        let position = position.vector();
-        Self::new_unchecked(position.x, position.y, position.z)
-    }
-
     fn to_position(self) -> Result<Position, StateError> {
-        Ok(Position::from_vector_unchecked(self.vector()))
+        Position::from_vector(self.vector()).map_err(|_| StateError::InvalidPosition)
     }
 }
 
@@ -80,19 +85,25 @@ pub struct CartesianVelocityComponents {
 
 impl CartesianVelocityComponents {
     /// Creates finite Cartesian velocity components from meters per second.
-    pub fn from_meters_per_second(x_mps: f64, y_mps: f64, z_mps: f64) -> Option<Self> {
-        components_are_finite(x_mps, y_mps, z_mps).then_some(Self {
-            x_mps,
-            y_mps,
-            z_mps,
-        })
+    pub fn from_meters_per_second(x_mps: f64, y_mps: f64, z_mps: f64) -> Result<Self, DomainError> {
+        if components_are_finite(x_mps, y_mps, z_mps) {
+            Ok(Self {
+                x_mps,
+                y_mps,
+                z_mps,
+            })
+        } else {
+            Err(DomainError::NotFinite)
+        }
     }
 
-    pub(crate) const fn new_unchecked(x_mps: f64, y_mps: f64, z_mps: f64) -> Self {
+    fn from_velocity(velocity: Velocity) -> Self {
+        let v = velocity.vector();
+        debug_assert!(v.x.is_finite() && v.y.is_finite() && v.z.is_finite());
         Self {
-            x_mps,
-            y_mps,
-            z_mps,
+            x_mps: v.x,
+            y_mps: v.y,
+            z_mps: v.z,
         }
     }
 
@@ -118,13 +129,8 @@ impl CartesianVelocityComponents {
         Vector3::new(self.x_mps, self.y_mps, self.z_mps)
     }
 
-    fn from_velocity(velocity: Velocity) -> Self {
-        let velocity = velocity.vector();
-        Self::new_unchecked(velocity.x, velocity.y, velocity.z)
-    }
-
     fn to_velocity(self) -> Result<Velocity, StateError> {
-        Ok(Velocity::from_vector_unchecked(self.vector()))
+        Velocity::from_vector(self.vector()).map_err(|_| StateError::InvalidVelocity)
     }
 }
 
@@ -138,12 +144,20 @@ pub struct CartesianAccelerationComponents {
 
 impl CartesianAccelerationComponents {
     /// Creates finite Cartesian acceleration components from meters per second squared.
-    pub fn from_meters_per_second_squared(x_mps2: f64, y_mps2: f64, z_mps2: f64) -> Option<Self> {
-        components_are_finite(x_mps2, y_mps2, z_mps2).then_some(Self {
-            x_mps2,
-            y_mps2,
-            z_mps2,
-        })
+    pub fn from_meters_per_second_squared(
+        x_mps2: f64,
+        y_mps2: f64,
+        z_mps2: f64,
+    ) -> Result<Self, DomainError> {
+        if components_are_finite(x_mps2, y_mps2, z_mps2) {
+            Ok(Self {
+                x_mps2,
+                y_mps2,
+                z_mps2,
+            })
+        } else {
+            Err(DomainError::NotFinite)
+        }
     }
 
     /// Returns the x component in meters per second squared.
@@ -376,16 +390,18 @@ impl<'a> CartesianStates<'a> {
     pub(crate) fn components(&self, index: usize) -> Result<CartesianStateComponents, StateError> {
         self.validate_index(index)?;
         Ok(CartesianStateComponents {
-            position: CartesianPositionComponents::new_unchecked(
+            position: CartesianPositionComponents::from_meters(
                 self.pos_x[index],
                 self.pos_y[index],
                 self.pos_z[index],
-            ),
-            velocity: CartesianVelocityComponents::new_unchecked(
+            )
+            .map_err(|_| StateError::InvalidPosition)?,
+            velocity: CartesianVelocityComponents::from_meters_per_second(
                 self.vel_x[index],
                 self.vel_y[index],
                 self.vel_z[index],
-            ),
+            )
+            .map_err(|_| StateError::InvalidVelocity)?,
         })
     }
 
@@ -536,8 +552,8 @@ mod tests {
 
     fn state() -> Option<CartesianState> {
         Some(CartesianState::new(
-            Position::from_vector(Vector3::new(1.0, 2.0, 3.0))?,
-            Velocity::from_vector(Vector3::new(4.0, 5.0, 6.0))?,
+            Position::from_vector(Vector3::new(1.0, 2.0, 3.0)).ok()?,
+            Velocity::from_vector(Vector3::new(4.0, 5.0, 6.0)).ok()?,
         ))
     }
 
@@ -603,21 +619,5 @@ mod tests {
             Err(StateError::InvalidBodyIndex),
         ));
         Ok(())
-    }
-
-    #[test]
-    fn mutable_state_view_rejects_nonfinite_components() {
-        let mut buffer = CartesianStateBuffer::<1>::new();
-
-        assert!(matches!(
-            buffer.view_mut().write_components(
-                0,
-                CartesianStateComponents {
-                    position: CartesianPositionComponents::new_unchecked(f64::NAN, 0.0, 0.0),
-                    velocity: CartesianVelocityComponents::new_unchecked(0.0, 0.0, 0.0),
-                },
-            ),
-            Err(StateError::InvalidPosition),
-        ));
     }
 }

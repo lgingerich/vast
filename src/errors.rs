@@ -1,14 +1,32 @@
 use thiserror::Error;
 
+/// Error returned when a domain value cannot be constructed because it
+/// violates physical finiteness or sign constraints.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+pub enum DomainError {
+    /// The value is NaN, +infinity, or -infinity.
+    #[error("value must be finite")]
+    NotFinite,
+    /// The value is zero or negative but must be strictly positive.
+    #[error("value must be positive")]
+    NonPositive,
+    /// The value is negative but must be non-negative.
+    #[error("value must be non-negative")]
+    Negative,
+}
+
 /// Errors produced while evaluating a dynamics model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
 pub enum DynamicsError {
-    /// Gravity is undefined at the central body's center of mass.
-    #[error("two-body gravity is undefined at zero radius")]
-    PositionAtGravityCenter,
     /// The computed acceleration was not finite.
     #[error("computed acceleration was not finite")]
     InvalidAcceleration,
+    /// A domain value was physically invalid.
+    #[error(transparent)]
+    Domain(#[from] DomainError),
+    /// Gravity is undefined at the central body's center of mass.
+    #[error("two-body gravity is undefined at zero radius")]
+    PositionAtGravityCenter,
 }
 
 /// Errors produced while reading or writing Cartesian state storage.
@@ -40,6 +58,9 @@ pub enum IntegrationError {
     /// The state storage could not be read or written.
     #[error(transparent)]
     State(#[from] StateError),
+    /// A domain value was physically invalid.
+    #[error(transparent)]
+    Domain(#[from] DomainError),
     /// The integrated position was not finite.
     #[error("integrated position was not finite")]
     InvalidPosition,
@@ -60,6 +81,9 @@ pub enum PropagationError {
     /// Integration failed during propagation.
     #[error(transparent)]
     Integration(#[from] IntegrationError),
+    /// A domain value was physically invalid.
+    #[error(transparent)]
+    Domain(#[from] DomainError),
     /// The propagation epoch was not finite.
     #[error("propagation epoch was not finite")]
     InvalidEpoch,

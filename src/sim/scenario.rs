@@ -55,14 +55,14 @@ impl ScenarioConfig {
             });
         }
 
-        let dt = TimeStep::from_seconds(self.dt_s).ok_or_else(|| ScenarioError::InvalidField {
+        let dt = TimeStep::from_seconds(self.dt_s).map_err(|e| ScenarioError::InvalidField {
             field: "dt_s",
-            reason: "must be finite and positive".to_string(),
+            reason: e.to_string(),
         })?;
         let duration =
-            Duration::from_seconds(self.duration_s).ok_or_else(|| ScenarioError::InvalidField {
+            Duration::from_seconds(self.duration_s).map_err(|e| ScenarioError::InvalidField {
                 field: "duration_s",
-                reason: "must be finite and non-negative".to_string(),
+                reason: e.to_string(),
             })?;
         if self.duration_s <= 0.0 {
             return Err(ScenarioError::InvalidField {
@@ -81,34 +81,35 @@ impl ScenarioConfig {
         let integrator = parse_integrator(&self.integrator)?;
         let gravity = parse_force_model(&self.force_model)?;
 
-        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)
-            .ok_or_else(|| ScenarioError::InvalidField {
+        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).map_err(
+            |e| ScenarioError::InvalidField {
                 field: "force_model",
-                reason: "Earth mu is invalid".to_string(),
-            })?;
+                reason: e.to_string(),
+            },
+        )?;
 
-        let radius = Distance::from_meters(R_EARTH + self.altitude_m).ok_or_else(|| {
+        let radius = Distance::from_meters(R_EARTH + self.altitude_m).map_err(|e| {
             ScenarioError::InvalidField {
                 field: "altitude_m",
-                reason: "orbital radius is invalid".to_string(),
+                reason: e.to_string(),
             }
         })?;
 
         let orbit = EllipticOrbit {
             semi_major_axis: radius,
-            eccentricity: Eccentricity::from_scalar(0.0).ok_or_else(|| {
+            eccentricity: Eccentricity::from_scalar(0.0).map_err(|e| {
                 ScenarioError::InvalidField {
                     field: "altitude_m",
-                    reason: "eccentricity is invalid".to_string(),
+                    reason: e.to_string(),
                 }
             })?,
             mu,
             inclination: Angle::ZERO,
             right_ascension_of_ascending_node: Angle::ZERO,
             argument_of_periapsis: Angle::ZERO,
-            true_anomaly: Angle::from_radians(0.0).ok_or_else(|| ScenarioError::InvalidField {
+            true_anomaly: Angle::from_radians(0.0).map_err(|e| ScenarioError::InvalidField {
                 field: "altitude_m",
-                reason: "initial phase is invalid".to_string(),
+                reason: e.to_string(),
             })?,
             direction: OrbitDirection::Prograde,
         };
@@ -161,9 +162,9 @@ pub(crate) fn parse_force_model(name: &str) -> Result<TwoBodyGravity, ScenarioEr
     match name {
         "two_body" => {
             let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)
-                .ok_or_else(|| ScenarioError::InvalidField {
+                .map_err(|e| ScenarioError::InvalidField {
                     field: "force_model",
-                    reason: "Earth mu is invalid".to_string(),
+                    reason: e.to_string(),
                 })?;
             Ok(TwoBodyGravity { mu })
         }

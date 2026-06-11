@@ -12,43 +12,37 @@ const STEP_SECONDS: f64 = 10.0;
 const PROPAGATION_HOURS: f64 = 6.0;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)
-        .ok_or("invalid Earth gravitational parameter")?;
+    let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
     let orbit = EllipticOrbit {
-        semi_major_axis: Distance::from_meters(R_EARTH + ALTITUDE_M)
-            .ok_or("invalid orbital radius")?,
-        eccentricity: Eccentricity::from_scalar(0.0).ok_or("invalid eccentricity")?,
+        semi_major_axis: Distance::from_meters(R_EARTH + ALTITUDE_M)?,
+        eccentricity: Eccentricity::from_scalar(0.0)?,
         mu,
         inclination: Angle::ZERO,
         right_ascension_of_ascending_node: Angle::ZERO,
         argument_of_periapsis: Angle::ZERO,
-        true_anomaly: Angle::from_radians(0.0).ok_or("invalid phase")?,
+        true_anomaly: Angle::from_radians(0.0)?,
         direction: OrbitDirection::Prograde,
     };
     let initial_state = orbit
         .to_cartesian_state()
         .ok_or("invalid initial Cartesian state")?;
     let atmosphere = ExponentialAtmosphere {
-        reference_radius: Distance::from_meters(R_EARTH).ok_or("invalid Earth radius")?,
-        reference_altitude: Distance::from_meters(ALTITUDE_M).ok_or("invalid altitude")?,
-        reference_density: MassDensity::from_kilograms_per_cubic_meter(1.0e-10)
-            .ok_or("invalid density")?,
-        scale_height: Distance::from_meters(50_000.0).ok_or("invalid scale height")?,
-        angular_rate: AngularRate::from_radians_per_second(7.292_115_9e-5)
-            .ok_or("invalid Earth rotation rate")?,
+        reference_radius: Distance::from_meters(R_EARTH)?,
+        reference_altitude: Distance::from_meters(ALTITUDE_M)?,
+        reference_density: MassDensity::from_kilograms_per_cubic_meter(1.0e-10)?,
+        scale_height: Distance::from_meters(50_000.0)?,
+        angular_rate: AngularRate::from_radians_per_second(7.292_115_9e-5)?,
     };
     let dynamics = CompositeDynamics {
         first: TwoBodyGravity { mu },
         second: AtmosphericDrag {
             atmosphere,
-            area_per_mass: AreaPerMass::from_square_meters_per_kilogram(0.02)
-                .ok_or("invalid area per mass")?,
+            area_per_mass: AreaPerMass::from_square_meters_per_kilogram(0.02)?,
         },
     };
     let integrator = RungeKutta4Integrator;
-    let dt = TimeStep::from_seconds(STEP_SECONDS).ok_or("invalid time step")?;
-    let duration = Duration::from_seconds(PROPAGATION_HOURS * 3_600.0)
-        .ok_or("invalid propagation duration")?;
+    let dt = TimeStep::from_seconds(STEP_SECONDS)?;
+    let duration = Duration::from_seconds(PROPAGATION_HOURS * 3_600.0)?;
     let mut states = CartesianStateBuffer::<1>::new();
     states.write_from_state(0, &initial_state)?;
 
@@ -98,14 +92,13 @@ fn propagate<I: Integrator, D: space_sim::Dynamics>(
     duration: Duration,
     dt: TimeStep,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut epoch = Epoch::from_seconds(0.0).ok_or("invalid initial epoch")?;
+    let mut epoch = Epoch::from_seconds(0.0)?;
 
     while epoch.seconds() < duration.seconds() {
         let remaining_seconds = duration.seconds() - epoch.seconds();
-        let step =
-            TimeStep::from_seconds(dt.seconds().min(remaining_seconds)).ok_or("invalid step")?;
+        let step = TimeStep::from_seconds(dt.seconds().min(remaining_seconds))?;
         integrator.step(dynamics, &mut states.view_mut(), 0, epoch, step)?;
-        epoch = epoch.advance_by(step).ok_or("invalid next epoch")?;
+        epoch = epoch.advance_by(step)?;
     }
 
     Ok(())

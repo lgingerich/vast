@@ -13,19 +13,15 @@ const STEP_SECONDS: f64 = 30.0;
 const PROPAGATION_DAYS: f64 = 300.0;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)
-        .ok_or("invalid Earth gravitational parameter")?;
+    let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
     let orbit = EllipticOrbit {
-        semi_major_axis: Distance::from_meters(R_EARTH + ALTITUDE_M)
-            .ok_or("invalid orbital radius")?,
-        eccentricity: Eccentricity::from_scalar(0.0).ok_or("invalid eccentricity")?,
+        semi_major_axis: Distance::from_meters(R_EARTH + ALTITUDE_M)?,
+        eccentricity: Eccentricity::from_scalar(0.0)?,
         mu,
-        inclination: Angle::from_radians(INCLINATION_DEG.to_radians())
-            .ok_or("invalid inclination")?,
-        right_ascension_of_ascending_node: Angle::from_radians(RAAN_DEG.to_radians())
-            .ok_or("invalid RAAN")?,
+        inclination: Angle::from_radians(INCLINATION_DEG.to_radians())?,
+        right_ascension_of_ascending_node: Angle::from_radians(RAAN_DEG.to_radians())?,
         argument_of_periapsis: Angle::ZERO,
-        true_anomaly: Angle::from_radians(0.0).ok_or("invalid phase")?,
+        true_anomaly: Angle::from_radians(0.0)?,
         direction: OrbitDirection::Prograde,
     };
     let initial_state = orbit
@@ -34,13 +30,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let two_body_gravity = TwoBodyGravity { mu };
     let j2_gravity = OblateBodyGravity {
         mu,
-        equatorial_radius: Distance::from_meters(R_EARTH).ok_or("invalid equatorial radius")?,
+        equatorial_radius: Distance::from_meters(R_EARTH)?,
         j2: J2_EARTH,
     };
     let integrator = VelocityVerletIntegrator;
-    let dt = TimeStep::from_seconds(STEP_SECONDS).ok_or("invalid time step")?;
-    let duration = Duration::from_seconds(PROPAGATION_DAYS * 86_400.0)
-        .ok_or("invalid propagation duration")?;
+    let dt = TimeStep::from_seconds(STEP_SECONDS)?;
+    let duration = Duration::from_seconds(PROPAGATION_DAYS * 86_400.0)?;
     // First-order J2 secular RAAN drift for comparison.
     let mean_motion =
         (mu.meters_cubed_per_second_squared() / orbit.semi_major_axis.meters().powi(3)).sqrt();
@@ -122,14 +117,13 @@ fn propagate<I: Integrator, D: space_sim::Dynamics>(
     duration: Duration,
     dt: TimeStep,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut epoch = Epoch::from_seconds(0.0).ok_or("invalid initial epoch")?;
+    let mut epoch = Epoch::from_seconds(0.0)?;
 
     while epoch.seconds() < duration.seconds() {
         let remaining_seconds = duration.seconds() - epoch.seconds();
-        let step =
-            TimeStep::from_seconds(dt.seconds().min(remaining_seconds)).ok_or("invalid step")?;
+        let step = TimeStep::from_seconds(dt.seconds().min(remaining_seconds))?;
         integrator.step(dynamics, &mut states.view_mut(), 0, epoch, step)?;
-        epoch = epoch.advance_by(step).ok_or("invalid next epoch")?;
+        epoch = epoch.advance_by(step)?;
     }
 
     Ok(())

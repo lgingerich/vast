@@ -109,8 +109,8 @@ impl Propagator {
             .map_err(PropagationError::State)?;
 
         Ok(Self {
-            epoch: Epoch::from_seconds(0.0).ok_or(PropagationError::InvalidEpoch)?,
-            start_epoch: Epoch::from_seconds(0.0).ok_or(PropagationError::InvalidEpoch)?,
+            epoch: Epoch::from_seconds(0.0)?,
+            start_epoch: Epoch::from_seconds(0.0)?,
             dt,
             max_steps: None,
             sample_config: None,
@@ -153,8 +153,7 @@ impl Propagator {
             velocity.x + burn.delta_v_mps[0],
             velocity.y + burn.delta_v_mps[1],
             velocity.z + burn.delta_v_mps[2],
-        ))
-        .ok_or(PropagationError::InvalidBurn)?;
+        ))?;
         let updated_state = CartesianState {
             position: state.position,
             velocity: updated,
@@ -249,7 +248,7 @@ impl Propagator {
 
             let step = match termination.remaining_seconds(self.start_epoch, self.epoch) {
                 Some(remaining) if remaining < self.dt.seconds() => {
-                    TimeStep::from_seconds(remaining).ok_or(PropagationError::InvalidStep)?
+                    TimeStep::from_seconds(remaining)?
                 }
                 _ => self.dt,
             };
@@ -258,10 +257,7 @@ impl Propagator {
                 .step(dynamics, &mut self.states.view_mut(), 0, self.epoch, step)
                 .map_err(PropagationError::Integration)?;
 
-            self.epoch = self
-                .epoch
-                .advance_by(step)
-                .ok_or(PropagationError::InvalidEpoch)?;
+            self.epoch = self.epoch.advance_by(step)?;
             steps += 1;
 
             let state = self.states.read_state(0).map_err(PropagationError::State)?;

@@ -177,10 +177,10 @@ impl MissionScenarioConfig {
             });
         }
 
-        let dt = TimeStep::from_seconds(self.propagation.dt_s).ok_or_else(|| {
+        let dt = TimeStep::from_seconds(self.propagation.dt_s).map_err(|e| {
             MissionError::InvalidField {
                 field: "propagation.dt_s",
-                reason: "must be finite and positive".to_string(),
+                reason: e.to_string(),
             }
         })?;
         let sample_every_steps = (self.propagation.sample_every_steps >= 1)
@@ -460,29 +460,27 @@ fn build_initial_state(
 ) -> Result<CartesianState, MissionError> {
     match initial_orbit {
         InitialOrbitConfig::Circular { altitude_m } => {
-            let radius = Distance::from_meters(R_EARTH + altitude_m).ok_or_else(|| {
+            let radius = Distance::from_meters(R_EARTH + altitude_m).map_err(|e| {
                 MissionError::InvalidField {
                     field: "initial_orbit.altitude_m",
-                    reason: "orbital radius is invalid".to_string(),
+                    reason: e.to_string(),
                 }
             })?;
             let orbit = EllipticOrbit {
                 semi_major_axis: radius,
-                eccentricity: Eccentricity::from_scalar(0.0).ok_or_else(|| {
+                eccentricity: Eccentricity::from_scalar(0.0).map_err(|e| {
                     MissionError::InvalidField {
                         field: "initial_orbit",
-                        reason: "eccentricity is invalid".to_string(),
+                        reason: e.to_string(),
                     }
                 })?,
                 mu,
                 inclination: Angle::ZERO,
                 right_ascension_of_ascending_node: Angle::ZERO,
                 argument_of_periapsis: Angle::ZERO,
-                true_anomaly: Angle::from_radians(0.0).ok_or_else(|| {
-                    MissionError::InvalidField {
-                        field: "initial_orbit",
-                        reason: "initial phase is invalid".to_string(),
-                    }
+                true_anomaly: Angle::from_radians(0.0).map_err(|e| MissionError::InvalidField {
+                    field: "initial_orbit",
+                    reason: e.to_string(),
                 })?,
                 direction: OrbitDirection::Prograde,
             };
@@ -505,16 +503,16 @@ fn build_initial_state(
             use crate::physics::types::Eccentricity;
 
             let elements = ClassicalOrbitalElements {
-                semi_major_axis: Distance::from_meters(*semi_major_axis_m).ok_or_else(|| {
+                semi_major_axis: Distance::from_meters(*semi_major_axis_m).map_err(|e| {
                     MissionError::InvalidField {
                         field: "initial_orbit.semi_major_axis_m",
-                        reason: "semi-major axis is invalid".to_string(),
+                        reason: e.to_string(),
                     }
                 })?,
-                eccentricity: Eccentricity::from_scalar(*eccentricity).ok_or_else(|| {
+                eccentricity: Eccentricity::from_scalar(*eccentricity).map_err(|e| {
                     MissionError::InvalidField {
                         field: "initial_orbit.eccentricity",
-                        reason: "eccentricity is invalid".to_string(),
+                        reason: e.to_string(),
                     }
                 })?,
                 inclination: degrees_to_angle(*inclination_deg, "initial_orbit.inclination_deg")?,
@@ -542,9 +540,9 @@ fn build_initial_state(
 }
 
 fn degrees_to_angle(degrees: f64, field: &'static str) -> Result<Angle, MissionError> {
-    Angle::from_radians(degrees.to_radians()).ok_or_else(|| MissionError::InvalidField {
+    Angle::from_radians(degrees.to_radians()).map_err(|e| MissionError::InvalidField {
         field,
-        reason: "angle is invalid".to_string(),
+        reason: e.to_string(),
     })
 }
 
@@ -608,12 +606,11 @@ fn parse_stop_config(
         },
         StopConfig::Table(table) => match (table.duration_s, table.steps) {
             (Some(duration_s), None) => {
-                let duration = Duration::from_seconds(duration_s).ok_or_else(|| {
-                    MissionError::InvalidField {
+                let duration =
+                    Duration::from_seconds(duration_s).map_err(|e| MissionError::InvalidField {
                         field: "segments.stop.duration_s",
-                        reason: "must be finite and non-negative".to_string(),
-                    }
-                })?;
+                        reason: e.to_string(),
+                    })?;
                 Ok(TerminationCondition::Duration(duration))
             }
             (None, Some(steps)) => Ok(TerminationCondition::StepCount(steps)),
