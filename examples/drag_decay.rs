@@ -1,8 +1,8 @@
 #![allow(missing_docs)]
 
 use space_sim::{
-    Angle, AngularRate, AreaPerMass, AtmosphericDrag, CartesianStateBuffer, CircularOrbit,
-    CircularOrbitOrientation, CompositeDynamics, Distance, Duration, Epoch, ExponentialAtmosphere,
+    Angle, AngularRate, AreaPerMass, AtmosphericDrag, CartesianStateBuffer, CompositeDynamics,
+    Distance, Duration, Eccentricity, EllipticOrbit, Epoch, ExponentialAtmosphere,
     GravitationalParameter, Integrator, MU_EARTH, MassDensity, OrbitDirection, OrbitalDiagnostics,
     R_EARTH, RungeKutta4Integrator, TimeStep, TwoBodyGravity,
 };
@@ -14,11 +14,15 @@ const PROPAGATION_HOURS: f64 = 6.0;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)
         .ok_or("invalid Earth gravitational parameter")?;
-    let orbit = CircularOrbit {
-        radius: Distance::from_meters(R_EARTH + ALTITUDE_M).ok_or("invalid orbital radius")?,
+    let orbit = EllipticOrbit {
+        semi_major_axis: Distance::from_meters(R_EARTH + ALTITUDE_M)
+            .ok_or("invalid orbital radius")?,
+        eccentricity: Eccentricity::from_scalar(0.0).ok_or("invalid eccentricity")?,
         mu,
-        orientation: CircularOrbitOrientation::equatorial(),
-        phase: Angle::from_radians(0.0).ok_or("invalid phase")?,
+        inclination: Angle::ZERO,
+        right_ascension_of_ascending_node: Angle::ZERO,
+        argument_of_periapsis: Angle::ZERO,
+        true_anomaly: Angle::from_radians(0.0).ok_or("invalid phase")?,
         direction: OrbitDirection::Prograde,
     };
     let initial_state = orbit

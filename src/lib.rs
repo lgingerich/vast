@@ -20,7 +20,8 @@ pub use physics::{
         EulerIntegrator, Integrator, LeapfrogIntegrator, RungeKutta4Integrator,
         VelocityVerletIntegrator,
     },
-    orbits::{CircularOrbit, CircularOrbitOrientation, OrbitDirection},
+    orbits::EllipticOrbit,
+    orbits::OrbitDirection,
     state::{
         CartesianAccelerationComponents, CartesianPositionComponents, CartesianState,
         CartesianStateBuffer, CartesianStateComponents, CartesianStates, CartesianStatesMut,

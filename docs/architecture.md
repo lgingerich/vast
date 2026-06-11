@@ -71,7 +71,7 @@ They should not reimplement propagation loops once a shared propagator exists.
 | `dynamics` | Force models and `Dynamics` trait |
 | `integrators` | Fixed-step integrators and `Integrator` trait |
 | `types` | SI domain newtypes with validation |
-| `orbits` | `CircularOrbit` initial-condition construction |
+| `orbits` | `EllipticOrbit` initial-condition construction (circular via `e=0`) |
 | `elements` | Cartesian → classical elements, J2 secular helpers |
 | `diagnostics` | Two-body orbital invariants |
 | `constants` | Earth μ, radius, J2 |
@@ -86,7 +86,7 @@ fixed `TimeStep`. Caller owns epoch advancement.
 
 ### What examples do today
 
-Examples wire physics primitives manually: build `CircularOrbit`, create a
+Examples wire physics primitives manually: build an `EllipticOrbit`, create a
 `CartesianStateBuffer`, choose integrator and dynamics, then run a hand-written
 `while epoch < duration` loop with optional final partial steps. Scenario structs
 (e.g. `OrbitVizScenario`) exist only inside example files.

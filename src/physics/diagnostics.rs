@@ -138,8 +138,8 @@ fn bound_semi_major_axis(mu: f64, specific_energy: f64) -> Option<Distance> {
 mod tests {
     use super::*;
     use crate::{
-        Angle, CartesianStateBuffer, CircularOrbit, CircularOrbitOrientation, MU_EARTH,
-        OrbitDirection, Position, R_EARTH, Velocity,
+        Angle, CartesianStateBuffer, Eccentricity, EllipticOrbit, MU_EARTH, OrbitDirection,
+        Position, R_EARTH, Velocity,
     };
 
     type TestResult = Result<(), &'static str>;
@@ -147,12 +147,15 @@ mod tests {
     const ALTITUDE_M: f64 = 400_000.0;
     const EPS: f64 = 1.0e-6;
 
-    fn circular_orbit() -> Option<CircularOrbit> {
-        Some(CircularOrbit {
-            radius: Distance::from_meters(R_EARTH + ALTITUDE_M)?,
+    fn circular_orbit() -> Option<EllipticOrbit> {
+        Some(EllipticOrbit {
+            semi_major_axis: Distance::from_meters(R_EARTH + ALTITUDE_M)?,
+            eccentricity: Eccentricity::from_scalar(0.0)?,
             mu: earth_mu()?,
-            orientation: CircularOrbitOrientation::equatorial(),
-            phase: Angle::from_radians(0.0)?,
+            inclination: Angle::ZERO,
+            right_ascension_of_ascending_node: Angle::ZERO,
+            argument_of_periapsis: Angle::ZERO,
+            true_anomaly: Angle::from_radians(0.0)?,
             direction: OrbitDirection::Prograde,
         })
     }
@@ -180,7 +183,7 @@ mod tests {
         let diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, orbit.mu)
             .ok_or("invalid diagnostics")?;
 
-        let radius = orbit.radius.meters();
+        let radius = orbit.semi_major_axis.meters();
         let speed = orbit
             .speed()
             .ok_or("invalid circular speed")?

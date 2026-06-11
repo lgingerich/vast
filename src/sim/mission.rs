@@ -11,9 +11,11 @@ use crate::physics::dynamics::TwoBodyGravity;
 use crate::physics::integrators::{
     EulerIntegrator, LeapfrogIntegrator, RungeKutta4Integrator, VelocityVerletIntegrator,
 };
-use crate::physics::orbits::{CircularOrbit, CircularOrbitOrientation, OrbitDirection};
+use crate::physics::orbits::{EllipticOrbit, OrbitDirection};
 use crate::physics::state::CartesianState;
-use crate::physics::types::{Angle, Distance, Duration, GravitationalParameter, TimeStep};
+use crate::physics::types::{
+    Angle, Distance, Duration, Eccentricity, GravitationalParameter, TimeStep,
+};
 
 /// Serializable mission scenario loaded from TOML.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -464,13 +466,23 @@ fn build_initial_state(
                     reason: "orbital radius is invalid".to_string(),
                 }
             })?;
-            let orbit = CircularOrbit {
-                radius,
+            let orbit = EllipticOrbit {
+                semi_major_axis: radius,
+                eccentricity: Eccentricity::from_scalar(0.0).ok_or_else(|| {
+                    MissionError::InvalidField {
+                        field: "initial_orbit",
+                        reason: "eccentricity is invalid".to_string(),
+                    }
+                })?,
                 mu,
-                orientation: CircularOrbitOrientation::equatorial(),
-                phase: Angle::from_radians(0.0).ok_or_else(|| MissionError::InvalidField {
-                    field: "initial_orbit",
-                    reason: "initial phase is invalid".to_string(),
+                inclination: Angle::ZERO,
+                right_ascension_of_ascending_node: Angle::ZERO,
+                argument_of_periapsis: Angle::ZERO,
+                true_anomaly: Angle::from_radians(0.0).ok_or_else(|| {
+                    MissionError::InvalidField {
+                        field: "initial_orbit",
+                        reason: "initial phase is invalid".to_string(),
+                    }
                 })?,
                 direction: OrbitDirection::Prograde,
             };

@@ -2,8 +2,8 @@
 
 use macroquad::prelude::*;
 use space_sim::{
-    Angle, CartesianStateBuffer, CircularOrbit, CircularOrbitOrientation, Distance, Duration,
-    Epoch, GravitationalParameter, Integrator, LeapfrogIntegrator, MU_EARTH, OrbitDirection,
+    Angle, CartesianStateBuffer, Distance, Duration, Eccentricity, EllipticOrbit, Epoch,
+    GravitationalParameter, Integrator, LeapfrogIntegrator, MU_EARTH, OrbitDirection,
     OrbitalDiagnostics, R_EARTH, Speed, TimeStep, TwoBodyGravity,
 };
 
@@ -53,11 +53,14 @@ impl OrbitVizScenario {
         let altitude_m = 400_000.0;
         let earth_radius_m = R_EARTH;
         let orbital_radius_m = earth_radius_m + altitude_m;
-        let orbit = CircularOrbit {
-            radius: Distance::from_meters(orbital_radius_m)?,
+        let orbit = EllipticOrbit {
+            semi_major_axis: Distance::from_meters(orbital_radius_m)?,
+            eccentricity: Eccentricity::from_scalar(0.0)?,
             mu: earth.mu,
-            orientation: CircularOrbitOrientation::equatorial(),
-            phase: Angle::from_radians(0.0)?,
+            inclination: Angle::ZERO,
+            right_ascension_of_ascending_node: Angle::ZERO,
+            argument_of_periapsis: Angle::ZERO,
+            true_anomaly: Angle::from_radians(0.0)?,
             direction: OrbitDirection::Prograde,
         };
 
@@ -73,7 +76,7 @@ impl OrbitVizScenario {
             t: Epoch::from_seconds(0.0)?,
             dt: TimeStep::from_seconds(1.0)?,
             earth_radius_m,
-            ideal_orbital_radius: orbit.radius,
+            ideal_orbital_radius: orbit.semi_major_axis,
             circular_speed: orbit.speed()?,
             orbital_period: orbit.period()?,
             meters_per_pixel: 40_000.0,

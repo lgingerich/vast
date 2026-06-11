@@ -238,7 +238,7 @@ fn crossed_angle(previous_rad: f64, current_rad: f64, target_rad: f64) -> bool {
 mod tests {
     use super::*;
     use crate::{
-        Angle, CircularOrbit, CircularOrbitOrientation, Distance, GravitationalParameter, MU_EARTH,
+        Angle, Distance, Eccentricity, EllipticOrbit, GravitationalParameter, MU_EARTH,
         OrbitDirection, R_EARTH,
     };
 
@@ -300,11 +300,14 @@ mod tests {
     fn sample_state() -> crate::CartesianState {
         let mu =
             GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu");
-        CircularOrbit {
-            radius: Distance::from_meters(R_EARTH + 400_000.0).expect("radius"),
+        EllipticOrbit {
+            semi_major_axis: Distance::from_meters(R_EARTH + 400_000.0).expect("radius"),
+            eccentricity: Eccentricity::from_scalar(0.0).expect("eccentricity"),
             mu,
-            orientation: CircularOrbitOrientation::equatorial(),
-            phase: Angle::from_radians(0.0).expect("phase"),
+            inclination: Angle::ZERO,
+            right_ascension_of_ascending_node: Angle::ZERO,
+            argument_of_periapsis: Angle::ZERO,
+            true_anomaly: Angle::from_radians(0.0).expect("phase"),
             direction: OrbitDirection::Prograde,
         }
         .to_cartesian_state()

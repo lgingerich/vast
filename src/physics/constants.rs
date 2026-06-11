@@ -26,6 +26,3 @@ pub const DEFAULT_CIRCULAR_ECCENTRICITY_TOLERANCE: f64 = 1.0e-6;
 
 /// Default tolerance for classifying an orbit as equatorial, in radians.
 pub const DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE_RAD: f64 = 1.0e-10;
-
-/// Two pi.
-pub const TWO_PI: f64 = 2.0 * std::f64::consts::PI;

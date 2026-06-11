@@ -200,11 +200,11 @@ mod tests {
     use crate::physics::constants::{J2_EARTH, MU_EARTH, R_EARTH};
     use crate::physics::diagnostics::OrbitalDiagnostics;
     use crate::physics::integrators::{Integrator, RungeKutta4Integrator};
-    use crate::physics::orbits::{CircularOrbit, CircularOrbitOrientation, OrbitDirection};
+    use crate::physics::orbits::{EllipticOrbit, OrbitDirection};
     use crate::physics::state::{
         CartesianPositionComponents, CartesianStateBuffer, CartesianVelocityComponents,
     };
-    use crate::physics::types::{Angle, Position, TimeStep};
+    use crate::physics::types::{Angle, Eccentricity, Position, TimeStep};
     use nalgebra::Vector3;
 
     type TestResult = Result<(), &'static str>;
@@ -705,11 +705,14 @@ mod tests {
     fn low_orbit_with_drag_loses_specific_energy() -> TestResult {
         let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)
             .ok_or("invalid mu")?;
-        let orbit = CircularOrbit {
-            radius: Distance::from_meters(R_EARTH + 250_000.0).ok_or("invalid radius")?,
+        let orbit = EllipticOrbit {
+            semi_major_axis: Distance::from_meters(R_EARTH + 250_000.0).ok_or("invalid radius")?,
+            eccentricity: Eccentricity::from_scalar(0.0).ok_or("invalid eccentricity")?,
             mu,
-            orientation: CircularOrbitOrientation::equatorial(),
-            phase: Angle::from_radians(0.0).ok_or("invalid phase")?,
+            inclination: Angle::ZERO,
+            right_ascension_of_ascending_node: Angle::ZERO,
+            argument_of_periapsis: Angle::ZERO,
+            true_anomaly: Angle::from_radians(0.0).ok_or("invalid phase")?,
             direction: OrbitDirection::Prograde,
         };
         let mut states = CartesianStateBuffer::<1>::new();
@@ -752,11 +755,14 @@ mod tests {
         let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)
             .ok_or("invalid mu")?;
         let radius = R_EARTH + 250_000.0;
-        let orbit = CircularOrbit {
-            radius: Distance::from_meters(radius).ok_or("invalid radius")?,
+        let orbit = EllipticOrbit {
+            semi_major_axis: Distance::from_meters(radius).ok_or("invalid radius")?,
+            eccentricity: Eccentricity::from_scalar(0.0).ok_or("invalid eccentricity")?,
             mu,
-            orientation: CircularOrbitOrientation::equatorial(),
-            phase: Angle::from_radians(0.0).ok_or("invalid phase")?,
+            inclination: Angle::ZERO,
+            right_ascension_of_ascending_node: Angle::ZERO,
+            argument_of_periapsis: Angle::ZERO,
+            true_anomaly: Angle::from_radians(0.0).ok_or("invalid phase")?,
             direction: OrbitDirection::Prograde,
         };
         let mut states = CartesianStateBuffer::<1>::new();

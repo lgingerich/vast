@@ -1,7 +1,7 @@
 use nalgebra::Vector3;
 
 use super::constants::{
-    DEFAULT_CIRCULAR_ECCENTRICITY_TOLERANCE, DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE_RAD, TWO_PI,
+    DEFAULT_CIRCULAR_ECCENTRICITY_TOLERANCE, DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE_RAD,
 };
 use super::state::{CartesianState, CartesianStates};
 use super::types::{Angle, Distance, Eccentricity, GravitationalParameter, Position, Velocity};
@@ -382,8 +382,9 @@ fn angle_from_radians(radians: f64) -> Option<Angle> {
 }
 
 fn normalize_angle(radians: f64) -> f64 {
-    let normalized = radians.rem_euclid(TWO_PI);
-    if normalized == TWO_PI {
+    let two_pi = 2.0 * std::f64::consts::PI;
+    let normalized = radians.rem_euclid(two_pi);
+    if normalized == two_pi {
         0.0
     } else {
         normalized
@@ -396,9 +397,12 @@ mod tests {
     use crate::physics::constants::{J2_EARTH, MU_EARTH, R_EARTH};
     use crate::physics::dynamics::{OblateBodyGravity, TwoBodyGravity};
     use crate::physics::integrators::{Integrator, VelocityVerletIntegrator};
-    use crate::physics::orbits::{CircularOrbit, CircularOrbitOrientation, OrbitDirection};
+    use crate::physics::orbits::{EllipticOrbit, OrbitDirection};
     use crate::physics::state::CartesianStateBuffer;
-    use crate::physics::types::{Duration, Epoch, Position, TimeStep, Velocity};
+    use crate::physics::types::{
+        Angle, Distance, Duration, Eccentricity, Epoch, GravitationalParameter, Position, TimeStep,
+        Velocity,
+    };
 
     type TestResult = Result<(), &'static str>;
 
@@ -408,12 +412,15 @@ mod tests {
         GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)
     }
 
-    fn circular_orbit(orientation: CircularOrbitOrientation) -> Option<CircularOrbit> {
-        Some(CircularOrbit {
-            radius: Distance::from_meters(R_EARTH + 600_000.0)?,
+    fn circular_orbit(inclination: Angle, raan: Angle) -> Option<EllipticOrbit> {
+        Some(EllipticOrbit {
+            semi_major_axis: Distance::from_meters(R_EARTH + 600_000.0)?,
+            eccentricity: Eccentricity::from_scalar(0.0)?,
             mu: earth_mu()?,
-            orientation,
-            phase: Angle::from_radians(0.4)?,
+            inclination,
+            right_ascension_of_ascending_node: raan,
+            argument_of_periapsis: Angle::ZERO,
+            true_anomaly: Angle::from_radians(0.4)?,
             direction: OrbitDirection::Prograde,
         })
     }
@@ -462,14 +469,15 @@ mod tests {
         let j2 = J2_EARTH;
         let equatorial_radius = R_EARTH;
         let radius_m = R_EARTH + 600_000.0;
-        let orbit = CircularOrbit {
-            radius: Distance::from_meters(radius_m).ok_or("invalid radius")?,
+        let orbit = EllipticOrbit {
+            semi_major_axis: Distance::from_meters(radius_m).ok_or("invalid radius")?,
+            eccentricity: Eccentricity::from_scalar(0.0).ok_or("invalid eccentricity")?,
             mu,
-            orientation: CircularOrbitOrientation::new(
-                Angle::from_radians(inclination).ok_or("invalid inclination")?,
-                Angle::from_radians(32.0_f64.to_radians()).ok_or("invalid raan")?,
-            ),
-            phase: Angle::from_radians(0.0).ok_or("invalid phase")?,
+            inclination: Angle::from_radians(inclination).ok_or("invalid inclination")?,
+            right_ascension_of_ascending_node: Angle::from_radians(32.0_f64.to_radians())
+                .ok_or("invalid raan")?,
+            argument_of_periapsis: Angle::ZERO,
+            true_anomaly: Angle::from_radians(0.0).ok_or("invalid phase")?,
             direction: OrbitDirection::Prograde,
         };
         let mut states = CartesianStateBuffer::<1>::new();
@@ -531,8 +539,7 @@ mod tests {
     fn inclined_circular_state_maps_to_circular_inclined_elements() -> TestResult {
         let inclination = Angle::from_radians(0.9).ok_or("invalid inclination")?;
         let raan = Angle::from_radians(1.1).ok_or("invalid raan")?;
-        let orbit = circular_orbit(CircularOrbitOrientation::new(inclination, raan))
-            .ok_or("invalid orbit")?;
+        let orbit = circular_orbit(inclination, raan).ok_or("invalid orbit")?;
         let state = orbit.to_cartesian_state().ok_or("invalid state")?;
 
         let elements =
@@ -549,7 +556,7 @@ mod tests {
         );
         assert_close(
             elements.argument_of_latitude.radians(),
-            orbit.phase.radians(),
+            orbit.true_anomaly.radians(),
             EPS,
         );
         Ok(())
@@ -557,8 +564,7 @@ mod tests {
 
     #[test]
     fn equatorial_circular_state_maps_to_circular_equatorial_elements() -> TestResult {
-        let orbit =
-            circular_orbit(CircularOrbitOrientation::equatorial()).ok_or("invalid orbit")?;
+        let orbit = circular_orbit(Angle::ZERO, Angle::ZERO).ok_or("invalid orbit")?;
         let state = orbit.to_cartesian_state().ok_or("invalid state")?;
 
         let elements =
@@ -570,7 +576,7 @@ mod tests {
         assert_close(elements.inclination.radians(), 0.0, EPS);
         assert_close(
             elements.true_longitude.radians(),
-            orbit.phase.radians(),
+            orbit.true_anomaly.radians(),
             EPS,
         );
         Ok(())
@@ -580,8 +586,7 @@ mod tests {
     fn propagated_inclined_circular_state_stays_circular_in_elements() -> TestResult {
         let inclination = Angle::from_radians(0.9).ok_or("invalid inclination")?;
         let raan = Angle::from_radians(1.1).ok_or("invalid raan")?;
-        let orbit = circular_orbit(CircularOrbitOrientation::new(inclination, raan))
-            .ok_or("invalid orbit")?;
+        let orbit = circular_orbit(inclination, raan).ok_or("invalid orbit")?;
         let mut states = CartesianStateBuffer::<1>::new();
         states
             .write_from_state(
@@ -632,8 +637,7 @@ mod tests {
     fn strict_classification_can_keep_near_circular_state_classical() -> TestResult {
         let inclination = Angle::from_radians(0.9).ok_or("invalid inclination")?;
         let raan = Angle::from_radians(1.1).ok_or("invalid raan")?;
-        let orbit = circular_orbit(CircularOrbitOrientation::new(inclination, raan))
-            .ok_or("invalid orbit")?;
+        let orbit = circular_orbit(inclination, raan).ok_or("invalid orbit")?;
         let mut states = CartesianStateBuffer::<1>::new();
         states
             .write_from_state(
@@ -804,7 +808,7 @@ mod tests {
     fn angles_are_normalized_to_positive_turn() -> TestResult {
         let angle = angle_from_radians(-0.25).ok_or("invalid angle")?;
 
-        assert_close(angle.radians(), TWO_PI - 0.25, EPS);
+        assert_close(angle.radians(), 2.0 * std::f64::consts::PI - 0.25, EPS);
         Ok(())
     }
 }

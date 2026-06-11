@@ -1,11 +1,10 @@
 #![allow(missing_docs)]
 
 use space_sim::{
-    Angle, CartesianState, CartesianStateBuffer, CircularOrbit, CircularOrbitOrientation, Distance,
-    Duration, Epoch, EulerIntegrator, GravitationalParameter, Integrator, LeapfrogIntegrator,
-    MU_EARTH, OrbitDirection, OrbitalDiagnostics, R_EARTH, RungeKutta4Integrator,
-    SpecificAngularMomentum, SpecificEnergy, Speed, TimeStep, TwoBodyGravity,
-    VelocityVerletIntegrator,
+    Angle, CartesianState, CartesianStateBuffer, Distance, Duration, Eccentricity, EllipticOrbit,
+    Epoch, EulerIntegrator, GravitationalParameter, Integrator, LeapfrogIntegrator, MU_EARTH,
+    OrbitDirection, OrbitalDiagnostics, R_EARTH, RungeKutta4Integrator, SpecificAngularMomentum,
+    SpecificEnergy, Speed, TimeStep, TwoBodyGravity, VelocityVerletIntegrator,
 };
 
 const ALTITUDE_M: f64 = 400_000.0;
@@ -26,11 +25,15 @@ struct PropagationSummary {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)
         .ok_or("invalid Earth gravitational parameter")?;
-    let orbit = CircularOrbit {
-        radius: Distance::from_meters(R_EARTH + ALTITUDE_M).ok_or("invalid orbital radius")?,
+    let orbit = EllipticOrbit {
+        semi_major_axis: Distance::from_meters(R_EARTH + ALTITUDE_M)
+            .ok_or("invalid orbital radius")?,
+        eccentricity: Eccentricity::from_scalar(0.0).ok_or("invalid eccentricity")?,
         mu,
-        orientation: CircularOrbitOrientation::equatorial(),
-        phase: Angle::from_radians(0.0).ok_or("invalid initial phase")?,
+        inclination: Angle::ZERO,
+        right_ascension_of_ascending_node: Angle::ZERO,
+        argument_of_periapsis: Angle::ZERO,
+        true_anomaly: Angle::from_radians(0.0).ok_or("invalid initial phase")?,
         direction: OrbitDirection::Prograde,
     };
 
@@ -51,7 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!(
         "radius: {:.3} km | speed: {:.3} km/s | period: {:.3} min",
-        orbit.radius.meters() / 1000.0,
+        orbit.semi_major_axis.meters() / 1000.0,
         speed.meters_per_second() / 1000.0,
         period.seconds() / 60.0,
     );

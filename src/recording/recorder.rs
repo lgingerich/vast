@@ -332,18 +332,21 @@ pub fn stop_reason_name(reason: StopReason) -> &'static str {
 mod tests {
     use super::*;
     use crate::{
-        Angle, CartesianState, CircularOrbit, CircularOrbitOrientation, Distance, Epoch,
+        Angle, CartesianState, Distance, Eccentricity, EllipticOrbit, Epoch,
         GravitationalParameter, MU_EARTH, OrbitDirection, R_EARTH, TrajectorySample,
     };
 
     fn sample_state() -> CartesianState {
         let mu =
             GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu");
-        CircularOrbit {
-            radius: Distance::from_meters(R_EARTH + 400_000.0).expect("radius"),
+        EllipticOrbit {
+            semi_major_axis: Distance::from_meters(R_EARTH + 400_000.0).expect("radius"),
+            eccentricity: Eccentricity::from_scalar(0.0).expect("eccentricity"),
             mu,
-            orientation: CircularOrbitOrientation::equatorial(),
-            phase: Angle::from_radians(0.0).expect("phase"),
+            inclination: Angle::ZERO,
+            right_ascension_of_ascending_node: Angle::ZERO,
+            argument_of_periapsis: Angle::ZERO,
+            true_anomaly: Angle::from_radians(0.0).expect("phase"),
             direction: OrbitDirection::Prograde,
         }
         .to_cartesian_state()

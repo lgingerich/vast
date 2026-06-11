@@ -259,12 +259,12 @@ mod tests {
     use crate::physics::constants::{MU_EARTH, R_EARTH};
     use crate::physics::diagnostics::OrbitalDiagnostics;
     use crate::physics::dynamics::TwoBodyGravity;
-    use crate::physics::orbits::{CircularOrbit, CircularOrbitOrientation, OrbitDirection};
+    use crate::physics::orbits::{EllipticOrbit, OrbitDirection};
     use crate::physics::state::{
         CartesianAccelerationComponents, CartesianState, CartesianStateBuffer,
     };
     use crate::physics::types::{
-        Acceleration, Angle, Distance, GravitationalParameter, Position, Velocity,
+        Acceleration, Angle, Distance, Eccentricity, GravitationalParameter, Position, Velocity,
     };
     use nalgebra::Vector3;
 
@@ -780,12 +780,15 @@ mod tests {
         radius_m: f64,
         phase_rad: f64,
         mu: GravitationalParameter,
-    ) -> Option<CircularOrbit> {
-        Some(CircularOrbit {
-            radius: Distance::from_meters(radius_m)?,
+    ) -> Option<EllipticOrbit> {
+        Some(EllipticOrbit {
+            semi_major_axis: Distance::from_meters(radius_m)?,
+            eccentricity: Eccentricity::from_scalar(0.0)?,
             mu,
-            orientation: CircularOrbitOrientation::equatorial(),
-            phase: Angle::from_radians(phase_rad)?,
+            inclination: Angle::ZERO,
+            right_ascension_of_ascending_node: Angle::ZERO,
+            argument_of_periapsis: Angle::ZERO,
+            true_anomaly: Angle::from_radians(phase_rad)?,
             direction: OrbitDirection::Prograde,
         })
     }
