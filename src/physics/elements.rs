@@ -15,57 +15,40 @@ use crate::errors::NumericalError;
 #[derive(Debug, Clone, Copy)]
 pub struct OrbitalElementClassification {
     /// Eccentricities at or below this value are treated as circular.
-    pub circular_eccentricity_tolerance: f64,
+    pub circular_eccentricity_tolerance: Eccentricity,
     /// Inclinations within this angle of 0 or pi are treated as equatorial.
     pub equatorial_inclination_tolerance: Angle,
 }
 
 impl OrbitalElementClassification {
     /// Creates a classification policy.
-    ///
-    /// Returns an error if the tolerances are non-finite or negative.
     pub fn new(
-        circular_eccentricity_tolerance: f64,
+        circular_eccentricity_tolerance: Eccentricity,
         equatorial_inclination_tolerance: Angle,
-    ) -> Result<Self, NumericalError> {
-        let policy = Self {
+    ) -> Self {
+        Self {
             circular_eccentricity_tolerance,
             equatorial_inclination_tolerance,
-        };
-        policy.validate()?;
-        Ok(policy)
-    }
-
-    fn validate(self) -> Result<(), NumericalError> {
-        if !self.circular_eccentricity_tolerance.is_finite() {
-            return Err(NumericalError::NotFinite {
-                field: "circular eccentricity tolerance",
-            });
         }
-        if self.circular_eccentricity_tolerance < 0.0 {
-            return Err(NumericalError::Negative {
-                field: "circular eccentricity tolerance",
-            });
-        }
-        if self.equatorial_inclination_tolerance.radians() < 0.0 {
-            return Err(NumericalError::Negative {
-                field: "equatorial inclination tolerance",
-            });
-        }
-        Ok(())
     }
 }
 
 impl Default for OrbitalElementClassification {
     fn default() -> Self {
+        // Both constants are compile-time values known to be finite and
+        // non-negative — verified by the unreachable! guards below.
+        let Ok(circular_eccentricity_tolerance) =
+            Eccentricity::from_scalar(DEFAULT_CIRCULAR_ECCENTRICITY_TOLERANCE)
+        else {
+            unreachable!("default circular eccentricity tolerance is finite and non-negative");
+        };
         let Ok(equatorial_inclination_tolerance) =
             Angle::from_radians(DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE_RAD)
         else {
             unreachable!("default equatorial inclination tolerance is finite");
         };
-
         Self {
-            circular_eccentricity_tolerance: DEFAULT_CIRCULAR_ECCENTRICITY_TOLERANCE,
+            circular_eccentricity_tolerance,
             equatorial_inclination_tolerance,
         }
     }
@@ -234,8 +217,6 @@ impl OrbitalElements {
         mu: GravitationalParameter,
         classification: OrbitalElementClassification,
     ) -> Result<Self, NumericalError> {
-        classification.validate()?;
-
         let diagnostics =
             super::diagnostics::OrbitalDiagnostics::from_components(position, velocity, mu)?;
 
@@ -274,7 +255,8 @@ impl OrbitalElements {
         let node = Vector3::new(-h.y, h.x, 0.0);
         let inclination = angle_from_radians((h.z / h_norm).clamp(-1.0, 1.0).acos())?;
 
-        let is_circular = eccentricity_scalar <= classification.circular_eccentricity_tolerance;
+        let is_circular =
+            eccentricity_scalar <= classification.circular_eccentricity_tolerance.scalar();
         let is_equatorial =
             is_equatorial_inclination(inclination, classification.equatorial_inclination_tolerance);
 
@@ -644,7 +626,9 @@ mod tests {
         };
         assert!(
             elements.eccentricity.scalar()
-                <= OrbitalElementClassification::default().circular_eccentricity_tolerance
+                <= OrbitalElementClassification::default()
+                    .circular_eccentricity_tolerance
+                    .scalar()
         );
         assert_close(
             elements.inclination.radians(),
@@ -680,9 +664,9 @@ mod tests {
         }
 
         let strict_classification = OrbitalElementClassification::new(
-            1.0e-10,
+            Eccentricity::from_scalar(1.0e-10)?,
             Angle::from_radians(DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE_RAD)?,
-        )?;
+        );
         let elements = OrbitalElements::from_states_with_classification(
             &states.view(),
             0,
@@ -694,7 +678,10 @@ mod tests {
             return Err("expected classical elements".into());
         };
         assert!(
-            elements.eccentricity.scalar() > strict_classification.circular_eccentricity_tolerance
+            elements.eccentricity.scalar()
+                > strict_classification
+                    .circular_eccentricity_tolerance
+                    .scalar()
         );
         Ok(())
     }
@@ -713,7 +700,9 @@ mod tests {
         };
         assert!(
             elements.eccentricity.scalar()
-                > OrbitalElementClassification::default().circular_eccentricity_tolerance
+                > OrbitalElementClassification::default()
+                    .circular_eccentricity_tolerance
+                    .scalar()
         );
         assert!(
             elements.inclination.radians()
@@ -739,7 +728,9 @@ mod tests {
         };
         assert!(
             elements.eccentricity.scalar()
-                > OrbitalElementClassification::default().circular_eccentricity_tolerance
+                > OrbitalElementClassification::default()
+                    .circular_eccentricity_tolerance
+                    .scalar()
         );
         assert_close(elements.inclination.radians(), 0.0, EPS);
         assert_close(elements.longitude_of_periapsis.radians(), 0.0, EPS);
@@ -748,14 +739,10 @@ mod tests {
     }
 
     #[test]
-    fn classification_policy_rejects_invalid_tolerances() -> TestResult {
-        let zero = Angle::from_radians(0.0)?;
-        let negative = Angle::from_radians(-1.0)?;
-
-        assert!(OrbitalElementClassification::new(f64::NAN, zero).is_err());
-        assert!(OrbitalElementClassification::new(-1.0, zero).is_err());
-        assert!(OrbitalElementClassification::new(1.0e-6, negative).is_err());
-        Ok(())
+    fn classification_policy_rejects_invalid_tolerances() {
+        assert!(Eccentricity::from_scalar(f64::NAN).is_err());
+        assert!(Eccentricity::from_scalar(-1.0).is_err());
+        assert!(Angle::from_radians(f64::NAN).is_err());
     }
 
     #[test]
