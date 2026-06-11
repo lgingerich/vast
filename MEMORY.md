@@ -8,8 +8,8 @@ vectors and returns acceleration as `Vector3<f64>`. Finiteness and domain
 constraints are enforced only at scenario/boundary constructors (`Position`,
 `Velocity`, `TimeStep`, `write_from_state`, etc.). `Epoch` propagation inside
 the step loop uses `const fn` arithmetic on already-validated `Epoch` and
-`TimeStep` values (`advance_by`, `TimeStep::scaled_by` for RK4 stages) — no
-`is_finite` per step.
+`TimeStep` values (`advance_by` for full steps, `plus_elapsed` for RK4 stage
+offsets from `0.5 * dt.seconds()`) — no `is_finite` per step.
 
 **Rejected:** `_unchecked` component constructors as a hot-path workaround;
 re-validating finiteness when reading/writing the SoA buffer each step.

@@ -106,7 +106,15 @@ impl Epoch {
     /// does not re-check finiteness on every step.
     #[must_use]
     pub const fn advance_by(self, dt: TimeStep) -> Self {
-        Self(self.0 + dt.0)
+        self.plus_elapsed(dt.0)
+    }
+
+    /// Offsets this epoch by an elapsed duration in seconds.
+    ///
+    /// Used by RK4 for fractional stage times where the offset is already
+    /// derived from a validated step (`0.5 * dt.seconds()`).
+    pub(crate) const fn plus_elapsed(self, seconds: f64) -> Self {
+        Self(self.0 + seconds)
     }
 
     /// Returns the elapsed `Duration` from an earlier epoch.
@@ -149,15 +157,6 @@ impl TimeStep {
     #[inline]
     pub const fn seconds(self) -> f64 {
         self.0
-    }
-
-    /// Scales this time step by a positive factor.
-    ///
-    /// Used by integrators for stage offsets (e.g. RK4 midpoint evaluation).
-    /// The factor must keep the result positive; integrators pass constants
-    /// such as `0.5` derived from a validated step.
-    pub(crate) const fn scaled_by(self, factor: f64) -> Self {
-        Self(self.0 * factor)
     }
 }
 

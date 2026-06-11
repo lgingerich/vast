@@ -138,25 +138,26 @@ impl Integrator for RungeKutta4Integrator {
     ) -> Result<(), PropagationError> {
         let (position, velocity) = states.as_view().body_vectors(index)?;
         let dt_s = dt.seconds();
+        let half_dt_s = 0.5 * dt_s;
 
         let k1 = StateDerivative::at(dynamics, position, velocity, t)?;
         let k2 = StateDerivative::at(
             dynamics,
-            position + k1.position * (0.5 * dt_s),
-            velocity + k1.velocity * (0.5 * dt_s),
-            t.advance_by(dt.scaled_by(0.5)),
+            position + k1.position * half_dt_s,
+            velocity + k1.velocity * half_dt_s,
+            t.plus_elapsed(half_dt_s),
         )?;
         let k3 = StateDerivative::at(
             dynamics,
-            position + k2.position * (0.5 * dt_s),
-            velocity + k2.velocity * (0.5 * dt_s),
-            t.advance_by(dt.scaled_by(0.5)),
+            position + k2.position * half_dt_s,
+            velocity + k2.velocity * half_dt_s,
+            t.plus_elapsed(half_dt_s),
         )?;
         let k4 = StateDerivative::at(
             dynamics,
             position + k3.position * dt_s,
             velocity + k3.velocity * dt_s,
-            t.advance_by(dt),
+            t.plus_elapsed(dt_s),
         )?;
 
         let new_position = position
