@@ -217,7 +217,6 @@ impl Add for Duration {
     fn add(self, rhs: Duration) -> Duration {
         let result = self.0 + rhs.0;
         debug_assert!(result.is_finite());
-        debug_assert!(result >= 0.0);
         Duration(result)
     }
 }
@@ -260,7 +259,6 @@ impl Add for Distance {
     fn add(self, rhs: Distance) -> Distance {
         let result = self.0 + rhs.0;
         debug_assert!(result.is_finite());
-        debug_assert!(result > 0.0);
         Distance(result)
     }
 }
@@ -375,7 +373,6 @@ impl Add for Speed {
     fn add(self, rhs: Speed) -> Speed {
         let result = self.0 + rhs.0;
         debug_assert!(result.is_finite());
-        debug_assert!(result >= 0.0);
         Speed(result)
     }
 }

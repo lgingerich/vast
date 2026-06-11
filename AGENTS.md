@@ -92,18 +92,34 @@ not copy TigerBeetle-specific constraints blindly.
 
 ## Invariants And Assertions
 
-- Call invariant checks at boundaries: before using caller-provided state, after
-  computing derived values, and before returning new simulation state.
-- Split unrelated assertions. Prefer:
+- Enforce invariants at boundaries: public constructors, domain-type arithmetic,
+  and before returning new simulation state.
+- Prefer `Result`-returning constructors with typed errors (`NumericalError`)
+  over panics. Use `debug_assert!` for debug-only backstops, not as the primary
+  enforcement mechanism.
+- **Do not re-assert domain constraints already guaranteed by the type.**
+  When a type's constructor enforces `> 0.0`, its `Add` impl should not repeat
+  `debug_assert!(result > 0.0)` — the sum of two positives is provably positive.
+  Reserve `debug_assert!` for checks type invariants cannot prove:
+  - **Float overflow** in arithmetic on domain types.
+    Rust does not check float arithmetic; `f64::MAX + f64::MAX` produces `+Inf`
+    silently. Guard `Add` and `Sub` impls with `debug_assert!(result.is_finite())`.
+  - **Preconditions for `_unchecked` constructors.**
+    When a hot path needs an unchecked constructor (e.g.,
+    `Duration::from_seconds_unchecked`), pair it with a debug assertion that
+    verifies the caller's obligation was met.
+- Split unrelated assertions over compound assertions:
 
   ```rust
-  debug_assert!(radius_m.is_finite());
-  debug_assert!(radius_m > 0.0);
+  debug_assert!(x_m.is_finite());
+  debug_assert!(x_m >= 0.0);
   ```
 
-  over one compound assertion.
-- Assert positive space directly when possible. For example, prefer
-  `radius_m > 0.0` over negated forms.
+- Assert positive space directly when possible. Prefer `radius_m > 0.0` over
+  `!(radius_m <= 0.0)`.
+- Do not use `unwrap()`, `expect()`, `panic!()`, or `assert!()` in library code.
+  `debug_assert!` in conjunction with `_unchecked` constructors is the only
+  exception.
 - Tests should cover valid behavior and invalid boundaries. Add negative-space
   tests for impossible states, non-finite values, bad radii, invalid timesteps,
   and coordinate-system edge cases.

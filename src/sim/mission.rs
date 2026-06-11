@@ -5,7 +5,7 @@ use super::propagator::{
 };
 use super::scenario::{IntegratorKind, parse_force_model, parse_integrator};
 use super::termination::{StopReason, TerminationCondition};
-use crate::errors::{MissionError, ScenarioError};
+use crate::errors::MissionError;
 use crate::physics::constants::R_EARTH;
 use crate::physics::dynamics::TwoBodyGravity;
 use crate::physics::integrators::{
@@ -131,16 +131,14 @@ pub enum LoadedScenario {
 
 impl LoadedScenario {
     /// Loads a scenario file, detecting rollout vs mission format.
-    pub fn from_file(path: &std::path::Path) -> Result<Self, ScenarioError> {
-        let contents = std::fs::read_to_string(path)
-            .map_err(|error| ScenarioError::ReadFile(error.to_string()))?;
+    pub fn from_file(path: &std::path::Path) -> Result<Self, MissionError> {
+        let contents = std::fs::read_to_string(path)?;
         Self::from_toml(&contents)
     }
 
     /// Parses a scenario string, detecting rollout vs mission format.
-    pub fn from_toml(contents: &str) -> Result<Self, ScenarioError> {
-        let value: toml::Value = toml::from_str(contents)
-            .map_err(|error| ScenarioError::ParseFile(error.to_string()))?;
+    pub fn from_toml(contents: &str) -> Result<Self, MissionError> {
+        let value: toml::Value = toml::from_str(contents)?;
 
         let is_mission = value
             .get("kind")
@@ -149,9 +147,7 @@ impl LoadedScenario {
             || value.get("segments").is_some();
 
         if is_mission {
-            let mission: MissionScenarioConfig = value
-                .try_into()
-                .map_err(|error: toml::de::Error| ScenarioError::ParseFile(error.to_string()))?;
+            let mission: MissionScenarioConfig = value.try_into()?;
             Ok(Self::Mission(mission))
         } else {
             Ok(Self::Rollout(
@@ -177,12 +173,7 @@ impl MissionScenarioConfig {
             });
         }
 
-        let dt = TimeStep::from_seconds(self.propagation.dt_s).map_err(|e| {
-            MissionError::InvalidField {
-                field: "propagation.dt_s",
-                reason: e.to_string(),
-            }
-        })?;
+        let dt = TimeStep::from_seconds(self.propagation.dt_s)?;
         let sample_every_steps = (self.propagation.sample_every_steps >= 1)
             .then_some(self.propagation.sample_every_steps)
             .ok_or_else(|| MissionError::InvalidField {
@@ -190,23 +181,19 @@ impl MissionScenarioConfig {
                 reason: "must be >= 1".to_string(),
             })?;
 
-        let integrator =
-            parse_integrator(&self.propagation.integrator).map_err(MissionError::Scenario)?;
-        let gravity =
-            parse_force_model(&self.propagation.force_model).map_err(MissionError::Scenario)?;
+        let integrator = parse_integrator(&self.propagation.integrator)?;
+        let gravity = parse_force_model(&self.propagation.force_model)?;
         let mu = gravity.mu;
 
         let initial_state = build_initial_state(&self.initial_orbit, mu)?;
-        let propagator = Propagator::new(initial_state, dt)
-            .map_err(MissionError::Propagation)?
-            .with_sampling(
-                SampleConfig::every_steps(sample_every_steps).ok_or_else(|| {
-                    MissionError::InvalidField {
-                        field: "propagation.sample_every_steps",
-                        reason: "invalid sample config".to_string(),
-                    }
-                })?,
-            );
+        let propagator = Propagator::new(initial_state, dt)?.with_sampling(
+            SampleConfig::every_steps(sample_every_steps).ok_or_else(|| {
+                MissionError::InvalidField {
+                    field: "propagation.sample_every_steps",
+                    reason: "invalid sample config".to_string(),
+                }
+            })?,
+        );
 
         let initial_burns = self
             .initial_burns
@@ -305,10 +292,7 @@ pub struct MissionRunner;
 impl MissionRunner {
     /// Runs a built mission scenario once from its initial state.
     pub fn run(scenario: &mut BuiltMissionScenario) -> Result<MissionResult, MissionError> {
-        scenario
-            .propagator
-            .reset(scenario.initial_state)
-            .map_err(MissionError::Propagation)?;
+        scenario.propagator.reset(scenario.initial_state)?;
 
         let mut all_samples = Vec::new();
         let mut segment_results = Vec::new();
@@ -335,10 +319,7 @@ impl MissionRunner {
             });
         }
 
-        let final_state = scenario
-            .propagator
-            .current_state()
-            .map_err(MissionError::Propagation)?;
+        let final_state = scenario.propagator.current_state()?;
         let final_epoch = segment_results
             .last()
             .map(|segment| segment.propagation.final_epoch)
@@ -360,46 +341,34 @@ fn propagate_segment(
 ) -> Result<PropagationResult, MissionError> {
     let mu = scenario.gravity.mu;
     match scenario.integrator {
-        IntegratorKind::Leapfrog => scenario
-            .propagator
-            .propagate_until_with_segment(
-                &LeapfrogIntegrator,
-                &scenario.gravity,
-                termination,
-                mu,
-                Some(segment_index),
-            )
-            .map_err(MissionError::Propagation),
-        IntegratorKind::VelocityVerlet => scenario
-            .propagator
-            .propagate_until_with_segment(
-                &VelocityVerletIntegrator,
-                &scenario.gravity,
-                termination,
-                mu,
-                Some(segment_index),
-            )
-            .map_err(MissionError::Propagation),
-        IntegratorKind::Euler => scenario
-            .propagator
-            .propagate_until_with_segment(
-                &EulerIntegrator,
-                &scenario.gravity,
-                termination,
-                mu,
-                Some(segment_index),
-            )
-            .map_err(MissionError::Propagation),
-        IntegratorKind::RungeKutta4 => scenario
-            .propagator
-            .propagate_until_with_segment(
-                &RungeKutta4Integrator,
-                &scenario.gravity,
-                termination,
-                mu,
-                Some(segment_index),
-            )
-            .map_err(MissionError::Propagation),
+        IntegratorKind::Leapfrog => Ok(scenario.propagator.propagate_until_with_segment(
+            &LeapfrogIntegrator,
+            &scenario.gravity,
+            termination,
+            mu,
+            Some(segment_index),
+        )?),
+        IntegratorKind::VelocityVerlet => Ok(scenario.propagator.propagate_until_with_segment(
+            &VelocityVerletIntegrator,
+            &scenario.gravity,
+            termination,
+            mu,
+            Some(segment_index),
+        )?),
+        IntegratorKind::Euler => Ok(scenario.propagator.propagate_until_with_segment(
+            &EulerIntegrator,
+            &scenario.gravity,
+            termination,
+            mu,
+            Some(segment_index),
+        )?),
+        IntegratorKind::RungeKutta4 => Ok(scenario.propagator.propagate_until_with_segment(
+            &RungeKutta4Integrator,
+            &scenario.gravity,
+            termination,
+            mu,
+            Some(segment_index),
+        )?),
     }
 }
 
@@ -411,15 +380,11 @@ fn apply_burn(
     let impulsive = match burn {
         BurnSpec::Inertial(delta_v_mps) => ImpulsiveBurn::inertial(delta_v_mps),
         BurnSpec::Prograde(delta_v_mps) => {
-            let state = propagator
-                .current_state()
-                .map_err(MissionError::Propagation)?;
-            ImpulsiveBurn::prograde(delta_v_mps, &state).map_err(MissionError::Propagation)?
+            let state = propagator.current_state()?;
+            ImpulsiveBurn::prograde(delta_v_mps, &state)?
         }
         BurnSpec::Circularize => {
-            let state = propagator
-                .current_state()
-                .map_err(MissionError::Propagation)?;
+            let state = propagator.current_state()?;
             let position = state.position.vector();
             let velocity = state.velocity.vector();
             let radius_m = position.norm();
@@ -449,9 +414,8 @@ fn apply_burn(
             ImpulsiveBurn::inertial([delta_v.x, delta_v.y, delta_v.z])
         }
     };
-    propagator
-        .apply_impulsive_burn(impulsive)
-        .map_err(MissionError::Propagation)
+    propagator.apply_impulsive_burn(impulsive)?;
+    Ok(())
 }
 
 fn build_initial_state(
@@ -460,28 +424,15 @@ fn build_initial_state(
 ) -> Result<CartesianState, MissionError> {
     match initial_orbit {
         InitialOrbitConfig::Circular { altitude_m } => {
-            let radius = Distance::from_meters(R_EARTH + altitude_m).map_err(|e| {
-                MissionError::InvalidField {
-                    field: "initial_orbit.altitude_m",
-                    reason: e.to_string(),
-                }
-            })?;
+            let radius = Distance::from_meters(R_EARTH + altitude_m)?;
             let orbit = EllipticOrbit {
                 semi_major_axis: radius,
-                eccentricity: Eccentricity::from_scalar(0.0).map_err(|e| {
-                    MissionError::InvalidField {
-                        field: "initial_orbit",
-                        reason: e.to_string(),
-                    }
-                })?,
+                eccentricity: Eccentricity::from_scalar(0.0)?,
                 mu,
                 inclination: Angle::ZERO,
                 right_ascension_of_ascending_node: Angle::ZERO,
                 argument_of_periapsis: Angle::ZERO,
-                true_anomaly: Angle::from_radians(0.0).map_err(|e| MissionError::InvalidField {
-                    field: "initial_orbit",
-                    reason: e.to_string(),
-                })?,
+                true_anomaly: Angle::from_radians(0.0)?,
                 direction: OrbitDirection::Prograde,
             };
             orbit
@@ -580,11 +531,7 @@ fn parse_stop_config(
         },
         StopConfig::Table(table) => match (table.duration_s, table.steps) {
             (Some(duration_s), None) => {
-                let duration =
-                    Duration::from_seconds(duration_s).map_err(|e| MissionError::InvalidField {
-                        field: "segments.stop.duration_s",
-                        reason: e.to_string(),
-                    })?;
+                let duration = Duration::from_seconds(duration_s)?;
                 Ok(TerminationCondition::Duration(duration))
             }
             (None, Some(steps)) => Ok(TerminationCondition::StepCount(steps)),

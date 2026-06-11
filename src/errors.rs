@@ -59,31 +59,6 @@ pub enum PropagationError {
     InvalidBurn,
 }
 
-/// Errors produced while loading or building a scenario.
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
-pub enum ScenarioError {
-    /// The scenario file could not be read.
-    #[error("failed to read scenario file: {0}")]
-    ReadFile(String),
-    /// The scenario file could not be parsed.
-    #[error("failed to parse scenario file: {0}")]
-    ParseFile(String),
-    /// A scenario field was invalid.
-    #[error("invalid scenario field `{field}`: {reason}")]
-    InvalidField {
-        /// Field name.
-        field: &'static str,
-        /// Why the field is invalid.
-        reason: String,
-    },
-    /// The requested integrator is unknown.
-    #[error("unknown integrator `{0}`")]
-    UnknownIntegrator(String),
-    /// The requested force model is unknown or unsupported.
-    #[error("unknown force model `{0}`")]
-    UnknownForceModel(String),
-}
-
 /// Errors produced while writing run artifacts.
 #[derive(Debug, Error)]
 pub enum RecordingError {
@@ -98,38 +73,44 @@ pub enum RecordingError {
 /// Errors produced by environment rollout.
 #[derive(Debug, Error)]
 pub enum EnvironmentError {
-    /// Scenario construction failed.
+    /// Scenario or mission construction failed.
     #[error(transparent)]
-    Scenario(#[from] ScenarioError),
+    Mission(#[from] MissionError),
     /// Propagation failed.
     #[error(transparent)]
     Propagation(#[from] PropagationError),
     /// Artifact recording failed.
     #[error(transparent)]
     Recording(#[from] RecordingError),
-    /// Mission execution failed.
-    #[error(transparent)]
-    Mission(#[from] MissionError),
 }
 
-/// Errors produced while loading or executing mission scenarios.
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
+/// Errors produced while loading or executing scenarios and missions.
+#[derive(Debug, Error)]
 pub enum MissionError {
-    /// Scenario construction failed.
-    #[error(transparent)]
-    Scenario(#[from] ScenarioError),
-    /// Propagation failed.
-    #[error(transparent)]
-    Propagation(#[from] PropagationError),
-    /// A numerical field was physically invalid.
-    #[error(transparent)]
-    Numerical(#[from] NumericalError),
-    /// A mission field was invalid.
-    #[error("invalid mission field `{field}`: {reason}")]
+    /// The scenario file could not be read.
+    #[error("failed to read scenario file")]
+    ReadFile(#[from] std::io::Error),
+    /// The scenario file could not be parsed.
+    #[error("failed to parse scenario file")]
+    ParseFile(#[from] toml::de::Error),
+    /// A field was invalid.
+    #[error("invalid field `{field}`: {reason}")]
     InvalidField {
         /// Field name.
         field: &'static str,
         /// Why the field is invalid.
         reason: String,
     },
+    /// The requested integrator is unknown.
+    #[error("unknown integrator `{0}`")]
+    UnknownIntegrator(String),
+    /// The requested force model is unknown or unsupported.
+    #[error("unknown force model `{0}`")]
+    UnknownForceModel(String),
+    /// Propagation failed.
+    #[error(transparent)]
+    Propagation(#[from] PropagationError),
+    /// A numerical field was physically invalid.
+    #[error(transparent)]
+    Numerical(#[from] NumericalError),
 }

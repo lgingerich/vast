@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use super::propagator::{Propagator, SampleConfig};
 use super::termination::TerminationCondition;
-use crate::errors::ScenarioError;
+use crate::errors::MissionError;
 use crate::physics::constants::{MU_EARTH, R_EARTH};
 use crate::physics::dynamics::TwoBodyGravity;
 use crate::physics::integrators::{
@@ -35,37 +35,29 @@ pub struct ScenarioConfig {
 
 impl ScenarioConfig {
     /// Loads a scenario from a TOML file path.
-    pub fn from_file(path: &std::path::Path) -> Result<Self, ScenarioError> {
-        let contents = std::fs::read_to_string(path)
-            .map_err(|error| ScenarioError::ReadFile(error.to_string()))?;
+    pub fn from_file(path: &std::path::Path) -> Result<Self, MissionError> {
+        let contents = std::fs::read_to_string(path)?;
         Self::from_toml(&contents)
     }
 
     /// Parses a scenario from a TOML string.
-    pub fn from_toml(contents: &str) -> Result<Self, ScenarioError> {
-        toml::from_str(contents).map_err(|error| ScenarioError::ParseFile(error.to_string()))
+    pub fn from_toml(contents: &str) -> Result<Self, MissionError> {
+        Ok(toml::from_str(contents)?)
     }
 
     /// Builds runtime objects for propagation.
-    pub fn build(&self) -> Result<BuiltScenario, ScenarioError> {
+    pub fn build(&self) -> Result<BuiltScenario, MissionError> {
         if self.name.is_empty() {
-            return Err(ScenarioError::InvalidField {
+            return Err(MissionError::InvalidField {
                 field: "name",
                 reason: "must not be empty".to_string(),
             });
         }
 
-        let dt = TimeStep::from_seconds(self.dt_s).map_err(|e| ScenarioError::InvalidField {
-            field: "dt_s",
-            reason: e.to_string(),
-        })?;
-        let duration =
-            Duration::from_seconds(self.duration_s).map_err(|e| ScenarioError::InvalidField {
-                field: "duration_s",
-                reason: e.to_string(),
-            })?;
+        let dt = TimeStep::from_seconds(self.dt_s)?;
+        let duration = Duration::from_seconds(self.duration_s)?;
         if self.duration_s <= 0.0 {
-            return Err(ScenarioError::InvalidField {
+            return Err(MissionError::InvalidField {
                 field: "duration_s",
                 reason: "must be positive for MVP rollouts".to_string(),
             });
@@ -73,7 +65,7 @@ impl ScenarioConfig {
 
         let sample_every_steps = (self.sample_every_steps >= 1)
             .then_some(self.sample_every_steps)
-            .ok_or_else(|| ScenarioError::InvalidField {
+            .ok_or_else(|| MissionError::InvalidField {
                 field: "sample_every_steps",
                 reason: "must be >= 1".to_string(),
             })?;
@@ -81,60 +73,36 @@ impl ScenarioConfig {
         let integrator = parse_integrator(&self.integrator)?;
         let gravity = parse_force_model(&self.force_model)?;
 
-        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).map_err(
-            |e| ScenarioError::InvalidField {
-                field: "force_model",
-                reason: e.to_string(),
-            },
-        )?;
-
-        let radius = Distance::from_meters(R_EARTH + self.altitude_m).map_err(|e| {
-            ScenarioError::InvalidField {
-                field: "altitude_m",
-                reason: e.to_string(),
-            }
-        })?;
+        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
+        let radius = Distance::from_meters(R_EARTH + self.altitude_m)?;
 
         let orbit = EllipticOrbit {
             semi_major_axis: radius,
-            eccentricity: Eccentricity::from_scalar(0.0).map_err(|e| {
-                ScenarioError::InvalidField {
-                    field: "altitude_m",
-                    reason: e.to_string(),
-                }
-            })?,
+            eccentricity: Eccentricity::from_scalar(0.0)?,
             mu,
             inclination: Angle::ZERO,
             right_ascension_of_ascending_node: Angle::ZERO,
             argument_of_periapsis: Angle::ZERO,
-            true_anomaly: Angle::from_radians(0.0).map_err(|e| ScenarioError::InvalidField {
-                field: "altitude_m",
-                reason: e.to_string(),
-            })?,
+            true_anomaly: Angle::from_radians(0.0)?,
             direction: OrbitDirection::Prograde,
         };
 
         let initial_state =
             orbit
                 .to_cartesian_state()
-                .ok_or_else(|| ScenarioError::InvalidField {
+                .ok_or_else(|| MissionError::InvalidField {
                     field: "altitude_m",
                     reason: "initial Cartesian state is invalid".to_string(),
                 })?;
 
-        let propagator = Propagator::new(initial_state, dt)
-            .map_err(|_| ScenarioError::InvalidField {
-                field: "dt_s",
-                reason: "failed to construct propagator".to_string(),
-            })?
-            .with_sampling(
-                SampleConfig::every_steps(sample_every_steps).ok_or_else(|| {
-                    ScenarioError::InvalidField {
-                        field: "sample_every_steps",
-                        reason: "invalid sample config".to_string(),
-                    }
-                })?,
-            );
+        let propagator = Propagator::new(initial_state, dt)?.with_sampling(
+            SampleConfig::every_steps(sample_every_steps).ok_or_else(|| {
+                MissionError::InvalidField {
+                    field: "sample_every_steps",
+                    reason: "invalid sample config".to_string(),
+                }
+            })?,
+        );
 
         Ok(BuiltScenario {
             config: self.clone(),
@@ -148,27 +116,23 @@ impl ScenarioConfig {
     }
 }
 
-pub(crate) fn parse_integrator(name: &str) -> Result<IntegratorKind, ScenarioError> {
+pub(crate) fn parse_integrator(name: &str) -> Result<IntegratorKind, MissionError> {
     match name {
         "leapfrog" => Ok(IntegratorKind::Leapfrog),
         "verlet" => Ok(IntegratorKind::VelocityVerlet),
         "euler" => Ok(IntegratorKind::Euler),
         "rk4" => Ok(IntegratorKind::RungeKutta4),
-        other => Err(ScenarioError::UnknownIntegrator(other.to_string())),
+        other => Err(MissionError::UnknownIntegrator(other.to_string())),
     }
 }
 
-pub(crate) fn parse_force_model(name: &str) -> Result<TwoBodyGravity, ScenarioError> {
+pub(crate) fn parse_force_model(name: &str) -> Result<TwoBodyGravity, MissionError> {
     match name {
         "two_body" => {
-            let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)
-                .map_err(|e| ScenarioError::InvalidField {
-                    field: "force_model",
-                    reason: e.to_string(),
-                })?;
+            let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
             Ok(TwoBodyGravity { mu })
         }
-        other => Err(ScenarioError::UnknownForceModel(other.to_string())),
+        other => Err(MissionError::UnknownForceModel(other.to_string())),
     }
 }
 
