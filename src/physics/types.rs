@@ -21,6 +21,11 @@ impl Angle {
         }
     }
 
+    /// Creates an angle from degrees.
+    pub fn from_degrees(degrees: f64) -> Result<Self, NumericalError> {
+        Self::from_radians(degrees.to_radians())
+    }
+
     /// Returns this angle in radians.
     #[inline]
     pub const fn radians(self) -> f64 {
@@ -59,7 +64,9 @@ impl AngularRate {
         if value.is_finite() {
             Ok(Self(value))
         } else {
-            Err(NumericalError::NotFinite { field: "angular rate" })
+            Err(NumericalError::NotFinite {
+                field: "angular rate",
+            })
         }
     }
 
@@ -292,10 +299,14 @@ impl MassDensity {
     /// Creates a non-negative mass density from kilograms per cubic meter.
     pub fn from_kilograms_per_cubic_meter(value: f64) -> Result<Self, NumericalError> {
         if !value.is_finite() {
-            return Err(NumericalError::NotFinite { field: "mass density" });
+            return Err(NumericalError::NotFinite {
+                field: "mass density",
+            });
         }
         if value < 0.0 {
-            return Err(NumericalError::Negative { field: "mass density" });
+            return Err(NumericalError::Negative {
+                field: "mass density",
+            });
         }
         Ok(Self(value))
     }
@@ -316,10 +327,14 @@ impl AreaPerMass {
     /// Creates a non-negative area per mass from square meters per kilogram.
     pub fn from_square_meters_per_kilogram(value: f64) -> Result<Self, NumericalError> {
         if !value.is_finite() {
-            return Err(NumericalError::NotFinite { field: "area per mass" });
+            return Err(NumericalError::NotFinite {
+                field: "area per mass",
+            });
         }
         if value < 0.0 {
-            return Err(NumericalError::Negative { field: "area per mass" });
+            return Err(NumericalError::Negative {
+                field: "area per mass",
+            });
         }
         Ok(Self(value))
     }
@@ -399,10 +414,14 @@ impl GravitationalParameter {
     /// Creates a positive gravitational parameter from cubic meters per second squared.
     pub fn from_meters_cubed_per_second_squared(value: f64) -> Result<Self, NumericalError> {
         if !value.is_finite() {
-            return Err(NumericalError::NotFinite { field: "gravitational parameter" });
+            return Err(NumericalError::NotFinite {
+                field: "gravitational parameter",
+            });
         }
         if value <= 0.0 {
-            return Err(NumericalError::NonPositive { field: "gravitational parameter" });
+            return Err(NumericalError::NonPositive {
+                field: "gravitational parameter",
+            });
         }
         Ok(Self(value))
     }
@@ -447,10 +466,14 @@ impl Eccentricity {
     /// Creates an eccentricity from a dimensionless scalar.
     pub fn from_scalar(value: f64) -> Result<Self, NumericalError> {
         if !value.is_finite() {
-            return Err(NumericalError::NotFinite { field: "eccentricity" });
+            return Err(NumericalError::NotFinite {
+                field: "eccentricity",
+            });
         }
         if value < 0.0 {
-            return Err(NumericalError::Negative { field: "eccentricity" });
+            return Err(NumericalError::Negative {
+                field: "eccentricity",
+            });
         }
         Ok(Self(value))
     }
@@ -517,7 +540,9 @@ impl Acceleration {
         if vector_is_finite(value) {
             Ok(Self(value))
         } else {
-            Err(NumericalError::NotFinite { field: "acceleration" })
+            Err(NumericalError::NotFinite {
+                field: "acceleration",
+            })
         }
     }
 

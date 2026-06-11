@@ -34,7 +34,9 @@ impl CartesianPositionComponents {
         if components_are_finite(x_m, y_m, z_m) {
             Ok(Self { x_m, y_m, z_m })
         } else {
-            Err(NumericalError::NotFinite { field: "position components" })
+            Err(NumericalError::NotFinite {
+                field: "position components",
+            })
         }
     }
 
@@ -85,7 +87,11 @@ pub struct CartesianVelocityComponents {
 
 impl CartesianVelocityComponents {
     /// Creates finite Cartesian velocity components from meters per second.
-    pub fn from_meters_per_second(x_mps: f64, y_mps: f64, z_mps: f64) -> Result<Self, NumericalError> {
+    pub fn from_meters_per_second(
+        x_mps: f64,
+        y_mps: f64,
+        z_mps: f64,
+    ) -> Result<Self, NumericalError> {
         if components_are_finite(x_mps, y_mps, z_mps) {
             Ok(Self {
                 x_mps,
@@ -93,7 +99,9 @@ impl CartesianVelocityComponents {
                 z_mps,
             })
         } else {
-            Err(NumericalError::NotFinite { field: "velocity components" })
+            Err(NumericalError::NotFinite {
+                field: "velocity components",
+            })
         }
     }
 
@@ -156,7 +164,9 @@ impl CartesianAccelerationComponents {
                 z_mps2,
             })
         } else {
-            Err(NumericalError::NotFinite { field: "acceleration components" })
+            Err(NumericalError::NotFinite {
+                field: "acceleration components",
+            })
         }
     }
 

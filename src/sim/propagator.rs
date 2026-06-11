@@ -251,8 +251,7 @@ impl Propagator {
                 _ => self.dt,
             };
 
-            integrator
-                .step(dynamics, &mut self.states.view_mut(), 0, self.epoch, step)?;
+            integrator.step(dynamics, &mut self.states.view_mut(), 0, self.epoch, step)?;
 
             self.epoch = self.epoch.advance_by(step)?;
             steps += 1;

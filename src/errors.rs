@@ -28,6 +28,9 @@ pub enum DynamicsError {
 /// Errors produced while reading or writing Cartesian state storage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
 pub enum StateError {
+    /// A numerical check failed.
+    #[error(transparent)]
+    Numerical(#[from] NumericalError),
     /// A requested body index was outside the active state range.
     #[error("body index is outside the active state range")]
     InvalidBodyIndex,
@@ -37,9 +40,6 @@ pub enum StateError {
     /// Borrowed state component slices did not have equal lengths.
     #[error("state component slices have mismatched lengths")]
     MismatchedSliceLengths,
-    /// A numerical check failed.
-    #[error(transparent)]
-    Numerical(#[from] NumericalError),
 }
 
 /// Errors produced during propagation.
@@ -121,6 +121,9 @@ pub enum MissionError {
     /// Propagation failed.
     #[error(transparent)]
     Propagation(#[from] PropagationError),
+    /// A numerical field was physically invalid.
+    #[error(transparent)]
+    Numerical(#[from] NumericalError),
     /// A mission field was invalid.
     #[error("invalid mission field `{field}`: {reason}")]
     InvalidField {

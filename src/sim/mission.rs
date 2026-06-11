@@ -503,31 +503,12 @@ fn build_initial_state(
             use crate::physics::types::Eccentricity;
 
             let elements = ClassicalOrbitalElements {
-                semi_major_axis: Distance::from_meters(*semi_major_axis_m).map_err(|e| {
-                    MissionError::InvalidField {
-                        field: "initial_orbit.semi_major_axis_m",
-                        reason: e.to_string(),
-                    }
-                })?,
-                eccentricity: Eccentricity::from_scalar(*eccentricity).map_err(|e| {
-                    MissionError::InvalidField {
-                        field: "initial_orbit.eccentricity",
-                        reason: e.to_string(),
-                    }
-                })?,
-                inclination: degrees_to_angle(*inclination_deg, "initial_orbit.inclination_deg")?,
-                right_ascension_of_ascending_node: degrees_to_angle(
-                    *raan_deg,
-                    "initial_orbit.raan_deg",
-                )?,
-                argument_of_periapsis: degrees_to_angle(
-                    *arg_periapsis_deg,
-                    "initial_orbit.arg_periapsis_deg",
-                )?,
-                true_anomaly: degrees_to_angle(
-                    *true_anomaly_deg,
-                    "initial_orbit.true_anomaly_deg",
-                )?,
+                semi_major_axis: Distance::from_meters(*semi_major_axis_m)?,
+                eccentricity: Eccentricity::from_scalar(*eccentricity)?,
+                inclination: Angle::from_degrees(*inclination_deg)?,
+                right_ascension_of_ascending_node: Angle::from_degrees(*raan_deg)?,
+                argument_of_periapsis: Angle::from_degrees(*arg_periapsis_deg)?,
+                true_anomaly: Angle::from_degrees(*true_anomaly_deg)?,
             };
             elements
                 .to_cartesian_state(mu)
@@ -537,13 +518,6 @@ fn build_initial_state(
                 })
         }
     }
-}
-
-fn degrees_to_angle(degrees: f64, field: &'static str) -> Result<Angle, MissionError> {
-    Angle::from_radians(degrees.to_radians()).map_err(|e| MissionError::InvalidField {
-        field,
-        reason: e.to_string(),
-    })
 }
 
 fn build_burn_spec(burn: &BurnConfig) -> Result<BurnSpec, MissionError> {

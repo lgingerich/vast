@@ -79,11 +79,13 @@ impl Dynamics for TwoBodyGravity {
         }
 
         let scale = -mu / (radius_sq_m * radius_m);
-        Ok(CartesianAccelerationComponents::from_meters_per_second_squared(
-            scale * px,
-            scale * py,
-            scale * pz,
-        )?)
+        Ok(
+            CartesianAccelerationComponents::from_meters_per_second_squared(
+                scale * px,
+                scale * py,
+                scale * pz,
+            )?,
+        )
     }
 }
 
@@ -113,11 +115,13 @@ impl Dynamics for OblateBodyGravity {
         let xy_j2_scale = j2_factor * (5.0 * z_sq_over_r_sq - 1.0);
         let z_j2_scale = j2_factor * (5.0 * z_sq_over_r_sq - 3.0);
 
-        Ok(CartesianAccelerationComponents::from_meters_per_second_squared(
-            central_scale * px + xy_j2_scale * px,
-            central_scale * py + xy_j2_scale * py,
-            central_scale * pz + z_j2_scale * pz,
-        )?)
+        Ok(
+            CartesianAccelerationComponents::from_meters_per_second_squared(
+                central_scale * px + xy_j2_scale * px,
+                central_scale * py + xy_j2_scale * py,
+                central_scale * pz + z_j2_scale * pz,
+            )?,
+        )
     }
 }
 
@@ -154,7 +158,9 @@ impl Dynamics for AtmosphericDrag {
         let density = self
             .atmosphere
             .density_at_radius_m(radius_m)
-            .ok_or(NumericalError::NotFinite { field: "atmospheric density" })?
+            .ok_or(NumericalError::NotFinite {
+                field: "atmospheric density",
+            })?
             .kilograms_per_cubic_meter();
         let omega = self.atmosphere.angular_rate.radians_per_second();
         let atmosphere_velocity =
@@ -165,11 +171,13 @@ impl Dynamics for AtmosphericDrag {
             -0.5 * density * self.area_per_mass.square_meters_per_kilogram() * relative_speed;
         let acceleration = scale * relative_velocity;
 
-        Ok(CartesianAccelerationComponents::from_meters_per_second_squared(
-            acceleration.x,
-            acceleration.y,
-            acceleration.z,
-        )?)
+        Ok(
+            CartesianAccelerationComponents::from_meters_per_second_squared(
+                acceleration.x,
+                acceleration.y,
+                acceleration.z,
+            )?,
+        )
     }
 }
 
@@ -182,11 +190,13 @@ impl<A: Dynamics, B: Dynamics> Dynamics for CompositeDynamics<A, B> {
         let first = self.first.acceleration_at(state, t)?;
         let second = self.second.acceleration_at(state, t)?;
 
-        Ok(CartesianAccelerationComponents::from_meters_per_second_squared(
-            first.x_meters_per_second_squared() + second.x_meters_per_second_squared(),
-            first.y_meters_per_second_squared() + second.y_meters_per_second_squared(),
-            first.z_meters_per_second_squared() + second.z_meters_per_second_squared(),
-        )?)
+        Ok(
+            CartesianAccelerationComponents::from_meters_per_second_squared(
+                first.x_meters_per_second_squared() + second.x_meters_per_second_squared(),
+                first.y_meters_per_second_squared() + second.y_meters_per_second_squared(),
+                first.z_meters_per_second_squared() + second.z_meters_per_second_squared(),
+            )?,
+        )
     }
 }
 

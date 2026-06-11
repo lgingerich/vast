@@ -272,11 +272,13 @@ mod tests {
             _t: Epoch,
         ) -> Result<CartesianAccelerationComponents, DynamicsError> {
             let acceleration = self.acceleration.vector();
-            Ok(CartesianAccelerationComponents::from_meters_per_second_squared(
-                acceleration.x,
-                acceleration.y,
-                acceleration.z,
-            )?)
+            Ok(
+                CartesianAccelerationComponents::from_meters_per_second_squared(
+                    acceleration.x,
+                    acceleration.y,
+                    acceleration.z,
+                )?,
+            )
         }
     }
 
