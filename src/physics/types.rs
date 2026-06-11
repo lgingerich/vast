@@ -154,7 +154,6 @@ impl Add for TimeStep {
     fn add(self, rhs: TimeStep) -> TimeStep {
         let result = self.0 + rhs.0;
         debug_assert!(result.is_finite());
-        debug_assert!(result > 0.0);
         TimeStep(result)
     }
 }
@@ -561,6 +560,8 @@ fn vector_is_finite(value: Vector3<f64>) -> bool {
 mod tests {
     use super::*;
 
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
     const EPS: f64 = 1.0e-12;
 
     fn assert_close(actual: f64, expected: f64, tolerance: f64) {
@@ -571,18 +572,11 @@ mod tests {
     }
 
     #[test]
-    fn epoch_advances_by_time_step() -> Result<(), &'static str> {
-        let epoch = Epoch::from_seconds(10.0).map_err(|_| "invalid epoch")?;
-        let dt = TimeStep::from_seconds(2.5).map_err(|_| "invalid time step")?;
+    fn epoch_advances_by_time_step() -> TestResult {
+        let epoch = Epoch::from_seconds(10.0)?;
+        let dt = TimeStep::from_seconds(2.5)?;
 
-        assert_close(
-            epoch
-                .advance_by(dt)
-                .map_err(|_| "invalid next epoch")?
-                .seconds(),
-            12.5,
-            EPS,
-        );
+        assert_close(epoch.advance_by(dt)?.seconds(), 12.5, EPS);
         Ok(())
     }
 
@@ -601,9 +595,9 @@ mod tests {
     }
 
     #[test]
-    fn epoch_advance_rejects_nonfinite_result() -> Result<(), &'static str> {
-        let epoch = Epoch::from_seconds(f64::MAX).map_err(|_| "invalid epoch")?;
-        let dt = TimeStep::from_seconds(f64::MAX).map_err(|_| "invalid time step")?;
+    fn epoch_advance_rejects_nonfinite_result() -> TestResult {
+        let epoch = Epoch::from_seconds(f64::MAX)?;
+        let dt = TimeStep::from_seconds(f64::MAX)?;
 
         assert!(epoch.advance_by(dt).is_err());
         Ok(())
@@ -638,8 +632,8 @@ mod tests {
     }
 
     #[test]
-    fn duration_can_be_created_from_time_step() -> Result<(), &'static str> {
-        let dt = TimeStep::from_seconds(2.5).map_err(|_| "invalid time step")?;
+    fn duration_can_be_created_from_time_step() -> TestResult {
+        let dt = TimeStep::from_seconds(2.5)?;
         let duration = Duration::from(dt);
 
         assert_close(duration.seconds(), 2.5, EPS);
@@ -731,9 +725,8 @@ mod tests {
     }
 
     #[test]
-    fn angular_rate_converts_to_degrees_per_day() -> Result<(), &'static str> {
-        let rate = AngularRate::from_radians_per_second(std::f64::consts::PI / 86_400.0)
-            .map_err(|_| "invalid angular rate")?;
+    fn angular_rate_converts_to_degrees_per_day() -> TestResult {
+        let rate = AngularRate::from_radians_per_second(std::f64::consts::PI / 86_400.0)?;
 
         assert_close(
             rate.radians_per_second(),
@@ -767,127 +760,126 @@ mod tests {
     // ── operator tests ──────────────────────────────────────────
 
     #[test]
-    fn angle_add_and_subtract() -> Result<(), &'static str> {
-        let a = Angle::from_radians(1.0).map_err(|_| "invalid a")?;
-        let b = Angle::from_radians(0.5).map_err(|_| "invalid b")?;
+    fn angle_add_and_subtract() -> TestResult {
+        let a = Angle::from_radians(1.0)?;
+        let b = Angle::from_radians(0.5)?;
         assert_close((a + b).radians(), 1.5, EPS);
         assert_close((a - b).radians(), 0.5, EPS);
         Ok(())
     }
 
     #[test]
-    fn time_step_add_and_ratio() -> Result<(), &'static str> {
-        let a = TimeStep::from_seconds(10.0).map_err(|_| "invalid a")?;
-        let b = TimeStep::from_seconds(5.0).map_err(|_| "invalid b")?;
+    fn time_step_add_and_ratio() -> TestResult {
+        let a = TimeStep::from_seconds(10.0)?;
+        let b = TimeStep::from_seconds(5.0)?;
         assert_close((a + b).seconds(), 15.0, EPS);
         assert_close(a / b, 2.0, EPS);
         Ok(())
     }
 
     #[test]
-    fn duration_add_and_subtract() -> Result<(), &'static str> {
-        let a = Duration::from_seconds(10.0).map_err(|_| "invalid a")?;
-        let b = Duration::from_seconds(3.0).map_err(|_| "invalid b")?;
+    fn duration_add_and_subtract() -> TestResult {
+        let a = Duration::from_seconds(10.0)?;
+        let b = Duration::from_seconds(3.0)?;
         assert_close((a + b).seconds(), 13.0, EPS);
         assert_close((a - b).unwrap().seconds(), 7.0, EPS);
         Ok(())
     }
 
     #[test]
-    fn duration_subtract_beyond_zero_fails() -> Result<(), &'static str> {
-        let a = Duration::from_seconds(3.0).map_err(|_| "invalid a")?;
-        let b = Duration::from_seconds(5.0).map_err(|_| "invalid b")?;
+    fn duration_subtract_beyond_zero_fails() -> TestResult {
+        let a = Duration::from_seconds(3.0)?;
+        let b = Duration::from_seconds(5.0)?;
         assert!((a - b).is_err());
         Ok(())
     }
 
     #[test]
-    fn distance_add_and_ratio() -> Result<(), &'static str> {
-        let a = Distance::from_meters(100.0).map_err(|_| "invalid a")?;
-        let b = Distance::from_meters(50.0).map_err(|_| "invalid b")?;
+    fn distance_add_and_ratio() -> TestResult {
+        let a = Distance::from_meters(100.0)?;
+        let b = Distance::from_meters(50.0)?;
         assert_close((a + b).meters(), 150.0, EPS);
         assert_close(a / b, 2.0, EPS);
         Ok(())
     }
 
     #[test]
-    fn distance_multiply_and_divide_scalar() -> Result<(), &'static str> {
-        let d = Distance::from_meters(100.0).map_err(|_| "invalid d")?;
+    fn distance_multiply_and_divide_scalar() -> TestResult {
+        let d = Distance::from_meters(100.0)?;
         assert_close((d * 2.0).unwrap().meters(), 200.0, EPS);
         assert_close((d / 4.0).unwrap().meters(), 25.0, EPS);
         Ok(())
     }
 
     #[test]
-    fn distance_multiply_by_zero_fails() -> Result<(), &'static str> {
-        let d = Distance::from_meters(10.0).map_err(|_| "invalid d")?;
+    fn distance_multiply_by_zero_fails() -> TestResult {
+        let d = Distance::from_meters(10.0)?;
         assert!((d * 0.0).is_err());
         Ok(())
     }
 
     #[test]
-    fn distance_multiply_by_negative_fails() -> Result<(), &'static str> {
-        let d = Distance::from_meters(10.0).map_err(|_| "invalid d")?;
+    fn distance_multiply_by_negative_fails() -> TestResult {
+        let d = Distance::from_meters(10.0)?;
         assert!((d * -1.0).is_err());
         Ok(())
     }
 
     #[test]
-    fn distance_divide_by_zero_fails() -> Result<(), &'static str> {
-        let d = Distance::from_meters(10.0).map_err(|_| "invalid d")?;
+    fn distance_divide_by_zero_fails() -> TestResult {
+        let d = Distance::from_meters(10.0)?;
         assert!((d / 0.0).is_err());
         Ok(())
     }
 
     #[test]
-    fn distance_divide_by_negative_fails() -> Result<(), &'static str> {
-        let d = Distance::from_meters(10.0).map_err(|_| "invalid d")?;
+    fn distance_divide_by_negative_fails() -> TestResult {
+        let d = Distance::from_meters(10.0)?;
         assert!((d / -1.0).is_err());
         Ok(())
     }
 
     #[test]
-    fn speed_add_and_ratio() -> Result<(), &'static str> {
-        let a = Speed::from_meters_per_second(100.0).map_err(|_| "invalid a")?;
-        let b = Speed::from_meters_per_second(50.0).map_err(|_| "invalid b")?;
+    fn speed_add_and_ratio() -> TestResult {
+        let a = Speed::from_meters_per_second(100.0)?;
+        let b = Speed::from_meters_per_second(50.0)?;
         assert_close((a + b).meters_per_second(), 150.0, EPS);
         assert_close(a / b, 2.0, EPS);
         Ok(())
     }
 
     #[test]
-    fn speed_multiply_and_divide_scalar() -> Result<(), &'static str> {
-        let s = Speed::from_meters_per_second(100.0).map_err(|_| "invalid s")?;
+    fn speed_multiply_and_divide_scalar() -> TestResult {
+        let s = Speed::from_meters_per_second(100.0)?;
         assert_close((s * 2.0).unwrap().meters_per_second(), 200.0, EPS);
         assert_close((s / 4.0).unwrap().meters_per_second(), 25.0, EPS);
         Ok(())
     }
 
     #[test]
-    fn speed_multiply_by_zero_is_valid() -> Result<(), &'static str> {
-        let s = Speed::from_meters_per_second(10.0).map_err(|_| "invalid s")?;
+    fn speed_multiply_by_zero_is_valid() -> TestResult {
+        let s = Speed::from_meters_per_second(10.0)?;
         assert_close((s * 0.0).unwrap().meters_per_second(), 0.0, EPS);
         Ok(())
     }
 
     #[test]
-    fn speed_multiply_by_negative_fails() -> Result<(), &'static str> {
-        let s = Speed::from_meters_per_second(10.0).map_err(|_| "invalid s")?;
+    fn speed_multiply_by_negative_fails() -> TestResult {
+        let s = Speed::from_meters_per_second(10.0)?;
         assert!((s * -1.0).is_err());
         Ok(())
     }
 
     #[test]
-    fn speed_divide_by_zero_fails() -> Result<(), &'static str> {
-        let s = Speed::from_meters_per_second(10.0).map_err(|_| "invalid s")?;
+    fn speed_divide_by_zero_fails() -> TestResult {
+        let s = Speed::from_meters_per_second(10.0)?;
         assert!((s / 0.0).is_err());
         Ok(())
     }
 
     #[test]
-    fn gravitational_parameter_multiply_and_divide_scalar() -> Result<(), &'static str> {
-        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(1.0e14)
-            .map_err(|_| "invalid mu")?;
+    fn gravitational_parameter_multiply_and_divide_scalar() -> TestResult {
+        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(1.0e14)?;
         assert_close(
             (mu * 2.0).unwrap().meters_cubed_per_second_squared(),
             2.0e14,
@@ -902,19 +894,16 @@ mod tests {
     }
 
     #[test]
-    fn gravitational_parameter_ratio() -> Result<(), &'static str> {
-        let mu1 = GravitationalParameter::from_meters_cubed_per_second_squared(1.0e14)
-            .map_err(|_| "invalid mu1")?;
-        let mu2 = GravitationalParameter::from_meters_cubed_per_second_squared(2.0e14)
-            .map_err(|_| "invalid mu2")?;
+    fn gravitational_parameter_ratio() -> TestResult {
+        let mu1 = GravitationalParameter::from_meters_cubed_per_second_squared(1.0e14)?;
+        let mu2 = GravitationalParameter::from_meters_cubed_per_second_squared(2.0e14)?;
         assert_close(mu1 / mu2, 0.5, EPS);
         Ok(())
     }
 
     #[test]
-    fn gravitational_parameter_multiply_by_zero_fails() -> Result<(), &'static str> {
-        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(1.0e14)
-            .map_err(|_| "invalid mu")?;
+    fn gravitational_parameter_multiply_by_zero_fails() -> TestResult {
+        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(1.0e14)?;
         assert!((mu * 0.0).is_err());
         Ok(())
     }

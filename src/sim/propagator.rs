@@ -104,9 +104,7 @@ impl Propagator {
     /// Creates a propagator starting from `initial_state` at epoch zero.
     pub fn new(initial_state: CartesianState, dt: TimeStep) -> Result<Self, PropagationError> {
         let mut states = CartesianStateBuffer::<1>::new();
-        states
-            .write_from_state(0, &initial_state)
-            .map_err(PropagationError::State)?;
+        states.write_from_state(0, &initial_state)?;
 
         Ok(Self {
             epoch: Epoch::from_seconds(0.0)?,
@@ -135,19 +133,18 @@ impl Propagator {
     /// Resets epoch and state for a new episode.
     pub fn reset(&mut self, initial_state: CartesianState) -> Result<(), PropagationError> {
         self.epoch = self.start_epoch;
-        self.states
-            .write_from_state(0, &initial_state)
-            .map_err(PropagationError::State)
+        self.states.write_from_state(0, &initial_state)?;
+        Ok(())
     }
 
     /// Reads the current body state at index 0.
     pub fn current_state(&self) -> Result<CartesianState, PropagationError> {
-        self.states.read_state(0).map_err(PropagationError::State)
+        Ok(self.states.read_state(0)?)
     }
 
     /// Applies an impulsive delta-v to body index 0.
     pub fn apply_impulsive_burn(&mut self, burn: ImpulsiveBurn) -> Result<(), PropagationError> {
-        let state = self.states.read_state(0).map_err(PropagationError::State)?;
+        let state = self.states.read_state(0)?;
         let velocity = state.velocity.vector();
         let updated = Velocity::from_vector(Vector3::new(
             velocity.x + burn.delta_v_mps[0],
@@ -158,9 +155,8 @@ impl Propagator {
             position: state.position,
             velocity: updated,
         };
-        self.states
-            .write_from_state(0, &updated_state)
-            .map_err(PropagationError::State)
+        self.states.write_from_state(0, &updated_state)?;
+        Ok(())
     }
 
     /// Propagates until `termination` is met, the step budget is exceeded, or
@@ -204,7 +200,7 @@ impl Propagator {
         let mut previous_radial_velocity_mps = Some(radial_velocity_mps(&self.current_state()?));
 
         if self.sample_config.is_some() {
-            let state = self.states.read_state(0).map_err(PropagationError::State)?;
+            let state = self.states.read_state(0)?;
             samples.push(TrajectorySample {
                 epoch: self.epoch,
                 state,
@@ -213,7 +209,7 @@ impl Propagator {
         }
 
         loop {
-            let state = self.states.read_state(0).map_err(PropagationError::State)?;
+            let state = self.states.read_state(0)?;
             let context = TerminationContext {
                 start_epoch: self.start_epoch,
                 current_epoch: self.epoch,
@@ -256,7 +252,7 @@ impl Propagator {
             self.epoch = self.epoch.advance_by(step)?;
             steps += 1;
 
-            let state = self.states.read_state(0).map_err(PropagationError::State)?;
+            let state = self.states.read_state(0)?;
             if needs_orbital_phase {
                 current_orbital_phase_angle_rad = orbital_phase_angle_rad(&state, mu);
             }

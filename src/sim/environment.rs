@@ -45,7 +45,7 @@ pub struct LeoCircularEnv {
 impl LeoCircularEnv {
     /// Builds an environment from a scenario configuration.
     pub fn from_config(config: &ScenarioConfig) -> Result<Self, EnvironmentError> {
-        let scenario = config.build().map_err(EnvironmentError::Scenario)?;
+        let scenario = config.build()?;
         Ok(Self { scenario, seed: 0 })
     }
 
@@ -69,18 +69,13 @@ impl Environment for LeoCircularEnv {
     fn reset(&mut self, seed: u64) -> Result<Observation, EnvironmentError> {
         self.seed = seed;
         let initial_state = self.scenario.initial_state;
-        self.scenario
-            .propagator
-            .reset(initial_state)
-            .map_err(EnvironmentError::Propagation)?;
+        self.scenario.propagator.reset(initial_state)?;
         self.observation_from_state(&initial_state)
     }
 
     fn step(&mut self, _action: Action) -> Result<StepResult, EnvironmentError> {
         let integrator = self.scenario.integrator;
-        let propagation = integrator
-            .propagate(&mut self.scenario)
-            .map_err(EnvironmentError::Propagation)?;
+        let propagation = integrator.propagate(&mut self.scenario)?;
         let observation = self.observation_from_state(&propagation.final_state)?;
         let done = matches!(
             propagation.stop_reason,

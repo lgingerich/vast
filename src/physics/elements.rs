@@ -407,7 +407,7 @@ mod tests {
         Velocity,
     };
 
-    type TestResult = Result<(), &'static str>;
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
 
     const EPS: f64 = 1.0e-9;
 
@@ -473,47 +473,40 @@ mod tests {
         let equatorial_radius = R_EARTH;
         let radius_m = R_EARTH + 600_000.0;
         let orbit = EllipticOrbit {
-            semi_major_axis: Distance::from_meters(radius_m).map_err(|_| "invalid radius")?,
-            eccentricity: Eccentricity::from_scalar(0.0).map_err(|_| "invalid eccentricity")?,
+            semi_major_axis: Distance::from_meters(radius_m)?,
+            eccentricity: Eccentricity::from_scalar(0.0)?,
             mu,
-            inclination: Angle::from_radians(inclination).map_err(|_| "invalid inclination")?,
-            right_ascension_of_ascending_node: Angle::from_radians(32.0_f64.to_radians())
-                .map_err(|_| "invalid raan")?,
+            inclination: Angle::from_radians(inclination)?,
+            right_ascension_of_ascending_node: Angle::from_radians(32.0_f64.to_radians())?,
             argument_of_periapsis: Angle::ZERO,
-            true_anomaly: Angle::from_radians(0.0).map_err(|_| "invalid phase")?,
+            true_anomaly: Angle::from_radians(0.0)?,
             direction: OrbitDirection::Prograde,
         };
         let mut states = CartesianStateBuffer::<1>::new();
-        states
-            .write_from_state(
-                0,
-                &orbit.to_cartesian_state().ok_or("invalid initial state")?,
-            )
-            .map_err(|_| "failed to write state")?;
+        states.write_from_state(
+            0,
+            &orbit.to_cartesian_state().ok_or("invalid initial state")?,
+        )?;
         let gravity = OblateBodyGravity {
             mu,
-            equatorial_radius: Distance::from_meters(equatorial_radius)
-                .map_err(|_| "invalid equatorial radius")?,
+            equatorial_radius: Distance::from_meters(equatorial_radius)?,
             j2,
         };
         let integrator = VelocityVerletIntegrator;
-        let dt = TimeStep::from_seconds(30.0).map_err(|_| "invalid time step")?;
-        let duration = Duration::from_seconds(3.0 * 86_400.0).map_err(|_| "invalid duration")?;
+        let dt = TimeStep::from_seconds(30.0)?;
+        let duration = Duration::from_seconds(3.0 * 86_400.0)?;
         let initial_raan = raan_degrees(
             &OrbitalElements::from_states(&states.view(), 0, mu)
                 .ok_or("invalid initial elements")?,
         )
         .ok_or("initial RAAN undefined")?;
-        let mut epoch = Epoch::from_seconds(0.0).map_err(|_| "invalid epoch")?;
+        let mut epoch = Epoch::from_seconds(0.0)?;
 
         while epoch.seconds() < duration.seconds() {
             let remaining_seconds = duration.seconds() - epoch.seconds();
-            let step = TimeStep::from_seconds(dt.seconds().min(remaining_seconds))
-                .map_err(|_| "invalid step")?;
-            integrator
-                .step(&gravity, &mut states.view_mut(), 0, epoch, step)
-                .map_err(|_| "integration failed")?;
-            epoch = epoch.advance_by(step).map_err(|_| "invalid next epoch")?;
+            let step = TimeStep::from_seconds(dt.seconds().min(remaining_seconds))?;
+            integrator.step(&gravity, &mut states.view_mut(), 0, epoch, step)?;
+            epoch = epoch.advance_by(step)?;
         }
 
         let final_raan = raan_degrees(
@@ -540,8 +533,8 @@ mod tests {
 
     #[test]
     fn inclined_circular_state_maps_to_circular_inclined_elements() -> TestResult {
-        let inclination = Angle::from_radians(0.9).map_err(|_| "invalid inclination")?;
-        let raan = Angle::from_radians(1.1).map_err(|_| "invalid raan")?;
+        let inclination = Angle::from_radians(0.9)?;
+        let raan = Angle::from_radians(1.1)?;
         let orbit = circular_orbit(inclination, raan).ok_or("invalid orbit")?;
         let state = orbit.to_cartesian_state().ok_or("invalid state")?;
 
@@ -549,7 +542,7 @@ mod tests {
             OrbitalElements::from_cartesian_state(&state, orbit.mu).ok_or("invalid elements")?;
 
         let OrbitalElements::CircularInclined(elements) = elements else {
-            return Err("expected circular inclined elements");
+            return Err("expected circular inclined elements".into());
         };
         assert_close(elements.inclination.radians(), inclination.radians(), EPS);
         assert_close(
@@ -574,7 +567,7 @@ mod tests {
             OrbitalElements::from_cartesian_state(&state, orbit.mu).ok_or("invalid elements")?;
 
         let OrbitalElements::CircularEquatorial(elements) = elements else {
-            return Err("expected circular equatorial elements");
+            return Err("expected circular equatorial elements".into());
         };
         assert_close(elements.inclination.radians(), 0.0, EPS);
         assert_close(
@@ -587,37 +580,32 @@ mod tests {
 
     #[test]
     fn propagated_inclined_circular_state_stays_circular_in_elements() -> TestResult {
-        let inclination = Angle::from_radians(0.9).map_err(|_| "invalid inclination")?;
-        let raan = Angle::from_radians(1.1).map_err(|_| "invalid raan")?;
+        let inclination = Angle::from_radians(0.9)?;
+        let raan = Angle::from_radians(1.1)?;
         let orbit = circular_orbit(inclination, raan).ok_or("invalid orbit")?;
         let mut states = CartesianStateBuffer::<1>::new();
-        states
-            .write_from_state(
-                0,
-                &orbit.to_cartesian_state().ok_or("invalid initial state")?,
-            )
-            .map_err(|_| "failed to write state")?;
+        states.write_from_state(
+            0,
+            &orbit.to_cartesian_state().ok_or("invalid initial state")?,
+        )?;
         let gravity = TwoBodyGravity { mu: orbit.mu };
         let integrator = VelocityVerletIntegrator;
-        let dt = TimeStep::from_seconds(10.0).map_err(|_| "invalid time step")?;
+        let dt = TimeStep::from_seconds(10.0)?;
         let target_seconds = orbit.period().ok_or("invalid period")?.seconds() * 3.0;
-        let mut epoch = Epoch::from_seconds(0.0).map_err(|_| "invalid epoch")?;
+        let mut epoch = Epoch::from_seconds(0.0)?;
 
         while epoch.seconds() < target_seconds {
             let remaining_seconds = target_seconds - epoch.seconds();
-            let step = TimeStep::from_seconds(dt.seconds().min(remaining_seconds))
-                .map_err(|_| "invalid step")?;
-            integrator
-                .step(&gravity, &mut states.view_mut(), 0, epoch, step)
-                .map_err(|_| "integration failed")?;
-            epoch = epoch.advance_by(step).map_err(|_| "invalid next epoch")?;
+            let step = TimeStep::from_seconds(dt.seconds().min(remaining_seconds))?;
+            integrator.step(&gravity, &mut states.view_mut(), 0, epoch, step)?;
+            epoch = epoch.advance_by(step)?;
         }
 
         let elements =
             OrbitalElements::from_states(&states.view(), 0, orbit.mu).ok_or("invalid elements")?;
 
         let OrbitalElements::CircularInclined(elements) = elements else {
-            return Err("expected circular inclined elements");
+            return Err("expected circular inclined elements".into());
         };
         assert!(
             elements.eccentricity.scalar()
@@ -638,36 +626,30 @@ mod tests {
 
     #[test]
     fn strict_classification_can_keep_near_circular_state_classical() -> TestResult {
-        let inclination = Angle::from_radians(0.9).map_err(|_| "invalid inclination")?;
-        let raan = Angle::from_radians(1.1).map_err(|_| "invalid raan")?;
+        let inclination = Angle::from_radians(0.9)?;
+        let raan = Angle::from_radians(1.1)?;
         let orbit = circular_orbit(inclination, raan).ok_or("invalid orbit")?;
         let mut states = CartesianStateBuffer::<1>::new();
-        states
-            .write_from_state(
-                0,
-                &orbit.to_cartesian_state().ok_or("invalid initial state")?,
-            )
-            .map_err(|_| "failed to write state")?;
+        states.write_from_state(
+            0,
+            &orbit.to_cartesian_state().ok_or("invalid initial state")?,
+        )?;
         let gravity = TwoBodyGravity { mu: orbit.mu };
         let integrator = VelocityVerletIntegrator;
-        let dt = TimeStep::from_seconds(10.0).map_err(|_| "invalid time step")?;
+        let dt = TimeStep::from_seconds(10.0)?;
         let target_seconds = orbit.period().ok_or("invalid period")?.seconds() * 3.0;
-        let mut epoch = Epoch::from_seconds(0.0).map_err(|_| "invalid epoch")?;
+        let mut epoch = Epoch::from_seconds(0.0)?;
 
         while epoch.seconds() < target_seconds {
             let remaining_seconds = target_seconds - epoch.seconds();
-            let step = TimeStep::from_seconds(dt.seconds().min(remaining_seconds))
-                .map_err(|_| "invalid step")?;
-            integrator
-                .step(&gravity, &mut states.view_mut(), 0, epoch, step)
-                .map_err(|_| "integration failed")?;
-            epoch = epoch.advance_by(step).map_err(|_| "invalid next epoch")?;
+            let step = TimeStep::from_seconds(dt.seconds().min(remaining_seconds))?;
+            integrator.step(&gravity, &mut states.view_mut(), 0, epoch, step)?;
+            epoch = epoch.advance_by(step)?;
         }
 
         let strict_classification = OrbitalElementClassification::new(
             1.0e-10,
-            Angle::from_radians(DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE_RAD)
-                .map_err(|_| "invalid tolerance")?,
+            Angle::from_radians(DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE_RAD)?,
         )
         .ok_or("invalid classification")?;
         let elements = OrbitalElements::from_states_with_classification(
@@ -679,7 +661,7 @@ mod tests {
         .ok_or("invalid elements")?;
 
         let OrbitalElements::Classical(elements) = elements else {
-            return Err("expected classical elements");
+            return Err("expected classical elements".into());
         };
         assert!(
             elements.eccentricity.scalar() > strict_classification.circular_eccentricity_tolerance
@@ -700,7 +682,7 @@ mod tests {
                 .ok_or("invalid elements")?;
 
         let OrbitalElements::Classical(elements) = elements else {
-            return Err("expected classical elements");
+            return Err("expected classical elements".into());
         };
         assert!(
             elements.eccentricity.scalar()
@@ -729,7 +711,7 @@ mod tests {
                 .ok_or("invalid elements")?;
 
         let OrbitalElements::EquatorialElliptic(elements) = elements else {
-            return Err("expected equatorial elliptic elements");
+            return Err("expected equatorial elliptic elements".into());
         };
         assert!(
             elements.eccentricity.scalar()
@@ -743,8 +725,8 @@ mod tests {
 
     #[test]
     fn classification_policy_rejects_invalid_tolerances() -> TestResult {
-        let zero = Angle::from_radians(0.0).map_err(|_| "invalid zero tolerance")?;
-        let negative = Angle::from_radians(-1.0).map_err(|_| "invalid negative tolerance")?;
+        let zero = Angle::from_radians(0.0)?;
+        let negative = Angle::from_radians(-1.0)?;
 
         assert!(OrbitalElementClassification::new(f64::NAN, zero).is_none());
         assert!(OrbitalElementClassification::new(-1.0, zero).is_none());
@@ -756,13 +738,12 @@ mod tests {
     fn classical_elements_round_trip_cartesian_state() -> TestResult {
         let mu = earth_mu().ok_or("invalid mu")?;
         let elements = ClassicalOrbitalElements {
-            semi_major_axis: Distance::from_meters(8_000_000.0).map_err(|_| "invalid sma")?,
-            eccentricity: Eccentricity::from_scalar(0.2).map_err(|_| "invalid eccentricity")?,
-            inclination: Angle::from_radians(0.4).map_err(|_| "invalid inclination")?,
-            right_ascension_of_ascending_node: Angle::from_radians(1.0)
-                .map_err(|_| "invalid raan")?,
-            argument_of_periapsis: Angle::from_radians(0.7).map_err(|_| "invalid argp")?,
-            true_anomaly: Angle::from_radians(1.2).map_err(|_| "invalid true anomaly")?,
+            semi_major_axis: Distance::from_meters(8_000_000.0)?,
+            eccentricity: Eccentricity::from_scalar(0.2)?,
+            inclination: Angle::from_radians(0.4)?,
+            right_ascension_of_ascending_node: Angle::from_radians(1.0)?,
+            argument_of_periapsis: Angle::from_radians(0.7)?,
+            true_anomaly: Angle::from_radians(1.2)?,
         };
 
         let state = elements
@@ -771,7 +752,7 @@ mod tests {
         let recovered = OrbitalElements::from_cartesian_state(&state, mu)
             .ok_or("invalid recovered elements")?;
         let OrbitalElements::Classical(recovered) = recovered else {
-            return Err("expected classical elements after round trip");
+            return Err("expected classical elements after round trip".into());
         };
 
         assert_close(
@@ -810,7 +791,7 @@ mod tests {
 
     #[test]
     fn angles_are_normalized_to_positive_turn() -> TestResult {
-        let angle = angle_from_radians(-0.25).map_err(|_| "invalid angle")?;
+        let angle = angle_from_radians(-0.25)?;
 
         assert_close(angle.radians(), 2.0 * std::f64::consts::PI - 0.25, EPS);
         Ok(())

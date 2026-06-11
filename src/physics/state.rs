@@ -556,7 +556,7 @@ fn slice_lengths_match(
 mod tests {
     use super::*;
 
-    type TestResult = Result<(), &'static str>;
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
 
     fn state() -> Option<CartesianState> {
         Some(CartesianState::new(
@@ -577,10 +577,8 @@ mod tests {
         let mut buffer = CartesianStateBuffer::<1>::new();
         let state = state().ok_or("invalid state")?;
 
-        buffer
-            .write_from_state(0, &state)
-            .map_err(|_| "write failed")?;
-        let read = buffer.read_state(0).map_err(|_| "read failed")?;
+        buffer.write_from_state(0, &state)?;
+        let read = buffer.read_state(0)?;
 
         assert_close(read.position.vector().x, 1.0);
         assert_close(read.position.vector().y, 2.0);

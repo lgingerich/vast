@@ -141,7 +141,7 @@ mod tests {
         Position, R_EARTH, Velocity,
     };
 
-    type TestResult = Result<(), &'static str>;
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
 
     const ALTITUDE_M: f64 = 400_000.0;
     const EPS: f64 = 1.0e-6;
@@ -175,9 +175,7 @@ mod tests {
         let orbit = circular_orbit().ok_or("invalid orbit")?;
         let state = orbit.to_cartesian_state().ok_or("invalid state")?;
         let mut states = CartesianStateBuffer::<1>::new();
-        states
-            .write_from_state(0, &state)
-            .map_err(|_| "invalid state buffer")?;
+        states.write_from_state(0, &state)?;
 
         let diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, orbit.mu)
             .ok_or("invalid diagnostics")?;
@@ -235,13 +233,11 @@ mod tests {
     #[test]
     fn diagnostics_reject_zero_radius() -> TestResult {
         let state = CartesianState::new(
-            Position::from_vector(Vector3::zeros()).map_err(|_| "invalid position")?,
-            Velocity::from_vector(Vector3::zeros()).map_err(|_| "invalid velocity")?,
+            Position::from_vector(Vector3::zeros())?,
+            Velocity::from_vector(Vector3::zeros())?,
         );
         let mut states = CartesianStateBuffer::<1>::new();
-        states
-            .write_from_state(0, &state)
-            .map_err(|_| "invalid state buffer")?;
+        states.write_from_state(0, &state)?;
 
         assert!(
             OrbitalDiagnostics::from_states(&states.view(), 0, earth_mu().ok_or("invalid mu")?)
@@ -254,10 +250,8 @@ mod tests {
     fn hyperbolic_state_has_no_bound_orbit_radii() -> TestResult {
         let radius = R_EARTH + ALTITUDE_M;
         let state = CartesianState::new(
-            Position::from_vector(Vector3::new(radius, 0.0, 0.0))
-                .map_err(|_| "invalid position")?,
-            Velocity::from_vector(Vector3::new(0.0, 20_000.0, 0.0))
-                .map_err(|_| "invalid velocity")?,
+            Position::from_vector(Vector3::new(radius, 0.0, 0.0))?,
+            Velocity::from_vector(Vector3::new(0.0, 20_000.0, 0.0))?,
         );
 
         let diagnostics = OrbitalDiagnostics::from_state(&state, earth_mu().ok_or("invalid mu")?)

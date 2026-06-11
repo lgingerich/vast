@@ -257,7 +257,7 @@ mod tests {
     };
     use nalgebra::Vector3;
 
-    type TestResult = Result<(), &'static str>;
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
 
     const EPS: f64 = 1.0e-9;
 
@@ -314,26 +314,21 @@ mod tests {
     fn semi_implicit_euler_updates_velocity_before_position() -> TestResult {
         let integrator = EulerIntegrator;
         let dynamics = ConstantAcceleration {
-            acceleration: Acceleration::from_vector(Vector3::new(0.0, 2.0, 0.0))
-                .map_err(|_| "invalid acceleration")?,
+            acceleration: Acceleration::from_vector(Vector3::new(0.0, 2.0, 0.0))?,
         };
         let state = state_at(Vector3::new(10.0, 20.0, 30.0), Vector3::new(1.0, 2.0, 3.0))
             .ok_or("invalid state")?;
         let mut states = CartesianStateBuffer::<1>::new();
-        states
-            .write_from_state(0, &state)
-            .map_err(|_| "invalid state buffer")?;
+        states.write_from_state(0, &state)?;
 
-        integrator
-            .step(
-                &dynamics,
-                &mut states.view_mut(),
-                0,
-                Epoch::from_seconds(0.0).map_err(|_| "invalid epoch")?,
-                TimeStep::from_seconds(5.0).map_err(|_| "invalid time step")?,
-            )
-            .map_err(|_| "integration failed")?;
-        let next = states.read_state(0).map_err(|_| "invalid next state")?;
+        integrator.step(
+            &dynamics,
+            &mut states.view_mut(),
+            0,
+            Epoch::from_seconds(0.0)?,
+            TimeStep::from_seconds(5.0)?,
+        )?;
+        let next = states.read_state(0)?;
 
         assert_close(next.velocity.vector().x, 1.0, EPS);
         assert_close(next.velocity.vector().y, 12.0, EPS);
@@ -353,17 +348,15 @@ mod tests {
         let state =
             state_at(Vector3::new(1.0, 0.0, 0.0), Vector3::zeros()).ok_or("invalid state")?;
         let mut states = CartesianStateBuffer::<1>::new();
-        states
-            .write_from_state(0, &state)
-            .map_err(|_| "invalid state buffer")?;
+        states.write_from_state(0, &state)?;
 
         assert!(matches!(
             integrator.step(
                 &dynamics,
                 &mut states.view_mut(),
                 0,
-                Epoch::from_seconds(0.0).map_err(|_| "invalid epoch")?,
-                TimeStep::from_seconds(1.0).map_err(|_| "invalid time step")?,
+                Epoch::from_seconds(0.0)?,
+                TimeStep::from_seconds(1.0)?,
             ),
             Err(PropagationError::Dynamics(
                 DynamicsError::PositionAtGravityCenter
@@ -376,22 +369,19 @@ mod tests {
     fn semi_implicit_euler_rejects_nonfinite_velocity_update() -> TestResult {
         let integrator = EulerIntegrator;
         let dynamics = ConstantAcceleration {
-            acceleration: Acceleration::from_vector(Vector3::new(f64::MAX, 0.0, 0.0))
-                .map_err(|_| "invalid acceleration")?,
+            acceleration: Acceleration::from_vector(Vector3::new(f64::MAX, 0.0, 0.0))?,
         };
         let state = state_at(Vector3::zeros(), Vector3::zeros()).ok_or("invalid state")?;
         let mut states = CartesianStateBuffer::<1>::new();
-        states
-            .write_from_state(0, &state)
-            .map_err(|_| "invalid state buffer")?;
+        states.write_from_state(0, &state)?;
 
         assert!(matches!(
             integrator.step(
                 &dynamics,
                 &mut states.view_mut(),
                 0,
-                Epoch::from_seconds(0.0).map_err(|_| "invalid epoch")?,
-                TimeStep::from_seconds(2.0).map_err(|_| "invalid time step")?,
+                Epoch::from_seconds(0.0)?,
+                TimeStep::from_seconds(2.0)?,
             ),
             Err(PropagationError::Numerical(NumericalError::NotFinite {
                 field: "velocity components"
@@ -404,8 +394,7 @@ mod tests {
     fn semi_implicit_euler_rejects_nonfinite_position_update() -> TestResult {
         let integrator = EulerIntegrator;
         let dynamics = ConstantAcceleration {
-            acceleration: Acceleration::from_vector(Vector3::zeros())
-                .map_err(|_| "invalid acceleration")?,
+            acceleration: Acceleration::from_vector(Vector3::zeros())?,
         };
         let state = state_at(
             Vector3::new(f64::MAX, 0.0, 0.0),
@@ -413,17 +402,15 @@ mod tests {
         )
         .ok_or("invalid state")?;
         let mut states = CartesianStateBuffer::<1>::new();
-        states
-            .write_from_state(0, &state)
-            .map_err(|_| "invalid state buffer")?;
+        states.write_from_state(0, &state)?;
 
         assert!(matches!(
             integrator.step(
                 &dynamics,
                 &mut states.view_mut(),
                 0,
-                Epoch::from_seconds(0.0).map_err(|_| "invalid epoch")?,
-                TimeStep::from_seconds(2.0).map_err(|_| "invalid time step")?,
+                Epoch::from_seconds(0.0)?,
+                TimeStep::from_seconds(2.0)?,
             ),
             Err(PropagationError::Numerical(NumericalError::NotFinite {
                 field: "position components"
@@ -436,26 +423,21 @@ mod tests {
     fn runge_kutta4_matches_constant_acceleration_solution() -> TestResult {
         let integrator = RungeKutta4Integrator;
         let dynamics = ConstantAcceleration {
-            acceleration: Acceleration::from_vector(Vector3::new(0.0, 2.0, 0.0))
-                .map_err(|_| "invalid acceleration")?,
+            acceleration: Acceleration::from_vector(Vector3::new(0.0, 2.0, 0.0))?,
         };
         let state = state_at(Vector3::new(10.0, 20.0, 30.0), Vector3::new(1.0, 2.0, 3.0))
             .ok_or("invalid state")?;
         let mut states = CartesianStateBuffer::<1>::new();
-        states
-            .write_from_state(0, &state)
-            .map_err(|_| "invalid state buffer")?;
+        states.write_from_state(0, &state)?;
 
-        integrator
-            .step(
-                &dynamics,
-                &mut states.view_mut(),
-                0,
-                Epoch::from_seconds(0.0).map_err(|_| "invalid epoch")?,
-                TimeStep::from_seconds(5.0).map_err(|_| "invalid time step")?,
-            )
-            .map_err(|_| "integration failed")?;
-        let next = states.read_state(0).map_err(|_| "invalid next state")?;
+        integrator.step(
+            &dynamics,
+            &mut states.view_mut(),
+            0,
+            Epoch::from_seconds(0.0)?,
+            TimeStep::from_seconds(5.0)?,
+        )?;
+        let next = states.read_state(0)?;
 
         assert_close(next.velocity.vector().x, 1.0, EPS);
         assert_close(next.velocity.vector().y, 12.0, EPS);
@@ -470,26 +452,21 @@ mod tests {
     fn velocity_verlet_matches_constant_acceleration_solution() -> TestResult {
         let integrator = VelocityVerletIntegrator;
         let dynamics = ConstantAcceleration {
-            acceleration: Acceleration::from_vector(Vector3::new(0.0, 2.0, 0.0))
-                .map_err(|_| "invalid acceleration")?,
+            acceleration: Acceleration::from_vector(Vector3::new(0.0, 2.0, 0.0))?,
         };
         let state = state_at(Vector3::new(10.0, 20.0, 30.0), Vector3::new(1.0, 2.0, 3.0))
             .ok_or("invalid state")?;
         let mut states = CartesianStateBuffer::<1>::new();
-        states
-            .write_from_state(0, &state)
-            .map_err(|_| "invalid state buffer")?;
+        states.write_from_state(0, &state)?;
 
-        integrator
-            .step(
-                &dynamics,
-                &mut states.view_mut(),
-                0,
-                Epoch::from_seconds(0.0).map_err(|_| "invalid epoch")?,
-                TimeStep::from_seconds(5.0).map_err(|_| "invalid time step")?,
-            )
-            .map_err(|_| "integration failed")?;
-        let next = states.read_state(0).map_err(|_| "invalid next state")?;
+        integrator.step(
+            &dynamics,
+            &mut states.view_mut(),
+            0,
+            Epoch::from_seconds(0.0)?,
+            TimeStep::from_seconds(5.0)?,
+        )?;
+        let next = states.read_state(0)?;
 
         assert_close(next.velocity.vector().x, 1.0, EPS);
         assert_close(next.velocity.vector().y, 12.0, EPS);
@@ -504,26 +481,21 @@ mod tests {
     fn leapfrog_matches_constant_acceleration_solution() -> TestResult {
         let integrator = LeapfrogIntegrator;
         let dynamics = ConstantAcceleration {
-            acceleration: Acceleration::from_vector(Vector3::new(0.0, 2.0, 0.0))
-                .map_err(|_| "invalid acceleration")?,
+            acceleration: Acceleration::from_vector(Vector3::new(0.0, 2.0, 0.0))?,
         };
         let state = state_at(Vector3::new(10.0, 20.0, 30.0), Vector3::new(1.0, 2.0, 3.0))
             .ok_or("invalid state")?;
         let mut states = CartesianStateBuffer::<1>::new();
-        states
-            .write_from_state(0, &state)
-            .map_err(|_| "invalid state buffer")?;
+        states.write_from_state(0, &state)?;
 
-        integrator
-            .step(
-                &dynamics,
-                &mut states.view_mut(),
-                0,
-                Epoch::from_seconds(0.0).map_err(|_| "invalid epoch")?,
-                TimeStep::from_seconds(5.0).map_err(|_| "invalid time step")?,
-            )
-            .map_err(|_| "integration failed")?;
-        let next = states.read_state(0).map_err(|_| "invalid next state")?;
+        integrator.step(
+            &dynamics,
+            &mut states.view_mut(),
+            0,
+            Epoch::from_seconds(0.0)?,
+            TimeStep::from_seconds(5.0)?,
+        )?;
+        let next = states.read_state(0)?;
 
         assert_close(next.velocity.vector().x, 1.0, EPS);
         assert_close(next.velocity.vector().y, 12.0, EPS);
@@ -543,17 +515,15 @@ mod tests {
         let state =
             state_at(Vector3::new(1.0, 0.0, 0.0), Vector3::zeros()).ok_or("invalid state")?;
         let mut states = CartesianStateBuffer::<1>::new();
-        states
-            .write_from_state(0, &state)
-            .map_err(|_| "invalid state buffer")?;
+        states.write_from_state(0, &state)?;
 
         assert!(matches!(
             integrator.step(
                 &dynamics,
                 &mut states.view_mut(),
                 0,
-                Epoch::from_seconds(0.0).map_err(|_| "invalid epoch")?,
-                TimeStep::from_seconds(1.0).map_err(|_| "invalid time step")?,
+                Epoch::from_seconds(0.0)?,
+                TimeStep::from_seconds(1.0)?,
             ),
             Err(PropagationError::Dynamics(
                 DynamicsError::PositionAtGravityCenter
@@ -566,8 +536,7 @@ mod tests {
     fn integrator_rejects_invalid_body_index() -> TestResult {
         let integrator = EulerIntegrator;
         let dynamics = ConstantAcceleration {
-            acceleration: Acceleration::from_vector(Vector3::zeros())
-                .map_err(|_| "invalid acceleration")?,
+            acceleration: Acceleration::from_vector(Vector3::zeros())?,
         };
         let mut states = CartesianStateBuffer::<1>::new();
 
@@ -576,8 +545,8 @@ mod tests {
                 &dynamics,
                 &mut states.view_mut(),
                 1,
-                Epoch::from_seconds(0.0).map_err(|_| "invalid epoch")?,
-                TimeStep::from_seconds(1.0).map_err(|_| "invalid time step")?,
+                Epoch::from_seconds(0.0)?,
+                TimeStep::from_seconds(1.0)?,
             ),
             Err(PropagationError::State(StateError::InvalidBodyIndex)),
         ));
@@ -588,8 +557,7 @@ mod tests {
     fn stepping_one_body_does_not_mutate_another_body() -> TestResult {
         let integrator = EulerIntegrator;
         let dynamics = ConstantAcceleration {
-            acceleration: Acceleration::from_vector(Vector3::new(0.0, 1.0, 0.0))
-                .map_err(|_| "invalid acceleration")?,
+            acceleration: Acceleration::from_vector(Vector3::new(0.0, 1.0, 0.0))?,
         };
         let mut states = CartesianStateBuffer::<2>::new();
         let body_zero = state_at(Vector3::new(1.0, 2.0, 3.0), Vector3::new(4.0, 5.0, 6.0))
@@ -599,26 +567,18 @@ mod tests {
             Vector3::new(40.0, 50.0, 60.0),
         )
         .ok_or("invalid body one")?;
-        states
-            .write_from_state(0, &body_zero)
-            .map_err(|_| "failed to write body zero")?;
-        states
-            .write_from_state(1, &body_one)
-            .map_err(|_| "failed to write body one")?;
+        states.write_from_state(0, &body_zero)?;
+        states.write_from_state(1, &body_one)?;
 
-        integrator
-            .step(
-                &dynamics,
-                &mut states.view_mut(),
-                0,
-                Epoch::from_seconds(0.0).map_err(|_| "invalid epoch")?,
-                TimeStep::from_seconds(1.0).map_err(|_| "invalid time step")?,
-            )
-            .map_err(|_| "integration failed")?;
+        integrator.step(
+            &dynamics,
+            &mut states.view_mut(),
+            0,
+            Epoch::from_seconds(0.0)?,
+            TimeStep::from_seconds(1.0)?,
+        )?;
 
-        let unchanged = states
-            .read_state(1)
-            .map_err(|_| "failed to read body one")?;
+        let unchanged = states.read_state(1)?;
         assert_close(
             unchanged.position.vector().x,
             body_one.position.vector().x,
@@ -654,8 +614,7 @@ mod tests {
 
     #[test]
     fn two_independent_central_gravity_bodies_conserve_energy() -> TestResult {
-        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)
-            .map_err(|_| "invalid earth mu")?;
+        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
         let gravity = TwoBodyGravity { mu };
         let integrator = RungeKutta4Integrator;
         let mut states = CartesianStateBuffer::<2>::new();
@@ -663,22 +622,18 @@ mod tests {
             circular_orbit(R_EARTH + 400_000.0, 0.0, mu).ok_or("invalid first circular orbit")?;
         let orbit_one =
             circular_orbit(R_EARTH + 800_000.0, 0.5, mu).ok_or("invalid second circular orbit")?;
-        states
-            .write_from_state(
-                0,
-                &orbit_zero
-                    .to_cartesian_state()
-                    .ok_or("invalid first state")?,
-            )
-            .map_err(|_| "failed to write first state")?;
-        states
-            .write_from_state(
-                1,
-                &orbit_one
-                    .to_cartesian_state()
-                    .ok_or("invalid second state")?,
-            )
-            .map_err(|_| "failed to write second state")?;
+        states.write_from_state(
+            0,
+            &orbit_zero
+                .to_cartesian_state()
+                .ok_or("invalid first state")?,
+        )?;
+        states.write_from_state(
+            1,
+            &orbit_one
+                .to_cartesian_state()
+                .ok_or("invalid second state")?,
+        )?;
 
         let initial_zero = OrbitalDiagnostics::from_states(&states.view(), 0, mu)
             .ok_or("invalid initial first diagnostics")?;
@@ -736,17 +691,14 @@ mod tests {
         integrator: I,
         tolerance: f64,
     ) -> TestResult {
-        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)
-            .map_err(|_| "invalid earth mu")?;
+        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
         let gravity = TwoBodyGravity { mu };
         let orbit = circular_orbit(R_EARTH + 400_000.0, 0.0, mu).ok_or("invalid circular orbit")?;
         let mut states = CartesianStateBuffer::<2>::new();
-        states
-            .write_from_state(
-                0,
-                &orbit.to_cartesian_state().ok_or("invalid initial state")?,
-            )
-            .map_err(|_| "failed to write initial state")?;
+        states.write_from_state(
+            0,
+            &orbit.to_cartesian_state().ok_or("invalid initial state")?,
+        )?;
 
         let initial = OrbitalDiagnostics::from_states(&states.view(), 0, mu)
             .ok_or("invalid initial diagnostics")?;
@@ -794,17 +746,14 @@ mod tests {
         index: usize,
         period_s: f64,
     ) -> TestResult {
-        let mut epoch = Epoch::from_seconds(0.0).map_err(|_| "invalid epoch")?;
-        let base_step = TimeStep::from_seconds(30.0).map_err(|_| "invalid base time step")?;
+        let mut epoch = Epoch::from_seconds(0.0)?;
+        let base_step = TimeStep::from_seconds(30.0)?;
 
         while epoch.seconds() < period_s {
             let remaining_s = period_s - epoch.seconds();
-            let step = TimeStep::from_seconds(base_step.seconds().min(remaining_s))
-                .map_err(|_| "invalid step")?;
-            integrator
-                .step(gravity, &mut states.view_mut(), index, epoch, step)
-                .map_err(|_| "integration failed")?;
-            epoch = epoch.advance_by(step).map_err(|_| "invalid next epoch")?;
+            let step = TimeStep::from_seconds(base_step.seconds().min(remaining_s))?;
+            integrator.step(gravity, &mut states.view_mut(), index, epoch, step)?;
+            epoch = epoch.advance_by(step)?;
         }
 
         Ok(())
@@ -838,35 +787,29 @@ mod tests {
         integrator: I,
         tolerance: f64,
     ) -> TestResult {
-        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)
-            .map_err(|_| "invalid earth mu")?;
+        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
         let gravity = TwoBodyGravity { mu };
         let orbit = circular_orbit(R_EARTH + 400_000.0, 0.0, mu).ok_or("invalid circular orbit")?;
         let mut states = CartesianStateBuffer::<1>::new();
-        states
-            .write_from_state(
-                0,
-                &orbit.to_cartesian_state().ok_or("invalid initial state")?,
-            )
-            .map_err(|_| "failed to write state")?;
+        states.write_from_state(
+            0,
+            &orbit.to_cartesian_state().ok_or("invalid initial state")?,
+        )?;
 
         let initial_h = OrbitalDiagnostics::from_states(&states.view(), 0, mu)
             .ok_or("invalid initial diagnostics")?
             .specific_angular_momentum
             .square_meters_per_second();
 
-        let mut epoch = Epoch::from_seconds(0.0).map_err(|_| "invalid epoch")?;
+        let mut epoch = Epoch::from_seconds(0.0)?;
         let period_s = orbit.period().ok_or("invalid period")?.seconds();
-        let dt = TimeStep::from_seconds(30.0).map_err(|_| "invalid time step")?;
+        let dt = TimeStep::from_seconds(30.0)?;
 
         while epoch.seconds() < period_s {
             let remaining_s = period_s - epoch.seconds();
-            let step = TimeStep::from_seconds(dt.seconds().min(remaining_s))
-                .map_err(|_| "invalid step")?;
-            integrator
-                .step(&gravity, &mut states.view_mut(), 0, epoch, step)
-                .map_err(|_| "integration failed")?;
-            epoch = epoch.advance_by(step).map_err(|_| "invalid next epoch")?;
+            let step = TimeStep::from_seconds(dt.seconds().min(remaining_s))?;
+            integrator.step(&gravity, &mut states.view_mut(), 0, epoch, step)?;
+            epoch = epoch.advance_by(step)?;
         }
 
         let final_h = OrbitalDiagnostics::from_states(&states.view(), 0, mu)
@@ -905,36 +848,32 @@ mod tests {
 
     // ── integrator energy fidelity ordering ────────────────────────
 
-    fn energy_error_after_one_period<I: Integrator>(integrator: I) -> Result<f64, &'static str> {
-        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)
-            .map_err(|_| "invalid earth mu")?;
+    fn energy_error_after_one_period<I: Integrator>(
+        integrator: I,
+    ) -> Result<f64, Box<dyn std::error::Error>> {
+        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
         let gravity = TwoBodyGravity { mu };
         let orbit = circular_orbit(R_EARTH + 400_000.0, 0.0, mu).ok_or("invalid circular orbit")?;
         let mut states = CartesianStateBuffer::<1>::new();
-        states
-            .write_from_state(
-                0,
-                &orbit.to_cartesian_state().ok_or("invalid initial state")?,
-            )
-            .map_err(|_| "failed to write state")?;
+        states.write_from_state(
+            0,
+            &orbit.to_cartesian_state().ok_or("invalid initial state")?,
+        )?;
 
         let initial_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)
             .ok_or("invalid initial diagnostics")?
             .specific_energy
             .square_meters_per_square_second();
 
-        let mut epoch = Epoch::from_seconds(0.0).map_err(|_| "invalid epoch")?;
+        let mut epoch = Epoch::from_seconds(0.0)?;
         let period_s = orbit.period().ok_or("invalid period")?.seconds();
-        let dt = TimeStep::from_seconds(30.0).map_err(|_| "invalid time step")?;
+        let dt = TimeStep::from_seconds(30.0)?;
 
         while epoch.seconds() < period_s {
             let remaining_s = period_s - epoch.seconds();
-            let step = TimeStep::from_seconds(dt.seconds().min(remaining_s))
-                .map_err(|_| "invalid step")?;
-            integrator
-                .step(&gravity, &mut states.view_mut(), 0, epoch, step)
-                .map_err(|_| "integration failed")?;
-            epoch = epoch.advance_by(step).map_err(|_| "invalid next epoch")?;
+            let step = TimeStep::from_seconds(dt.seconds().min(remaining_s))?;
+            integrator.step(&gravity, &mut states.view_mut(), 0, epoch, step)?;
+            epoch = epoch.advance_by(step)?;
         }
 
         let final_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)
@@ -947,10 +886,8 @@ mod tests {
 
     #[test]
     fn rk4_conserves_energy_better_than_euler() -> TestResult {
-        let euler_error = energy_error_after_one_period(EulerIntegrator)
-            .map_err(|_| "failed querying euler energy error")?;
-        let rk4_error = energy_error_after_one_period(RungeKutta4Integrator)
-            .map_err(|_| "failed querying rk4 energy error")?;
+        let euler_error = energy_error_after_one_period(EulerIntegrator)?;
+        let rk4_error = energy_error_after_one_period(RungeKutta4Integrator)?;
 
         assert!(
             rk4_error < euler_error,
