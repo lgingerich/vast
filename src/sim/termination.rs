@@ -211,7 +211,7 @@ fn orbital_crossing(
 }
 
 fn orbital_phase_angle_rad(state: &CartesianState, mu: GravitationalParameter) -> Option<f64> {
-    let elements = OrbitalElements::from_cartesian_state(state, mu)?;
+    let elements = OrbitalElements::from_cartesian_state(state, mu).ok()?;
     Some(elements.orbital_phase_angle().radians())
 }
 

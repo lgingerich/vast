@@ -35,15 +35,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         true_anomaly: Angle::from_radians(0.0)?,
         direction: OrbitDirection::Prograde,
     };
-    let initial_state = orbit
-        .to_cartesian_state()
-        .ok_or("invalid initial Cartesian state")?;
-    let initial_diagnostics =
-        OrbitalDiagnostics::from_state(&initial_state, mu).ok_or("invalid initial diagnostics")?;
+    let initial_state = orbit.to_cartesian_state()?;
+    let initial_diagnostics = OrbitalDiagnostics::from_state(&initial_state, mu)?;
     let gravity = TwoBodyGravity { mu };
     let integrator = VelocityVerletIntegrator;
     let dt = TimeStep::from_seconds(STEP_SECONDS)?;
-    let period = orbit.period().ok_or("invalid orbital period")?;
+    let period = orbit.period()?;
 
     let mut states = CartesianStateBuffer::<1>::new();
     states.write_from_state(0, &initial_state)?;
@@ -57,8 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         dt,
         PERIODS,
     )?;
-    let elements =
-        OrbitalElements::from_states(&states.view(), 0, mu).ok_or("invalid final elements")?;
+    let elements = OrbitalElements::from_states(&states.view(), 0, mu)?;
 
     println!(
         "Inclined circular orbit: altitude {:.0} km | inclination {:.1} deg | RAAN {:.1} deg",
@@ -115,14 +111,13 @@ fn propagate<I: Integrator>(
         steps += 1;
     }
 
-    let diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, gravity.mu)
-        .ok_or("invalid final diagnostics")?;
+    let diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, gravity.mu)?;
     let radius_drift = Distance::from_meters(
         (diagnostics.radius.meters() - initial_diagnostics.radius.meters())
             .abs()
             .max(f64::EPSILON),
     )?;
-    let specific_energy_error = SpecificEnergy::from_square_meters_per_square_second(
+    let specific_energy_error = SpecificEnergy::from_square_meters_per_second_squared(
         (diagnostics
             .specific_energy
             .square_meters_per_square_second()
@@ -130,8 +125,7 @@ fn propagate<I: Integrator>(
                 .specific_energy
                 .square_meters_per_square_second())
         .abs(),
-    )
-    .ok_or("invalid specific energy error")?;
+    )?;
     let specific_angular_momentum_error = SpecificAngularMomentum::from_square_meters_per_second(
         (diagnostics
             .specific_angular_momentum
@@ -140,8 +134,7 @@ fn propagate<I: Integrator>(
                 .specific_angular_momentum
                 .square_meters_per_second())
         .abs(),
-    )
-    .ok_or("invalid specific angular momentum error")?;
+    )?;
     let angular_momentum_direction = diagnostics.specific_angular_momentum_vector.normalize();
 
     Ok(PropagationSummary {

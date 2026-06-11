@@ -558,10 +558,10 @@ mod tests {
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-    fn state() -> Option<CartesianState> {
-        Some(CartesianState::new(
-            Position::from_vector(Vector3::new(1.0, 2.0, 3.0)).ok()?,
-            Velocity::from_vector(Vector3::new(4.0, 5.0, 6.0)).ok()?,
+    fn state() -> Result<CartesianState, Box<dyn std::error::Error>> {
+        Ok(CartesianState::new(
+            Position::from_vector(Vector3::new(1.0, 2.0, 3.0))?,
+            Velocity::from_vector(Vector3::new(4.0, 5.0, 6.0))?,
         ))
     }
 
@@ -575,7 +575,7 @@ mod tests {
     #[test]
     fn state_buffer_roundtrips_cartesian_state() -> TestResult {
         let mut buffer = CartesianStateBuffer::<1>::new();
-        let state = state().ok_or("invalid state")?;
+        let state = state()?;
 
         buffer.write_from_state(0, &state)?;
         let read = buffer.read_state(0)?;
@@ -617,7 +617,7 @@ mod tests {
         let mut buffer = CartesianStateBuffer::<1>::new();
 
         assert!(matches!(
-            buffer.write_from_state(1, &state().ok_or("invalid state")?),
+            buffer.write_from_state(1, &state()?),
             Err(StateError::InvalidBodyIndex),
         ));
         assert!(matches!(

@@ -296,10 +296,13 @@ mod tests {
         }
     }
 
-    fn state_at(position: Vector3<f64>, velocity: Vector3<f64>) -> Option<CartesianState> {
-        Some(CartesianState::new(
-            Position::from_vector(position).ok()?,
-            Velocity::from_vector(velocity).ok()?,
+    fn state_at(
+        position: Vector3<f64>,
+        velocity: Vector3<f64>,
+    ) -> Result<CartesianState, Box<dyn std::error::Error>> {
+        Ok(CartesianState::new(
+            Position::from_vector(position)?,
+            Velocity::from_vector(velocity)?,
         ))
     }
 
@@ -316,8 +319,7 @@ mod tests {
         let dynamics = ConstantAcceleration {
             acceleration: Acceleration::from_vector(Vector3::new(0.0, 2.0, 0.0))?,
         };
-        let state = state_at(Vector3::new(10.0, 20.0, 30.0), Vector3::new(1.0, 2.0, 3.0))
-            .ok_or("invalid state")?;
+        let state = state_at(Vector3::new(10.0, 20.0, 30.0), Vector3::new(1.0, 2.0, 3.0))?;
         let mut states = CartesianStateBuffer::<1>::new();
         states.write_from_state(0, &state)?;
 
@@ -345,8 +347,7 @@ mod tests {
         let dynamics = FailingDynamics {
             error: DynamicsError::PositionAtGravityCenter,
         };
-        let state =
-            state_at(Vector3::new(1.0, 0.0, 0.0), Vector3::zeros()).ok_or("invalid state")?;
+        let state = state_at(Vector3::new(1.0, 0.0, 0.0), Vector3::zeros())?;
         let mut states = CartesianStateBuffer::<1>::new();
         states.write_from_state(0, &state)?;
 
@@ -371,7 +372,7 @@ mod tests {
         let dynamics = ConstantAcceleration {
             acceleration: Acceleration::from_vector(Vector3::new(f64::MAX, 0.0, 0.0))?,
         };
-        let state = state_at(Vector3::zeros(), Vector3::zeros()).ok_or("invalid state")?;
+        let state = state_at(Vector3::zeros(), Vector3::zeros())?;
         let mut states = CartesianStateBuffer::<1>::new();
         states.write_from_state(0, &state)?;
 
@@ -399,8 +400,7 @@ mod tests {
         let state = state_at(
             Vector3::new(f64::MAX, 0.0, 0.0),
             Vector3::new(f64::MAX, 0.0, 0.0),
-        )
-        .ok_or("invalid state")?;
+        )?;
         let mut states = CartesianStateBuffer::<1>::new();
         states.write_from_state(0, &state)?;
 
@@ -425,8 +425,7 @@ mod tests {
         let dynamics = ConstantAcceleration {
             acceleration: Acceleration::from_vector(Vector3::new(0.0, 2.0, 0.0))?,
         };
-        let state = state_at(Vector3::new(10.0, 20.0, 30.0), Vector3::new(1.0, 2.0, 3.0))
-            .ok_or("invalid state")?;
+        let state = state_at(Vector3::new(10.0, 20.0, 30.0), Vector3::new(1.0, 2.0, 3.0))?;
         let mut states = CartesianStateBuffer::<1>::new();
         states.write_from_state(0, &state)?;
 
@@ -454,8 +453,7 @@ mod tests {
         let dynamics = ConstantAcceleration {
             acceleration: Acceleration::from_vector(Vector3::new(0.0, 2.0, 0.0))?,
         };
-        let state = state_at(Vector3::new(10.0, 20.0, 30.0), Vector3::new(1.0, 2.0, 3.0))
-            .ok_or("invalid state")?;
+        let state = state_at(Vector3::new(10.0, 20.0, 30.0), Vector3::new(1.0, 2.0, 3.0))?;
         let mut states = CartesianStateBuffer::<1>::new();
         states.write_from_state(0, &state)?;
 
@@ -483,8 +481,7 @@ mod tests {
         let dynamics = ConstantAcceleration {
             acceleration: Acceleration::from_vector(Vector3::new(0.0, 2.0, 0.0))?,
         };
-        let state = state_at(Vector3::new(10.0, 20.0, 30.0), Vector3::new(1.0, 2.0, 3.0))
-            .ok_or("invalid state")?;
+        let state = state_at(Vector3::new(10.0, 20.0, 30.0), Vector3::new(1.0, 2.0, 3.0))?;
         let mut states = CartesianStateBuffer::<1>::new();
         states.write_from_state(0, &state)?;
 
@@ -512,8 +509,7 @@ mod tests {
         let dynamics = FailingDynamics {
             error: DynamicsError::PositionAtGravityCenter,
         };
-        let state =
-            state_at(Vector3::new(1.0, 0.0, 0.0), Vector3::zeros()).ok_or("invalid state")?;
+        let state = state_at(Vector3::new(1.0, 0.0, 0.0), Vector3::zeros())?;
         let mut states = CartesianStateBuffer::<1>::new();
         states.write_from_state(0, &state)?;
 
@@ -560,13 +556,11 @@ mod tests {
             acceleration: Acceleration::from_vector(Vector3::new(0.0, 1.0, 0.0))?,
         };
         let mut states = CartesianStateBuffer::<2>::new();
-        let body_zero = state_at(Vector3::new(1.0, 2.0, 3.0), Vector3::new(4.0, 5.0, 6.0))
-            .ok_or("invalid body zero")?;
+        let body_zero = state_at(Vector3::new(1.0, 2.0, 3.0), Vector3::new(4.0, 5.0, 6.0))?;
         let body_one = state_at(
             Vector3::new(10.0, 20.0, 30.0),
             Vector3::new(40.0, 50.0, 60.0),
-        )
-        .ok_or("invalid body one")?;
+        )?;
         states.write_from_state(0, &body_zero)?;
         states.write_from_state(1, &body_one)?;
 
@@ -618,47 +612,31 @@ mod tests {
         let gravity = TwoBodyGravity { mu };
         let integrator = RungeKutta4Integrator;
         let mut states = CartesianStateBuffer::<2>::new();
-        let orbit_zero =
-            circular_orbit(R_EARTH + 400_000.0, 0.0, mu).ok_or("invalid first circular orbit")?;
-        let orbit_one =
-            circular_orbit(R_EARTH + 800_000.0, 0.5, mu).ok_or("invalid second circular orbit")?;
-        states.write_from_state(
-            0,
-            &orbit_zero
-                .to_cartesian_state()
-                .ok_or("invalid first state")?,
-        )?;
-        states.write_from_state(
-            1,
-            &orbit_one
-                .to_cartesian_state()
-                .ok_or("invalid second state")?,
-        )?;
+        let orbit_zero = circular_orbit(R_EARTH + 400_000.0, 0.0, mu)?;
+        let orbit_one = circular_orbit(R_EARTH + 800_000.0, 0.5, mu)?;
+        states.write_from_state(0, &orbit_zero.to_cartesian_state()?)?;
+        states.write_from_state(1, &orbit_one.to_cartesian_state()?)?;
 
-        let initial_zero = OrbitalDiagnostics::from_states(&states.view(), 0, mu)
-            .ok_or("invalid initial first diagnostics")?;
-        let initial_one = OrbitalDiagnostics::from_states(&states.view(), 1, mu)
-            .ok_or("invalid initial second diagnostics")?;
+        let initial_zero = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?;
+        let initial_one = OrbitalDiagnostics::from_states(&states.view(), 1, mu)?;
 
         propagate_one_period(
             &integrator,
             &gravity,
             &mut states,
             0,
-            orbit_zero.period().ok_or("invalid first period")?.seconds(),
+            orbit_zero.period()?.seconds(),
         )?;
         propagate_one_period(
             &integrator,
             &gravity,
             &mut states,
             1,
-            orbit_one.period().ok_or("invalid second period")?.seconds(),
+            orbit_one.period()?.seconds(),
         )?;
 
-        let final_zero = OrbitalDiagnostics::from_states(&states.view(), 0, mu)
-            .ok_or("invalid final first diagnostics")?;
-        let final_one = OrbitalDiagnostics::from_states(&states.view(), 1, mu)
-            .ok_or("invalid final second diagnostics")?;
+        let final_zero = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?;
+        let final_one = OrbitalDiagnostics::from_states(&states.view(), 1, mu)?;
 
         assert_close(
             final_zero.specific_energy.square_meters_per_square_second(),
@@ -693,24 +671,19 @@ mod tests {
     ) -> TestResult {
         let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
         let gravity = TwoBodyGravity { mu };
-        let orbit = circular_orbit(R_EARTH + 400_000.0, 0.0, mu).ok_or("invalid circular orbit")?;
+        let orbit = circular_orbit(R_EARTH + 400_000.0, 0.0, mu)?;
         let mut states = CartesianStateBuffer::<2>::new();
-        states.write_from_state(
-            0,
-            &orbit.to_cartesian_state().ok_or("invalid initial state")?,
-        )?;
+        states.write_from_state(0, &orbit.to_cartesian_state()?)?;
 
-        let initial = OrbitalDiagnostics::from_states(&states.view(), 0, mu)
-            .ok_or("invalid initial diagnostics")?;
+        let initial = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?;
         propagate_one_period(
             &integrator,
             &gravity,
             &mut states,
             0,
-            orbit.period().ok_or("invalid period")?.seconds(),
+            orbit.period()?.seconds(),
         )?;
-        let final_diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, mu)
-            .ok_or("invalid final diagnostics")?;
+        let final_diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?;
 
         assert_close(
             final_diagnostics
@@ -726,15 +699,15 @@ mod tests {
         radius_m: f64,
         phase_rad: f64,
         mu: GravitationalParameter,
-    ) -> Option<EllipticOrbit> {
-        Some(EllipticOrbit {
-            semi_major_axis: Distance::from_meters(radius_m).ok()?,
-            eccentricity: Eccentricity::from_scalar(0.0).ok()?,
+    ) -> Result<EllipticOrbit, Box<dyn std::error::Error>> {
+        Ok(EllipticOrbit {
+            semi_major_axis: Distance::from_meters(radius_m)?,
+            eccentricity: Eccentricity::from_scalar(0.0)?,
             mu,
             inclination: Angle::ZERO,
             right_ascension_of_ascending_node: Angle::ZERO,
             argument_of_periapsis: Angle::ZERO,
-            true_anomaly: Angle::from_radians(phase_rad).ok()?,
+            true_anomaly: Angle::from_radians(phase_rad)?,
             direction: OrbitDirection::Prograde,
         })
     }
@@ -789,20 +762,16 @@ mod tests {
     ) -> TestResult {
         let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
         let gravity = TwoBodyGravity { mu };
-        let orbit = circular_orbit(R_EARTH + 400_000.0, 0.0, mu).ok_or("invalid circular orbit")?;
+        let orbit = circular_orbit(R_EARTH + 400_000.0, 0.0, mu)?;
         let mut states = CartesianStateBuffer::<1>::new();
-        states.write_from_state(
-            0,
-            &orbit.to_cartesian_state().ok_or("invalid initial state")?,
-        )?;
+        states.write_from_state(0, &orbit.to_cartesian_state()?)?;
 
-        let initial_h = OrbitalDiagnostics::from_states(&states.view(), 0, mu)
-            .ok_or("invalid initial diagnostics")?
+        let initial_h = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
             .specific_angular_momentum
             .square_meters_per_second();
 
         let mut epoch = Epoch::from_seconds(0.0)?;
-        let period_s = orbit.period().ok_or("invalid period")?.seconds();
+        let period_s = orbit.period()?.seconds();
         let dt = TimeStep::from_seconds(30.0)?;
 
         while epoch.seconds() < period_s {
@@ -812,8 +781,7 @@ mod tests {
             epoch = epoch.advance_by(step)?;
         }
 
-        let final_h = OrbitalDiagnostics::from_states(&states.view(), 0, mu)
-            .ok_or("invalid final diagnostics")?
+        let final_h = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
             .specific_angular_momentum
             .square_meters_per_second();
 
@@ -853,20 +821,16 @@ mod tests {
     ) -> Result<f64, Box<dyn std::error::Error>> {
         let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
         let gravity = TwoBodyGravity { mu };
-        let orbit = circular_orbit(R_EARTH + 400_000.0, 0.0, mu).ok_or("invalid circular orbit")?;
+        let orbit = circular_orbit(R_EARTH + 400_000.0, 0.0, mu)?;
         let mut states = CartesianStateBuffer::<1>::new();
-        states.write_from_state(
-            0,
-            &orbit.to_cartesian_state().ok_or("invalid initial state")?,
-        )?;
+        states.write_from_state(0, &orbit.to_cartesian_state()?)?;
 
-        let initial_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)
-            .ok_or("invalid initial diagnostics")?
+        let initial_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
             .specific_energy
             .square_meters_per_square_second();
 
         let mut epoch = Epoch::from_seconds(0.0)?;
-        let period_s = orbit.period().ok_or("invalid period")?.seconds();
+        let period_s = orbit.period()?.seconds();
         let dt = TimeStep::from_seconds(30.0)?;
 
         while epoch.seconds() < period_s {
@@ -876,8 +840,7 @@ mod tests {
             epoch = epoch.advance_by(step)?;
         }
 
-        let final_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)
-            .ok_or("invalid final diagnostics")?
+        let final_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
             .specific_energy
             .square_meters_per_square_second();
 

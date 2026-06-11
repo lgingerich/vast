@@ -6,12 +6,12 @@ use axum::http::StatusCode;
 use axum::routing::get;
 use axum::{Json, Router};
 use clap::{Parser, Subcommand};
+use tower_http::cors::{Any, CorsLayer};
 use vast::{
     Environment, EpisodeRecord, LeoCircularEnv, LoadedScenario, MissionRunner,
     MissionSegmentMetrics, RecordingError, RunManifest, RunRecorder, list_runs, read_trajectory,
     stop_reason_name,
 };
-use tower_http::cors::{Any, CorsLayer};
 
 #[derive(Parser)]
 #[command(name = "runner", about = "VAST RL rollout runner and local API")]

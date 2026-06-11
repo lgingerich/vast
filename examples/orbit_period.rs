@@ -35,11 +35,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         direction: OrbitDirection::Prograde,
     };
 
-    let speed = orbit.speed().ok_or("invalid circular orbit speed")?;
-    let period = orbit.period().ok_or("invalid circular orbit period")?;
-    let initial_state = orbit
-        .to_cartesian_state()
-        .ok_or("invalid initial Cartesian state")?;
+    let speed = orbit.speed()?;
+    let period = orbit.period()?;
+    let initial_state = orbit.to_cartesian_state()?;
     let gravity = TwoBodyGravity { mu };
     let euler = EulerIntegrator;
     let rk4 = RungeKutta4Integrator;
@@ -99,8 +97,7 @@ fn propagate_one_period<I: Integrator>(
     dt: TimeStep,
 ) -> Result<PropagationSummary, Box<dyn std::error::Error>> {
     let initial_position = initial_state.position;
-    let initial_diagnostics = OrbitalDiagnostics::from_state(initial_state, gravity.mu)
-        .ok_or("invalid initial diagnostics")?;
+    let initial_diagnostics = OrbitalDiagnostics::from_state(initial_state, gravity.mu)?;
     let mut epoch = Epoch::from_seconds(0.0)?;
     let mut states = CartesianStateBuffer::<1>::new();
     states.write_from_state(0, initial_state)?;
@@ -125,9 +122,8 @@ fn propagate_one_period<I: Integrator>(
     let speed_error = Speed::from_meters_per_second(
         (state.velocity.vector().norm() - circular_speed.meters_per_second()).abs(),
     )?;
-    let final_diagnostics =
-        OrbitalDiagnostics::from_state(&state, gravity.mu).ok_or("invalid final diagnostics")?;
-    let specific_energy_error = SpecificEnergy::from_square_meters_per_square_second(
+    let final_diagnostics = OrbitalDiagnostics::from_state(&state, gravity.mu)?;
+    let specific_energy_error = SpecificEnergy::from_square_meters_per_second_squared(
         (final_diagnostics
             .specific_energy
             .square_meters_per_square_second()
@@ -135,8 +131,7 @@ fn propagate_one_period<I: Integrator>(
                 .specific_energy
                 .square_meters_per_square_second())
         .abs(),
-    )
-    .ok_or("invalid specific energy error")?;
+    )?;
     let specific_angular_momentum_error = SpecificAngularMomentum::from_square_meters_per_second(
         (final_diagnostics
             .specific_angular_momentum
@@ -145,8 +140,7 @@ fn propagate_one_period<I: Integrator>(
                 .specific_angular_momentum
                 .square_meters_per_second())
         .abs(),
-    )
-    .ok_or("invalid specific angular momentum error")?;
+    )?;
 
     Ok(PropagationSummary {
         dt,

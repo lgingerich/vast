@@ -127,17 +127,19 @@ impl Dynamics for OblateBodyGravity {
 
 impl ExponentialAtmosphere {
     /// Computes atmospheric density at `radius`.
-    pub fn density_at_radius(&self, radius: Distance) -> Option<MassDensity> {
+    ///
+    /// Returns an error if the computed density is non-finite.
+    pub fn density_at_radius(&self, radius: Distance) -> Result<MassDensity, NumericalError> {
         self.density_at_radius_m(radius.meters())
     }
 
-    fn density_at_radius_m(&self, radius_m: f64) -> Option<MassDensity> {
+    fn density_at_radius_m(&self, radius_m: f64) -> Result<MassDensity, NumericalError> {
         let altitude_m = radius_m - self.reference_radius.meters();
         let reference_altitude_m = self.reference_altitude.meters();
         let density = self.reference_density.kilograms_per_cubic_meter()
             * (-(altitude_m - reference_altitude_m) / self.scale_height.meters()).exp();
 
-        MassDensity::from_kilograms_per_cubic_meter(density).ok()
+        MassDensity::from_kilograms_per_cubic_meter(density)
     }
 }
 
@@ -157,10 +159,7 @@ impl Dynamics for AtmosphericDrag {
 
         let density = self
             .atmosphere
-            .density_at_radius_m(radius_m)
-            .ok_or(NumericalError::NotFinite {
-                field: "atmospheric density",
-            })?
+            .density_at_radius_m(radius_m)?
             .kilograms_per_cubic_meter();
         let omega = self.atmosphere.angular_rate.radians_per_second();
         let atmosphere_velocity =
@@ -225,34 +224,34 @@ mod tests {
         );
     }
 
-    fn earth_gravity() -> Option<TwoBodyGravity> {
-        Some(TwoBodyGravity {
-            mu: GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).ok()?,
+    fn earth_gravity() -> Result<TwoBodyGravity, Box<dyn std::error::Error>> {
+        Ok(TwoBodyGravity {
+            mu: GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?,
         })
     }
 
-    fn earth_oblate_gravity(j2: f64) -> Option<OblateBodyGravity> {
-        Some(OblateBodyGravity {
-            mu: GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).ok()?,
-            equatorial_radius: Distance::from_meters(R_EARTH).ok()?,
+    fn earth_oblate_gravity(j2: f64) -> Result<OblateBodyGravity, Box<dyn std::error::Error>> {
+        Ok(OblateBodyGravity {
+            mu: GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?,
+            equatorial_radius: Distance::from_meters(R_EARTH)?,
             j2,
         })
     }
 
-    fn atmosphere() -> Option<ExponentialAtmosphere> {
-        Some(ExponentialAtmosphere {
-            reference_radius: Distance::from_meters(R_EARTH).ok()?,
-            reference_altitude: Distance::from_meters(250_000.0).ok()?,
-            reference_density: MassDensity::from_kilograms_per_cubic_meter(1.0e-10).ok()?,
-            scale_height: Distance::from_meters(50_000.0).ok()?,
-            angular_rate: AngularRate::from_radians_per_second(7.292_115_9e-5).ok()?,
+    fn atmosphere() -> Result<ExponentialAtmosphere, Box<dyn std::error::Error>> {
+        Ok(ExponentialAtmosphere {
+            reference_radius: Distance::from_meters(R_EARTH)?,
+            reference_altitude: Distance::from_meters(250_000.0)?,
+            reference_density: MassDensity::from_kilograms_per_cubic_meter(1.0e-10)?,
+            scale_height: Distance::from_meters(50_000.0)?,
+            angular_rate: AngularRate::from_radians_per_second(7.292_115_9e-5)?,
         })
     }
 
-    fn drag_model(area_per_mass: f64) -> Option<AtmosphericDrag> {
-        Some(AtmosphericDrag {
+    fn drag_model(area_per_mass: f64) -> Result<AtmosphericDrag, Box<dyn std::error::Error>> {
+        Ok(AtmosphericDrag {
             atmosphere: atmosphere()?,
-            area_per_mass: AreaPerMass::from_square_meters_per_kilogram(area_per_mass).ok()?,
+            area_per_mass: AreaPerMass::from_square_meters_per_kilogram(area_per_mass)?,
         })
     }
 
@@ -266,14 +265,12 @@ mod tests {
     fn state_from_vectors(
         position: Vector3<f64>,
         velocity: Vector3<f64>,
-    ) -> Option<CartesianStateComponents> {
-        Some(CartesianStateComponents {
-            position: CartesianPositionComponents::from_meters(position.x, position.y, position.z)
-                .ok()?,
+    ) -> Result<CartesianStateComponents, Box<dyn std::error::Error>> {
+        Ok(CartesianStateComponents {
+            position: CartesianPositionComponents::from_meters(position.x, position.y, position.z)?,
             velocity: CartesianVelocityComponents::from_meters_per_second(
                 velocity.x, velocity.y, velocity.z,
-            )
-            .ok()?,
+            )?,
         })
     }
 
@@ -416,8 +413,8 @@ mod tests {
 
     #[test]
     fn oblate_body_gravity_with_zero_j2_matches_two_body_gravity() -> TestResult {
-        let two_body = earth_gravity().ok_or("invalid two-body gravity")?;
-        let oblate = earth_oblate_gravity(0.0).ok_or("invalid oblate gravity")?;
+        let two_body = earth_gravity()?;
+        let oblate = earth_oblate_gravity(0.0)?;
         let position =
             CartesianPositionComponents::from_meters(R_EARTH + 400_000.0, 200_000.0, 300_000.0)?;
         let epoch = Epoch::from_seconds(0.0)?;
@@ -437,7 +434,7 @@ mod tests {
 
     #[test]
     fn oblate_body_gravity_is_finite_for_inclined_leo_position() -> TestResult {
-        let gravity = earth_oblate_gravity(J2_EARTH).ok_or("invalid oblate gravity")?;
+        let gravity = earth_oblate_gravity(J2_EARTH)?;
         let position =
             CartesianPositionComponents::from_meters(R_EARTH + 400_000.0, 500_000.0, 1_000_000.0)?;
 
@@ -453,7 +450,7 @@ mod tests {
 
     #[test]
     fn oblate_body_gravity_rejects_zero_radius() -> TestResult {
-        let gravity = earth_oblate_gravity(J2_EARTH).ok_or("invalid oblate gravity")?;
+        let gravity = earth_oblate_gravity(J2_EARTH)?;
 
         assert!(matches!(
             gravity.acceleration_at(
@@ -467,7 +464,7 @@ mod tests {
 
     #[test]
     fn oblate_body_gravity_rejects_nonfinite_j2_acceleration() -> TestResult {
-        let gravity = earth_oblate_gravity(f64::NAN).ok_or("invalid oblate gravity")?;
+        let gravity = earth_oblate_gravity(f64::NAN)?;
 
         assert!(matches!(
             gravity.acceleration_at(
@@ -487,8 +484,8 @@ mod tests {
 
     #[test]
     fn oblate_body_gravity_equatorial_j2_increases_inward_acceleration() -> TestResult {
-        let two_body = earth_gravity().ok_or("invalid two-body gravity")?;
-        let oblate = earth_oblate_gravity(J2_EARTH).ok_or("invalid oblate gravity")?;
+        let two_body = earth_gravity()?;
+        let oblate = earth_oblate_gravity(J2_EARTH)?;
         let position = CartesianPositionComponents::from_meters(R_EARTH + 400_000.0, 0.0, 0.0)?;
         let epoch = Epoch::from_seconds(0.0)?;
 
@@ -506,8 +503,8 @@ mod tests {
 
     #[test]
     fn oblate_body_gravity_polar_axis_j2_reduces_inward_acceleration() -> TestResult {
-        let two_body = earth_gravity().ok_or("invalid two-body gravity")?;
-        let oblate = earth_oblate_gravity(J2_EARTH).ok_or("invalid oblate gravity")?;
+        let two_body = earth_gravity()?;
+        let oblate = earth_oblate_gravity(J2_EARTH)?;
         let position = CartesianPositionComponents::from_meters(0.0, 0.0, R_EARTH + 400_000.0)?;
         let epoch = Epoch::from_seconds(0.0)?;
 
@@ -525,14 +522,12 @@ mod tests {
 
     #[test]
     fn exponential_atmosphere_density_decreases_with_altitude() -> TestResult {
-        let atmosphere = atmosphere().ok_or("invalid atmosphere")?;
+        let atmosphere = atmosphere()?;
         let low = atmosphere
-            .density_at_radius(Distance::from_meters(R_EARTH + 250_000.0)?)
-            .ok_or("invalid low density")?
+            .density_at_radius(Distance::from_meters(R_EARTH + 250_000.0)?)?
             .kilograms_per_cubic_meter();
         let high = atmosphere
-            .density_at_radius(Distance::from_meters(R_EARTH + 350_000.0)?)
-            .ok_or("invalid high density")?
+            .density_at_radius(Distance::from_meters(R_EARTH + 350_000.0)?)?
             .kilograms_per_cubic_meter();
 
         assert!(high < low);
@@ -541,10 +536,8 @@ mod tests {
 
     #[test]
     fn exponential_atmosphere_matches_reference_density() -> TestResult {
-        let atmosphere = atmosphere().ok_or("invalid atmosphere")?;
-        let density = atmosphere
-            .density_at_radius(Distance::from_meters(R_EARTH + 250_000.0)?)
-            .ok_or("invalid density")?;
+        let atmosphere = atmosphere()?;
+        let density = atmosphere.density_at_radius(Distance::from_meters(R_EARTH + 250_000.0)?)?;
 
         assert_close(density.kilograms_per_cubic_meter(), 1.0e-10, EPS);
         Ok(())
@@ -555,15 +548,14 @@ mod tests {
         let drag = AtmosphericDrag {
             atmosphere: ExponentialAtmosphere {
                 angular_rate: AngularRate::from_radians_per_second(0.0)?,
-                ..atmosphere().ok_or("invalid atmosphere")?
+                ..atmosphere()?
             },
             area_per_mass: AreaPerMass::from_square_meters_per_kilogram(0.02)?,
         };
         let state = state_from_vectors(
             Vector3::new(R_EARTH + 250_000.0, 0.0, 0.0),
             Vector3::new(0.0, 7_700.0, 0.0),
-        )
-        .ok_or("invalid state")?;
+        )?;
 
         let acceleration = drag
             .acceleration_at(state, Epoch::from_seconds(0.0)?)?
@@ -575,7 +567,7 @@ mod tests {
 
     #[test]
     fn atmospheric_drag_is_zero_when_relative_velocity_is_zero() -> TestResult {
-        let atmosphere = atmosphere().ok_or("invalid atmosphere")?;
+        let atmosphere = atmosphere()?;
         let radius = R_EARTH + 250_000.0;
         let omega = atmosphere.angular_rate.radians_per_second();
         let drag = AtmosphericDrag {
@@ -585,8 +577,7 @@ mod tests {
         let state = state_from_vectors(
             Vector3::new(radius, 0.0, 0.0),
             Vector3::new(0.0, omega * radius, 0.0),
-        )
-        .ok_or("invalid state")?;
+        )?;
 
         let acceleration = drag
             .acceleration_at(state, Epoch::from_seconds(0.0)?)?
@@ -601,15 +592,14 @@ mod tests {
         let drag = AtmosphericDrag {
             atmosphere: ExponentialAtmosphere {
                 reference_density: MassDensity::from_kilograms_per_cubic_meter(f64::MAX)?,
-                ..atmosphere().ok_or("invalid atmosphere")?
+                ..atmosphere()?
             },
             area_per_mass: AreaPerMass::from_square_meters_per_kilogram(f64::MAX)?,
         };
         let state = state_from_vectors(
             Vector3::new(R_EARTH + 250_000.0, 0.0, 0.0),
             Vector3::new(0.0, f64::MAX, 0.0),
-        )
-        .ok_or("invalid state")?;
+        )?;
 
         assert!(matches!(
             drag.acceleration_at(state, Epoch::from_seconds(0.0)?),
@@ -622,8 +612,8 @@ mod tests {
 
     #[test]
     fn composite_dynamics_sums_component_accelerations() -> TestResult {
-        let gravity = earth_gravity().ok_or("invalid gravity")?;
-        let drag = drag_model(0.02).ok_or("invalid drag")?;
+        let gravity = earth_gravity()?;
+        let drag = drag_model(0.02)?;
         let composite = CompositeDynamics {
             first: gravity,
             second: drag,
@@ -631,8 +621,7 @@ mod tests {
         let state = state_from_vectors(
             Vector3::new(R_EARTH + 250_000.0, 0.0, 0.0),
             Vector3::new(0.0, 7_700.0, 0.0),
-        )
-        .ok_or("invalid state")?;
+        )?;
         let epoch = Epoch::from_seconds(0.0)?;
 
         let gravity_acceleration = composite.first.acceleration_at(state, epoch)?;
@@ -674,16 +663,12 @@ mod tests {
             direction: OrbitDirection::Prograde,
         };
         let mut states = CartesianStateBuffer::<1>::new();
-        states.write_from_state(
-            0,
-            &orbit.to_cartesian_state().ok_or("invalid initial state")?,
-        )?;
+        states.write_from_state(0, &orbit.to_cartesian_state()?)?;
         let dynamics = CompositeDynamics {
             first: TwoBodyGravity { mu },
-            second: drag_model(0.05).ok_or("invalid drag")?,
+            second: drag_model(0.05)?,
         };
-        let initial_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)
-            .ok_or("invalid initial diagnostics")?
+        let initial_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
             .specific_energy
             .square_meters_per_square_second();
         let integrator = RungeKutta4Integrator;
@@ -695,8 +680,7 @@ mod tests {
             epoch = epoch.advance_by(dt)?;
         }
 
-        let final_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)
-            .ok_or("invalid final diagnostics")?
+        let final_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
             .specific_energy
             .square_meters_per_square_second();
 
@@ -719,27 +703,22 @@ mod tests {
             direction: OrbitDirection::Prograde,
         };
         let mut states = CartesianStateBuffer::<1>::new();
-        states.write_from_state(
-            0,
-            &orbit.to_cartesian_state().ok_or("invalid initial state")?,
-        )?;
-        let initial_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)
-            .ok_or("invalid initial diagnostics")?
+        states.write_from_state(0, &orbit.to_cartesian_state()?)?;
+        let initial_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
             .specific_energy
             .square_meters_per_square_second();
-        let initial_altitude_m = OrbitalDiagnostics::from_states(&states.view(), 0, mu)
-            .ok_or("invalid initial diagnostics")?
+        let initial_altitude_m = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
             .radius
             .meters()
             - R_EARTH;
         let dynamics = CompositeDynamics {
             first: TwoBodyGravity { mu },
-            second: drag_model(0.1).ok_or("invalid drag")?,
+            second: drag_model(0.1)?,
         };
         let integrator = RungeKutta4Integrator;
         let dt = TimeStep::from_seconds(10.0)?;
         let mut epoch = Epoch::from_seconds(0.0)?;
-        let period_s = orbit.period().ok_or("invalid period")?.seconds();
+        let period_s = orbit.period()?.seconds();
 
         while epoch.seconds() < period_s {
             let remaining_s = period_s - epoch.seconds();
@@ -748,8 +727,7 @@ mod tests {
             epoch = epoch.advance_by(step)?;
         }
 
-        let diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, mu)
-            .ok_or("invalid final diagnostics")?;
+        let diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?;
         let final_energy = diagnostics
             .specific_energy
             .square_meters_per_square_second();

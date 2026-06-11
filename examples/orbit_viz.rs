@@ -66,7 +66,7 @@ impl OrbitVizScenario {
 
         let mut states = CartesianStateBuffer::<1>::new();
         states
-            .write_from_state(0, &orbit.to_cartesian_state()?)
+            .write_from_state(0, &orbit.to_cartesian_state().ok()?)
             .ok()?;
 
         Some(Self {
@@ -77,8 +77,8 @@ impl OrbitVizScenario {
             dt: TimeStep::from_seconds(1.0).ok()?,
             earth_radius_m,
             ideal_orbital_radius: orbit.semi_major_axis,
-            circular_speed: orbit.speed()?,
-            orbital_period: orbit.period()?,
+            circular_speed: orbit.speed().ok()?,
+            orbital_period: orbit.period().ok()?,
             meters_per_pixel: 40_000.0,
             trail: [Vec2::ZERO; TRAIL_POINTS_MAX],
             trail_start: 0,
@@ -150,7 +150,7 @@ impl OrbitVizScenario {
 
     fn draw_hud(&self) {
         let Some(diagnostics) =
-            OrbitalDiagnostics::from_states(&self.states.view(), 0, self.earth.mu)
+            OrbitalDiagnostics::from_states(&self.states.view(), 0, self.earth.mu).ok()
         else {
             draw_text("orbital diagnostics unavailable", 20.0, 30.0, 24.0, RED);
             return;

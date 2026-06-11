@@ -23,9 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         true_anomaly: Angle::from_radians(0.0)?,
         direction: OrbitDirection::Prograde,
     };
-    let initial_state = orbit
-        .to_cartesian_state()
-        .ok_or("invalid initial Cartesian state")?;
+    let initial_state = orbit.to_cartesian_state()?;
     let atmosphere = ExponentialAtmosphere {
         reference_radius: Distance::from_meters(R_EARTH)?,
         reference_altitude: Distance::from_meters(ALTITUDE_M)?,
@@ -46,11 +44,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut states = CartesianStateBuffer::<1>::new();
     states.write_from_state(0, &initial_state)?;
 
-    let initial_diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, mu)
-        .ok_or("invalid initial diagnostics")?;
+    let initial_diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?;
     propagate(&integrator, &dynamics, &mut states, duration, dt)?;
-    let final_diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, mu)
-        .ok_or("invalid final diagnostics")?;
+    let final_diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?;
 
     let initial_altitude_m = initial_diagnostics.radius.meters() - R_EARTH;
     let final_altitude_m = final_diagnostics.radius.meters() - R_EARTH;

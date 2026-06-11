@@ -12,6 +12,17 @@ pub enum NumericalError {
     /// The value is negative but must be non-negative.
     #[error("{field} must be non-negative")]
     Negative { field: &'static str },
+    /// A vector quantity has zero norm when a nonzero vector is required.
+    #[error("{field} has zero norm")]
+    ZeroNorm { field: &'static str },
+    /// A domain-specific physical constraint was violated.
+    #[error("{field}: {reason}")]
+    ConstraintViolation {
+        /// The field or quantity name.
+        field: &'static str,
+        /// Why the constraint is required.
+        reason: &'static str,
+    },
 }
 
 /// Errors produced while evaluating a dynamics model.

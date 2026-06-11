@@ -24,9 +24,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         true_anomaly: Angle::from_radians(0.0)?,
         direction: OrbitDirection::Prograde,
     };
-    let initial_state = orbit
-        .to_cartesian_state()
-        .ok_or("invalid initial Cartesian state")?;
+    let initial_state = orbit.to_cartesian_state()?;
     let two_body_gravity = TwoBodyGravity { mu };
     let j2_gravity = OblateBodyGravity {
         mu,
@@ -52,10 +50,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     two_body_states.write_from_state(0, &initial_state)?;
     j2_states.write_from_state(0, &initial_state)?;
 
-    let initial_raan = raan_degrees(
-        &OrbitalElements::from_states(&two_body_states.view(), 0, mu)
-            .ok_or("invalid initial elements")?,
-    )
+    let initial_raan = raan_degrees(&OrbitalElements::from_states(
+        &two_body_states.view(),
+        0,
+        mu,
+    )?)
     .ok_or("initial RAAN is undefined")?;
 
     propagate(
@@ -67,16 +66,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     propagate(&integrator, &j2_gravity, &mut j2_states, duration, dt)?;
 
-    let final_two_body_raan = raan_degrees(
-        &OrbitalElements::from_states(&two_body_states.view(), 0, mu)
-            .ok_or("invalid final two-body elements")?,
-    )
+    let final_two_body_raan = raan_degrees(&OrbitalElements::from_states(
+        &two_body_states.view(),
+        0,
+        mu,
+    )?)
     .ok_or("final two-body RAAN is undefined")?;
-    let final_j2_raan = raan_degrees(
-        &OrbitalElements::from_states(&j2_states.view(), 0, mu)
-            .ok_or("invalid final J2 elements")?,
-    )
-    .ok_or("final J2 RAAN is undefined")?;
+    let final_j2_raan = raan_degrees(&OrbitalElements::from_states(&j2_states.view(), 0, mu)?)
+        .ok_or("final J2 RAAN is undefined")?;
     let two_body_drift = angle_delta_degrees(final_two_body_raan, initial_raan);
     let j2_drift = angle_delta_degrees(final_j2_raan, initial_raan);
     let simulated_drift_per_day = j2_drift / PROPAGATION_DAYS;

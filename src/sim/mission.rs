@@ -435,12 +435,7 @@ fn build_initial_state(
                 true_anomaly: Angle::from_radians(0.0)?,
                 direction: OrbitDirection::Prograde,
             };
-            orbit
-                .to_cartesian_state()
-                .ok_or_else(|| MissionError::InvalidField {
-                    field: "initial_orbit",
-                    reason: "failed to build circular initial state".to_string(),
-                })
+            Ok(orbit.to_cartesian_state()?)
         }
         InitialOrbitConfig::Classical {
             semi_major_axis_m,
@@ -461,12 +456,7 @@ fn build_initial_state(
                 argument_of_periapsis: Angle::from_degrees(*arg_periapsis_deg)?,
                 true_anomaly: Angle::from_degrees(*true_anomaly_deg)?,
             };
-            elements
-                .to_cartesian_state(mu)
-                .ok_or_else(|| MissionError::InvalidField {
-                    field: "initial_orbit",
-                    reason: "failed to build classical initial state".to_string(),
-                })
+            Ok(elements.to_cartesian_state(mu)?)
         }
     }
 }

@@ -87,13 +87,7 @@ impl ScenarioConfig {
             direction: OrbitDirection::Prograde,
         };
 
-        let initial_state =
-            orbit
-                .to_cartesian_state()
-                .ok_or_else(|| MissionError::InvalidField {
-                    field: "altitude_m",
-                    reason: "initial Cartesian state is invalid".to_string(),
-                })?;
+        let initial_state = orbit.to_cartesian_state()?;
 
         let propagator = Propagator::new(initial_state, dt)?.with_sampling(
             SampleConfig::every_steps(sample_every_steps).ok_or_else(|| {
