@@ -105,6 +105,22 @@ impl Epoch {
         Self::from_seconds(self.seconds() + dt.seconds())
     }
 
+    /// Advances this epoch by a validated integration step.
+    ///
+    /// Both operands are validated at construction, so propagation does not
+    /// re-check finiteness on every step.
+    pub(crate) const fn advance_by_step(self, dt: TimeStep) -> Self {
+        Self(self.0 + dt.0)
+    }
+
+    /// Offsets this epoch by a duration in seconds.
+    ///
+    /// Used for integrator stage times where the offset is derived from a
+    /// validated `TimeStep`.
+    pub(crate) const fn plus_seconds(self, seconds: f64) -> Self {
+        Self(self.0 + seconds)
+    }
+
     /// Returns the elapsed `Duration` from an earlier epoch.
     ///
     /// Callers must ensure `earlier <= self` — forward-only propagation

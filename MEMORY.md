@@ -1,5 +1,18 @@
 # Project Memory
 
+## 2026-06-11 — Physics hot path: no per-step finiteness checks
+
+**Decision:** The integrator/dynamics stepping loop operates on raw SoA `f64`
+slices and `Vector3<f64>`. `Dynamics::acceleration_at` takes position/velocity
+vectors and returns acceleration as `Vector3<f64>`. Finiteness and domain
+constraints are enforced only at scenario/boundary constructors (`Position`,
+`Velocity`, `TimeStep`, `write_from_state`, etc.). `Epoch` propagation inside
+the step loop uses `const fn` arithmetic on already-validated `Epoch` and
+`TimeStep` values (`advance_by_step`, `plus_seconds`) — no `is_finite` per step.
+
+**Rejected:** `_unchecked` component constructors as a hot-path workaround;
+re-validating finiteness when reading/writing the SoA buffer each step.
+
 ## 2025-05-21 — Simulation layer architecture
 
 **Decision:** Document the simulator as layered architecture in

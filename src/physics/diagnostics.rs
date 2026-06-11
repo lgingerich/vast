@@ -102,12 +102,8 @@ impl OrbitalDiagnostics {
         index: usize,
         mu: GravitationalParameter,
     ) -> Result<Self, crate::errors::StateError> {
-        let components = states.components(index)?;
-        Ok(Self::from_components(
-            components.position.vector(),
-            components.velocity.vector(),
-            mu,
-        )?)
+        let (position, velocity) = states.body_vectors(index)?;
+        Ok(Self::from_components(position, velocity, mu)?)
     }
 
     pub(crate) fn from_components(

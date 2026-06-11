@@ -72,9 +72,6 @@ impl CartesianPositionComponents {
         Vector3::new(self.x_m, self.y_m, self.z_m)
     }
 
-    fn to_position(self) -> Result<Position, StateError> {
-        Ok(Position::from_vector(self.vector())?)
-    }
 }
 
 /// Velocity components in an inertial Cartesian frame, measured in meters per second.
@@ -137,9 +134,6 @@ impl CartesianVelocityComponents {
         Vector3::new(self.x_mps, self.y_mps, self.z_mps)
     }
 
-    fn to_velocity(self) -> Result<Velocity, StateError> {
-        Ok(Velocity::from_vector(self.vector())?)
-    }
 }
 
 /// Acceleration components in an inertial Cartesian frame, measured in meters per second squared.
@@ -188,9 +182,6 @@ impl CartesianAccelerationComponents {
         self.z_mps2
     }
 
-    pub(crate) fn vector(self) -> Vector3<f64> {
-        Vector3::new(self.x_mps2, self.y_mps2, self.z_mps2)
-    }
 }
 
 /// Position and velocity components for one Cartesian state.
@@ -380,37 +371,35 @@ impl<'a> CartesianStates<'a> {
 
     /// Reads position for the active body at `index`.
     pub fn position(&self, index: usize) -> Result<Position, StateError> {
-        self.components(index)?.position.to_position()
+        let (position, _) = self.body_vectors(index)?;
+        Ok(Position::from_vector(position)?)
     }
 
     /// Reads velocity for the active body at `index`.
     pub fn velocity(&self, index: usize) -> Result<Velocity, StateError> {
-        self.components(index)?.velocity.to_velocity()
+        let (_, velocity) = self.body_vectors(index)?;
+        Ok(Velocity::from_vector(velocity)?)
     }
 
     /// Reads the active body at `index` into a typed Cartesian state.
     pub fn read_state(&self, index: usize) -> Result<CartesianState, StateError> {
-        let components = self.components(index)?;
+        let (position, velocity) = self.body_vectors(index)?;
         Ok(CartesianState::new(
-            components.position.to_position()?,
-            components.velocity.to_velocity()?,
+            Position::from_vector(position)?,
+            Velocity::from_vector(velocity)?,
         ))
     }
 
-    pub(crate) fn components(&self, index: usize) -> Result<CartesianStateComponents, StateError> {
+    /// Reads position and velocity vectors for the active body at `index`.
+    pub(crate) fn body_vectors(
+        &self,
+        index: usize,
+    ) -> Result<(Vector3<f64>, Vector3<f64>), StateError> {
         self.validate_index(index)?;
-        Ok(CartesianStateComponents {
-            position: CartesianPositionComponents::from_meters(
-                self.pos_x[index],
-                self.pos_y[index],
-                self.pos_z[index],
-            )?,
-            velocity: CartesianVelocityComponents::from_meters_per_second(
-                self.vel_x[index],
-                self.vel_y[index],
-                self.vel_z[index],
-            )?,
-        })
+        Ok((
+            Vector3::new(self.pos_x[index], self.pos_y[index], self.pos_z[index]),
+            Vector3::new(self.vel_x[index], self.vel_y[index], self.vel_z[index]),
+        ))
     }
 
     fn validate_index(&self, index: usize) -> Result<(), StateError> {
@@ -495,8 +484,21 @@ impl<'a> CartesianStatesMut<'a> {
         }
     }
 
-    pub(crate) fn components(&self, index: usize) -> Result<CartesianStateComponents, StateError> {
-        self.as_view().components(index)
+    /// Writes position and velocity vectors for the active body at `index`.
+    pub(crate) fn write_body_vectors(
+        &mut self,
+        index: usize,
+        position: Vector3<f64>,
+        velocity: Vector3<f64>,
+    ) -> Result<(), StateError> {
+        self.validate_index(index)?;
+        self.pos_x[index] = position.x;
+        self.pos_y[index] = position.y;
+        self.pos_z[index] = position.z;
+        self.vel_x[index] = velocity.x;
+        self.vel_y[index] = velocity.y;
+        self.vel_z[index] = velocity.z;
+        Ok(())
     }
 
     pub(crate) fn write_components(
@@ -504,24 +506,11 @@ impl<'a> CartesianStatesMut<'a> {
         index: usize,
         components: CartesianStateComponents,
     ) -> Result<(), StateError> {
-        self.validate_index(index)?;
-        let position = components.position;
-        let velocity = components.velocity;
-
-        if !components_are_finite(position.x_m, position.y_m, position.z_m) {
-            return Err(NumericalError::NotFinite { field: "position" }.into());
-        }
-        if !components_are_finite(velocity.x_mps, velocity.y_mps, velocity.z_mps) {
-            return Err(NumericalError::NotFinite { field: "velocity" }.into());
-        }
-
-        self.pos_x[index] = position.x_m;
-        self.pos_y[index] = position.y_m;
-        self.pos_z[index] = position.z_m;
-        self.vel_x[index] = velocity.x_mps;
-        self.vel_y[index] = velocity.y_mps;
-        self.vel_z[index] = velocity.z_mps;
-        Ok(())
+        self.write_body_vectors(
+            index,
+            components.position.vector(),
+            components.velocity.vector(),
+        )
     }
 
     fn validate_index(&self, index: usize) -> Result<(), StateError> {

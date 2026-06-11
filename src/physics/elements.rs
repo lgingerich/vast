@@ -202,10 +202,10 @@ impl OrbitalElements {
         mu: GravitationalParameter,
         classification: OrbitalElementClassification,
     ) -> Result<Self, crate::errors::StateError> {
-        let components = states.components(index)?;
+        let (position, velocity) = states.body_vectors(index)?;
         Ok(Self::from_components(
-            components.position.vector(),
-            components.velocity.vector(),
+            position,
+            velocity,
             mu,
             classification,
         )?)
