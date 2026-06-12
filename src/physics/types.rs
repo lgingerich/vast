@@ -133,7 +133,7 @@ impl Epoch {
 ///
 /// Use `TimeStep` when advancing a simulation state forward in time.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TimeStep(f64);
 
 impl TimeStep {
@@ -173,7 +173,7 @@ impl Div<TimeStep> for TimeStep {
 
 /// Non-negative elapsed simulation time, measured in seconds.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Duration(f64);
 
 impl Duration {
@@ -192,12 +192,6 @@ impl Duration {
     #[inline]
     pub const fn seconds(self) -> f64 {
         self.0
-    }
-}
-
-impl PartialOrd for Duration {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.0.partial_cmp(&other.0)
     }
 }
 
@@ -547,7 +541,7 @@ impl Velocity {
 
 /// Acceleration vector in a Cartesian frame, measured in meters per second squared.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Acceleration(Vector3<f64>);
 
 impl Acceleration {
