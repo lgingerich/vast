@@ -614,14 +614,18 @@ mod tests {
         let final_one = OrbitalDiagnostics::from_states(&states.view(), 1, mu)?;
 
         assert_close(
-            final_zero.specific_energy().square_meters_per_square_second(),
+            final_zero
+                .specific_energy()
+                .square_meters_per_square_second(),
             initial_zero
                 .specific_energy()
                 .square_meters_per_square_second(),
             1.0,
         );
         assert_close(
-            final_one.specific_energy().square_meters_per_square_second(),
+            final_one
+                .specific_energy()
+                .square_meters_per_square_second(),
             initial_one
                 .specific_energy()
                 .square_meters_per_square_second(),

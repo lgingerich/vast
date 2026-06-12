@@ -164,7 +164,8 @@ impl AtmosphericDrag {
 }
 
 /// Allocation-free composition of two local dynamics models.
-pub struct CompositeDynamics<A, B> {  // NOTE: What if we have more than two dynamics models?
+pub struct CompositeDynamics<A, B> {
+    // NOTE: What if we have more than two dynamics models?
     first: A,
     second: B,
 }
@@ -207,7 +208,8 @@ impl Dynamics for TwoBodyGravity {
         let radius_m = radius_sq_m.sqrt();
         let mu = self.mu.meters_cubed_per_second_squared();
 
-        if radius_m == 0.0 { // NOTE: Is this check necessary?
+        if radius_m == 0.0 {
+            // NOTE: Is this check necessary?
             return Err(DynamicsError::PositionAtGravityCenter);
         }
 
@@ -237,7 +239,8 @@ impl Dynamics for OblateBodyGravity {
         let mu = self.mu.meters_cubed_per_second_squared();
         let equatorial_radius = self.equatorial_radius.meters();
 
-        if radius_m == 0.0 { // NOTE: Is this check necessary?
+        if radius_m == 0.0 {
+            // NOTE: Is this check necessary?
             return Err(DynamicsError::PositionAtGravityCenter);
         }
 

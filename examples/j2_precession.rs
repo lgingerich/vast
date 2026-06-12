@@ -3,7 +3,8 @@
 use vast::{
     Angle, CartesianStateBuffer, Distance, Duration, Eccentricity, EllipticOrbit, Epoch,
     GravitationalParameter, Integrator, J2_EARTH, J2Coefficient, MU_EARTH, OblateBodyGravity,
-    OrbitDirection, OrbitalElementClassification, OrbitalElements, R_EARTH, TimeStep, TwoBodyGravity, VelocityVerletIntegrator,
+    OrbitDirection, OrbitalElementClassification, OrbitalElements, R_EARTH, TimeStep,
+    TwoBodyGravity, VelocityVerletIntegrator,
 };
 
 const ALTITUDE_M: f64 = 600_000.0;
@@ -75,8 +76,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?)
     .ok_or("final two-body RAAN is undefined")?;
     let final_j2_state = j2_states.view().read_state(0)?;
-    let final_j2_raan = raan_degrees(&OrbitalElements::from_state(&final_j2_state, mu, OrbitalElementClassification::default())?)
-        .ok_or("final J2 RAAN is undefined")?;
+    let final_j2_raan = raan_degrees(&OrbitalElements::from_state(
+        &final_j2_state,
+        mu,
+        OrbitalElementClassification::default(),
+    )?)
+    .ok_or("final J2 RAAN is undefined")?;
     let two_body_drift = angle_delta_degrees(final_two_body_raan, initial_raan);
     let j2_drift = angle_delta_degrees(final_j2_raan, initial_raan);
     let simulated_drift_per_day = j2_drift / PROPAGATION_DAYS;

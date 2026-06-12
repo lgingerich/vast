@@ -770,7 +770,7 @@ mod tests {
             mu,
             OrbitalElementClassification::default(),
         )?)
-            .ok_or("initial RAAN undefined")?;
+        .ok_or("initial RAAN undefined")?;
         let mut epoch = Epoch::from_seconds(0.0)?;
 
         while epoch.seconds() < duration.seconds() {
@@ -786,7 +786,7 @@ mod tests {
             mu,
             OrbitalElementClassification::default(),
         )?)
-            .ok_or("final RAAN undefined")?;
+        .ok_or("final RAAN undefined")?;
         let simulated_drift_degrees_per_day =
             angle_delta_degrees(final_raan, initial_raan) / (duration.seconds() / 86_400.0);
 
@@ -812,7 +812,11 @@ mod tests {
         let orbit = circular_orbit(inclination, raan)?;
         let state = orbit.to_cartesian_state()?;
 
-        let elements = OrbitalElements::from_state(&state, orbit.mu(), OrbitalElementClassification::default())?;
+        let elements = OrbitalElements::from_state(
+            &state,
+            orbit.mu(),
+            OrbitalElementClassification::default(),
+        )?;
 
         let OrbitalElements::CircularInclined(elements) = elements else {
             return Err("expected circular inclined elements".into());
@@ -836,7 +840,11 @@ mod tests {
         let orbit = circular_orbit(Angle::ZERO, Angle::ZERO)?;
         let state = orbit.to_cartesian_state()?;
 
-        let elements = OrbitalElements::from_state(&state, orbit.mu(), OrbitalElementClassification::default())?;
+        let elements = OrbitalElements::from_state(
+            &state,
+            orbit.mu(),
+            OrbitalElementClassification::default(),
+        )?;
 
         let OrbitalElements::CircularEquatorial(elements) = elements else {
             return Err("expected circular equatorial elements".into());
@@ -871,7 +879,11 @@ mod tests {
         }
 
         let state = states.view().read_state(0)?;
-        let elements = OrbitalElements::from_state(&state, orbit.mu(), OrbitalElementClassification::default())?;
+        let elements = OrbitalElements::from_state(
+            &state,
+            orbit.mu(),
+            OrbitalElementClassification::default(),
+        )?;
 
         let OrbitalElements::CircularInclined(elements) = elements else {
             return Err("expected circular inclined elements".into());
@@ -920,11 +932,7 @@ mod tests {
             Angle::from_radians(DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE_RAD)?,
         );
         let state = states.view().read_state(0)?;
-        let elements = OrbitalElements::from_state(
-            &state,
-            orbit.mu(),
-            strict_classification,
-        )?;
+        let elements = OrbitalElements::from_state(&state, orbit.mu(), strict_classification)?;
 
         let OrbitalElements::Classical(elements) = elements else {
             return Err("expected classical elements".into());
@@ -945,7 +953,11 @@ mod tests {
             Vector3::new(-1_000.0, 7_200.0, 1_500.0),
         )?;
 
-        let elements = OrbitalElements::from_state(&state, earth_mu()?, OrbitalElementClassification::default())?;
+        let elements = OrbitalElements::from_state(
+            &state,
+            earth_mu()?,
+            OrbitalElementClassification::default(),
+        )?;
 
         let OrbitalElements::Classical(elements) = elements else {
             return Err("expected classical elements".into());
@@ -973,7 +985,11 @@ mod tests {
             Vector3::new(0.0, 8_000.0, 0.0),
         )?;
 
-        let elements = OrbitalElements::from_state(&state, earth_mu()?, OrbitalElementClassification::default())?;
+        let elements = OrbitalElements::from_state(
+            &state,
+            earth_mu()?,
+            OrbitalElementClassification::default(),
+        )?;
 
         let OrbitalElements::EquatorialElliptic(elements) = elements else {
             return Err("expected equatorial elliptic elements".into());
@@ -1010,7 +1026,8 @@ mod tests {
         );
 
         let state = elements.to_cartesian_state(mu)?;
-        let recovered = OrbitalElements::from_state(&state, mu, OrbitalElementClassification::default())?;
+        let recovered =
+            OrbitalElements::from_state(&state, mu, OrbitalElementClassification::default())?;
         let OrbitalElements::Classical(recovered) = recovered else {
             return Err("expected classical elements after round trip".into());
         };
@@ -1050,7 +1067,8 @@ mod tests {
         );
 
         let state = elements.to_cartesian_state(mu)?;
-        let recovered = OrbitalElements::from_state(&state, mu, OrbitalElementClassification::default())?;
+        let recovered =
+            OrbitalElements::from_state(&state, mu, OrbitalElementClassification::default())?;
         let OrbitalElements::CircularInclined(recovered) = recovered else {
             return Err("expected circular inclined elements after round trip".into());
         };
@@ -1079,7 +1097,8 @@ mod tests {
         );
 
         let state = elements.to_cartesian_state(mu)?;
-        let recovered = OrbitalElements::from_state(&state, mu, OrbitalElementClassification::default())?;
+        let recovered =
+            OrbitalElements::from_state(&state, mu, OrbitalElementClassification::default())?;
         let OrbitalElements::CircularEquatorial(recovered) = recovered else {
             return Err("expected circular equatorial elements after round trip".into());
         };
@@ -1109,7 +1128,8 @@ mod tests {
         );
 
         let state = elements.to_cartesian_state(mu)?;
-        let recovered = OrbitalElements::from_state(&state, mu, OrbitalElementClassification::default())?;
+        let recovered =
+            OrbitalElements::from_state(&state, mu, OrbitalElementClassification::default())?;
         let OrbitalElements::EquatorialElliptic(recovered) = recovered else {
             return Err("expected equatorial elliptic elements after round trip".into());
         };
@@ -1136,7 +1156,32 @@ mod tests {
     fn zero_radius_state_has_no_elements() -> TestResult {
         let state = state_at(Vector3::zeros(), Vector3::zeros())?;
 
-        assert!(OrbitalElements::from_state(&state, earth_mu()?, OrbitalElementClassification::default()).is_err());
+        assert!(
+            OrbitalElements::from_state(
+                &state,
+                earth_mu()?,
+                OrbitalElementClassification::default()
+            )
+            .is_err()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn unbound_state_rejected() -> TestResult {
+        // Escape velocity at 7,000 km from Earth: √(2 * 3.986e14 / 7e6) ≈ 10,672 m/s.
+        // Use 11 km/s to ensure specific energy is positive (parabolic/hyperbolic).
+        let state = state_at(
+            Vector3::new(7_000_000.0, 0.0, 0.0),
+            Vector3::new(0.0, 11_000.0, 0.0),
+        )?;
+
+        let result = OrbitalElements::from_state(
+            &state,
+            earth_mu()?,
+            OrbitalElementClassification::default(),
+        );
+        assert!(result.is_err());
         Ok(())
     }
 
@@ -1145,6 +1190,70 @@ mod tests {
         let angle = angle_from_radians(-0.25)?;
 
         assert_close(angle.radians(), 2.0 * std::f64::consts::PI - 0.25, EPS);
+        Ok(())
+    }
+
+    #[test]
+    fn orbital_phase_angle_returns_correct_angle_per_variant() -> TestResult {
+        let sma = Distance::from_meters(8_000_000.0)?;
+        let ecc = Eccentricity::from_scalar(0.1)?;
+        let inc = Angle::from_radians(0.4)?;
+        let raan = Angle::from_radians(1.0)?;
+        let aop = Angle::from_radians(0.7)?;
+
+        let test_cases: [(&str, OrbitalElements, f64); 4] = [
+            (
+                "Classical → true anomaly",
+                OrbitalElements::Classical(ClassicalOrbitalElements::new(
+                    sma,
+                    ecc,
+                    inc,
+                    raan,
+                    aop,
+                    Angle::from_radians(1.2)?,
+                )),
+                1.2,
+            ),
+            (
+                "CircularInclined → argument of latitude",
+                OrbitalElements::CircularInclined(CircularInclinedElements::new(
+                    sma,
+                    Eccentricity::from_scalar(0.0)?,
+                    inc,
+                    raan,
+                    Angle::from_radians(2.3)?,
+                )),
+                2.3,
+            ),
+            (
+                "CircularEquatorial → true longitude",
+                OrbitalElements::CircularEquatorial(CircularEquatorialElements::new(
+                    sma,
+                    Eccentricity::from_scalar(0.0)?,
+                    Angle::ZERO,
+                    Angle::from_radians(3.4)?,
+                )),
+                3.4,
+            ),
+            (
+                "EquatorialElliptic → true anomaly",
+                OrbitalElements::EquatorialElliptic(EquatorialEllipticElements::new(
+                    sma,
+                    ecc,
+                    Angle::ZERO,
+                    aop,
+                    Angle::from_radians(4.5)?,
+                )),
+                4.5,
+            ),
+        ];
+
+        for (label, elements, expected_rad) in &test_cases {
+            let phase = elements.orbital_phase_angle();
+            assert_close(phase.radians(), *expected_rad, EPS);
+            // Verify the label uniquely identifies the variant under test.
+            eprintln!("{label}: {expected_rad} rad → {:.6} rad", phase.radians());
+        }
         Ok(())
     }
 }
