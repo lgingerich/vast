@@ -134,7 +134,7 @@ pub struct TerminationContext<'a> {
     /// Pre-computed current orbital phase angle in radians, if available.
     ///
     /// When supplied by the caller, `orbital_crossing` uses this value
-    /// instead of re-computing `OrbitalElements::from_cartesian_state`.
+    /// instead of re-computing `OrbitalElements::from_state`.
     pub current_orbital_phase_angle_rad: Option<f64>,
 }
 
@@ -211,7 +211,7 @@ fn orbital_crossing(
 }
 
 fn orbital_phase_angle_rad(state: &CartesianState, mu: GravitationalParameter) -> Option<f64> {
-    let elements = OrbitalElements::from_cartesian_state(state, mu).ok()?;
+    let elements = OrbitalElements::from_state(state, mu).ok()?;
     Some(elements.orbital_phase_angle().radians())
 }
 
