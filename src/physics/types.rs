@@ -11,14 +11,8 @@ pub struct Angle(f64);
 impl Angle {
     /// Zero radians.
     pub const ZERO: Self = Self(0.0);
-    pub(crate) const DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE: Self = {
-        const {
-            assert!(
-                crate::physics::constants::DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE_RAD.is_finite()
-            );
-        }
-        Self(crate::physics::constants::DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE_RAD)
-    };
+    pub(crate) const DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE: Self =
+        Self(crate::physics::constants::DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE_RAD);
 
     /// Creates an angle from radians.
     pub fn from_radians(value: f64) -> Result<Self, NumericalError> {
@@ -465,13 +459,8 @@ impl J2Coefficient {
 pub struct Eccentricity(f64);
 
 impl Eccentricity {
-    pub(crate) const DEFAULT_CIRCULAR_CLASSIFICATION_TOLERANCE: Self = {
-        const {
-            assert!(crate::physics::constants::DEFAULT_CIRCULAR_ECCENTRICITY_TOLERANCE.is_finite());
-            assert!(crate::physics::constants::DEFAULT_CIRCULAR_ECCENTRICITY_TOLERANCE >= 0.0);
-        }
-        Self(crate::physics::constants::DEFAULT_CIRCULAR_ECCENTRICITY_TOLERANCE)
-    };
+    pub(crate) const DEFAULT_CIRCULAR_CLASSIFICATION_TOLERANCE: Self =
+        Self(crate::physics::constants::DEFAULT_CIRCULAR_ECCENTRICITY_TOLERANCE);
 
     /// Creates an eccentricity from a dimensionless scalar.
     pub fn from_scalar(value: f64) -> Result<Self, NumericalError> {
