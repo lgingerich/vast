@@ -259,36 +259,34 @@ impl OrbitalElements {
             is_equatorial_inclination(inclination, classification.equatorial_inclination_tolerance);
 
         match (is_circular, is_equatorial) {
-            (false, false) => Ok(Self::Classical(ClassicalOrbitalElements {
+            (false, false) => Ok(Self::Classical(ClassicalOrbitalElements::new(
                 semi_major_axis,
                 eccentricity,
                 inclination,
-                right_ascension_of_ascending_node: angle_from_radians(node.y.atan2(node.x))?,
-                argument_of_periapsis: angle_between_in_plane(node, eccentricity_vector, h_hat)?,
-                true_anomaly: angle_between_in_plane(eccentricity_vector, position, h_hat)?,
-            })),
-            (true, false) => Ok(Self::CircularInclined(CircularInclinedElements {
+                angle_from_radians(node.y.atan2(node.x))?,
+                angle_between_in_plane(node, eccentricity_vector, h_hat)?,
+                angle_between_in_plane(eccentricity_vector, position, h_hat)?,
+            ))),
+            (true, false) => Ok(Self::CircularInclined(CircularInclinedElements::new(
                 semi_major_axis,
                 eccentricity,
                 inclination,
-                right_ascension_of_ascending_node: angle_from_radians(node.y.atan2(node.x))?,
-                argument_of_latitude: angle_between_in_plane(node, position, h_hat)?,
-            })),
-            (true, true) => Ok(Self::CircularEquatorial(CircularEquatorialElements {
+                angle_from_radians(node.y.atan2(node.x))?,
+                angle_between_in_plane(node, position, h_hat)?,
+            ))),
+            (true, true) => Ok(Self::CircularEquatorial(CircularEquatorialElements::new(
                 semi_major_axis,
                 eccentricity,
                 inclination,
-                true_longitude: angle_from_radians(position.y.atan2(position.x))?,
-            })),
-            (false, true) => Ok(Self::EquatorialElliptic(EquatorialEllipticElements {
+                angle_from_radians(position.y.atan2(position.x))?,
+            ))),
+            (false, true) => Ok(Self::EquatorialElliptic(EquatorialEllipticElements::new(
                 semi_major_axis,
                 eccentricity,
                 inclination,
-                longitude_of_periapsis: angle_from_radians(
-                    eccentricity_vector.y.atan2(eccentricity_vector.x),
-                )?,
-                true_anomaly: angle_between_in_plane(eccentricity_vector, position, h_hat)?,
-            })),
+                angle_from_radians(eccentricity_vector.y.atan2(eccentricity_vector.x))?,
+                angle_between_in_plane(eccentricity_vector, position, h_hat)?,
+            ))),
         }
     }
 
@@ -315,42 +313,9 @@ impl OrbitalElements {
     ) -> Result<CartesianState, NumericalError> {
         match self {
             Self::Classical(elements) => elements.to_cartesian_state(mu),
-            Self::CircularInclined(elements) => {
-                elliptic_elements_to_cartesian_state(EllipticElementSet {
-                    semi_major_axis: elements.semi_major_axis,
-                    eccentricity: elements.eccentricity,
-                    mu,
-                    inclination: elements.inclination,
-                    right_ascension_of_ascending_node: elements.right_ascension_of_ascending_node,
-                    argument_of_periapsis: Angle::ZERO,
-                    true_anomaly: elements.argument_of_latitude,
-                    velocity_sign: 1.0,
-                })
-            }
-            Self::CircularEquatorial(elements) => {
-                elliptic_elements_to_cartesian_state(EllipticElementSet {
-                    semi_major_axis: elements.semi_major_axis,
-                    eccentricity: elements.eccentricity,
-                    mu,
-                    inclination: elements.inclination,
-                    right_ascension_of_ascending_node: Angle::ZERO,
-                    argument_of_periapsis: Angle::ZERO,
-                    true_anomaly: elements.true_longitude,
-                    velocity_sign: 1.0,
-                })
-            }
-            Self::EquatorialElliptic(elements) => {
-                elliptic_elements_to_cartesian_state(EllipticElementSet {
-                    semi_major_axis: elements.semi_major_axis,
-                    eccentricity: elements.eccentricity,
-                    mu,
-                    inclination: elements.inclination,
-                    right_ascension_of_ascending_node: Angle::ZERO,
-                    argument_of_periapsis: elements.longitude_of_periapsis,
-                    true_anomaly: elements.true_anomaly,
-                    velocity_sign: 1.0,
-                })
-            }
+            Self::CircularInclined(elements) => elements.to_cartesian_state(mu),
+            Self::CircularEquatorial(elements) => elements.to_cartesian_state(mu),
+            Self::EquatorialElliptic(elements) => elements.to_cartesian_state(mu),
         }
     }
 }
@@ -434,6 +399,47 @@ impl ClassicalOrbitalElements {
 }
 
 impl CircularInclinedElements {
+    /// Creates a circular inclined orbital-element set from domain quantities.
+    #[inline]
+    pub const fn new(
+        semi_major_axis: Distance,
+        eccentricity: Eccentricity,
+        inclination: Angle,
+        right_ascension_of_ascending_node: Angle,
+        argument_of_latitude: Angle,
+    ) -> Self {
+        Self {
+            semi_major_axis,
+            eccentricity,
+            inclination,
+            right_ascension_of_ascending_node,
+            argument_of_latitude,
+        }
+    }
+
+    /// Builds an inertial Cartesian state from circular inclined elements.
+    ///
+    /// Argument of latitude is used as the in-plane angle; argument of
+    /// periapsis is set to zero by convention.
+    ///
+    /// Returns an error if the orbital parameters are physically invalid or
+    /// a computed quantity is non-finite.
+    pub fn to_cartesian_state(
+        self,
+        mu: GravitationalParameter,
+    ) -> Result<CartesianState, NumericalError> {
+        elliptic_elements_to_cartesian_state(EllipticElementSet {
+            semi_major_axis: self.semi_major_axis,
+            eccentricity: self.eccentricity,
+            mu,
+            inclination: self.inclination,
+            right_ascension_of_ascending_node: self.right_ascension_of_ascending_node,
+            argument_of_periapsis: Angle::ZERO,
+            true_anomaly: self.argument_of_latitude,
+            velocity_sign: 1.0,
+        })
+    }
+
     /// Returns the semi-major axis.
     #[inline]
     pub const fn semi_major_axis(&self) -> Distance {
@@ -466,6 +472,45 @@ impl CircularInclinedElements {
 }
 
 impl CircularEquatorialElements {
+    /// Creates a circular equatorial orbital-element set from domain quantities.
+    #[inline]
+    pub const fn new(
+        semi_major_axis: Distance,
+        eccentricity: Eccentricity,
+        inclination: Angle,
+        true_longitude: Angle,
+    ) -> Self {
+        Self {
+            semi_major_axis,
+            eccentricity,
+            inclination,
+            true_longitude,
+        }
+    }
+
+    /// Builds an inertial Cartesian state from circular equatorial elements.
+    ///
+    /// True longitude is used as the in-plane angle; both RAAN and argument
+    /// of periapsis are set to zero by convention.
+    ///
+    /// Returns an error if the orbital parameters are physically invalid or
+    /// a computed quantity is non-finite.
+    pub fn to_cartesian_state(
+        self,
+        mu: GravitationalParameter,
+    ) -> Result<CartesianState, NumericalError> {
+        elliptic_elements_to_cartesian_state(EllipticElementSet {
+            semi_major_axis: self.semi_major_axis,
+            eccentricity: self.eccentricity,
+            mu,
+            inclination: self.inclination,
+            right_ascension_of_ascending_node: Angle::ZERO,
+            argument_of_periapsis: Angle::ZERO,
+            true_anomaly: self.true_longitude,
+            velocity_sign: 1.0,
+        })
+    }
+
     /// Returns the semi-major axis.
     #[inline]
     pub const fn semi_major_axis(&self) -> Distance {
@@ -492,6 +537,47 @@ impl CircularEquatorialElements {
 }
 
 impl EquatorialEllipticElements {
+    /// Creates an eccentric equatorial orbital-element set from domain quantities.
+    #[inline]
+    pub const fn new(
+        semi_major_axis: Distance,
+        eccentricity: Eccentricity,
+        inclination: Angle,
+        longitude_of_periapsis: Angle,
+        true_anomaly: Angle,
+    ) -> Self {
+        Self {
+            semi_major_axis,
+            eccentricity,
+            inclination,
+            longitude_of_periapsis,
+            true_anomaly,
+        }
+    }
+
+    /// Builds an inertial Cartesian state from eccentric equatorial elements.
+    ///
+    /// Longitude of periapsis is used as the argument of periapsis; RAAN is
+    /// set to zero by convention.
+    ///
+    /// Returns an error if the orbital parameters are physically invalid or
+    /// a computed quantity is non-finite.
+    pub fn to_cartesian_state(
+        self,
+        mu: GravitationalParameter,
+    ) -> Result<CartesianState, NumericalError> {
+        elliptic_elements_to_cartesian_state(EllipticElementSet {
+            semi_major_axis: self.semi_major_axis,
+            eccentricity: self.eccentricity,
+            mu,
+            inclination: self.inclination,
+            right_ascension_of_ascending_node: Angle::ZERO,
+            argument_of_periapsis: self.longitude_of_periapsis,
+            true_anomaly: self.true_anomaly,
+            velocity_sign: 1.0,
+        })
+    }
+
     /// Returns the semi-major axis.
     #[inline]
     pub const fn semi_major_axis(&self) -> Distance {
@@ -968,14 +1054,14 @@ mod tests {
     #[test]
     fn classical_elements_round_trip_cartesian_state() -> TestResult {
         let mu = earth_mu()?;
-        let elements = ClassicalOrbitalElements {
-            semi_major_axis: Distance::from_meters(8_000_000.0)?,
-            eccentricity: Eccentricity::from_scalar(0.2)?,
-            inclination: Angle::from_radians(0.4)?,
-            right_ascension_of_ascending_node: Angle::from_radians(1.0)?,
-            argument_of_periapsis: Angle::from_radians(0.7)?,
-            true_anomaly: Angle::from_radians(1.2)?,
-        };
+        let elements = ClassicalOrbitalElements::new(
+            Distance::from_meters(8_000_000.0)?,
+            Eccentricity::from_scalar(0.2)?,
+            Angle::from_radians(0.4)?,
+            Angle::from_radians(1.0)?,
+            Angle::from_radians(0.7)?,
+            Angle::from_radians(1.2)?,
+        );
 
         let state = elements.to_cartesian_state(mu)?;
         let recovered = OrbitalElements::from_cartesian_state(&state, mu)?;
@@ -1009,15 +1095,15 @@ mod tests {
     #[test]
     fn circular_inclined_elements_convert_to_cartesian_state() -> TestResult {
         let mu = earth_mu()?;
-        let elements = CircularInclinedElements {
-            semi_major_axis: Distance::from_meters(8_000_000.0)?,
-            eccentricity: Eccentricity::from_scalar(0.0)?,
-            inclination: Angle::from_radians(0.4)?,
-            right_ascension_of_ascending_node: Angle::from_radians(1.0)?,
-            argument_of_latitude: Angle::from_radians(1.2)?,
-        };
+        let elements = CircularInclinedElements::new(
+            Distance::from_meters(8_000_000.0)?,
+            Eccentricity::from_scalar(0.0)?,
+            Angle::from_radians(0.4)?,
+            Angle::from_radians(1.0)?,
+            Angle::from_radians(1.2)?,
+        );
 
-        let state = OrbitalElements::CircularInclined(elements).to_cartesian_state(mu)?;
+        let state = elements.to_cartesian_state(mu)?;
         let recovered = OrbitalElements::from_cartesian_state(&state, mu)?;
         let OrbitalElements::CircularInclined(recovered) = recovered else {
             return Err("expected circular inclined elements after round trip".into());
@@ -1039,14 +1125,14 @@ mod tests {
     #[test]
     fn circular_equatorial_elements_convert_to_cartesian_state() -> TestResult {
         let mu = earth_mu()?;
-        let elements = CircularEquatorialElements {
-            semi_major_axis: Distance::from_meters(8_000_000.0)?,
-            eccentricity: Eccentricity::from_scalar(0.0)?,
-            inclination: Angle::ZERO,
-            true_longitude: Angle::from_radians(1.2)?,
-        };
+        let elements = CircularEquatorialElements::new(
+            Distance::from_meters(8_000_000.0)?,
+            Eccentricity::from_scalar(0.0)?,
+            Angle::ZERO,
+            Angle::from_radians(1.2)?,
+        );
 
-        let state = OrbitalElements::CircularEquatorial(elements).to_cartesian_state(mu)?;
+        let state = elements.to_cartesian_state(mu)?;
         let recovered = OrbitalElements::from_cartesian_state(&state, mu)?;
         let OrbitalElements::CircularEquatorial(recovered) = recovered else {
             return Err("expected circular equatorial elements after round trip".into());
@@ -1068,15 +1154,15 @@ mod tests {
     #[test]
     fn equatorial_elliptic_elements_convert_to_cartesian_state() -> TestResult {
         let mu = earth_mu()?;
-        let elements = EquatorialEllipticElements {
-            semi_major_axis: Distance::from_meters(8_000_000.0)?,
-            eccentricity: Eccentricity::from_scalar(0.2)?,
-            inclination: Angle::ZERO,
-            longitude_of_periapsis: Angle::from_radians(0.7)?,
-            true_anomaly: Angle::from_radians(1.2)?,
-        };
+        let elements = EquatorialEllipticElements::new(
+            Distance::from_meters(8_000_000.0)?,
+            Eccentricity::from_scalar(0.2)?,
+            Angle::ZERO,
+            Angle::from_radians(0.7)?,
+            Angle::from_radians(1.2)?,
+        );
 
-        let state = OrbitalElements::EquatorialElliptic(elements).to_cartesian_state(mu)?;
+        let state = elements.to_cartesian_state(mu)?;
         let recovered = OrbitalElements::from_cartesian_state(&state, mu)?;
         let OrbitalElements::EquatorialElliptic(recovered) = recovered else {
             return Err("expected equatorial elliptic elements after round trip".into());
