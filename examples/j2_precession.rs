@@ -3,7 +3,7 @@
 use vast::{
     Angle, CartesianStateBuffer, Distance, Duration, Eccentricity, EllipticOrbit, Epoch,
     GravitationalParameter, Integrator, J2_EARTH, J2Coefficient, MU_EARTH, OblateBodyGravity,
-    OrbitDirection, OrbitalElements, R_EARTH, TimeStep, TwoBodyGravity, VelocityVerletIntegrator,
+    OrbitDirection, OrbitalElementClassification, OrbitalElements, R_EARTH, TimeStep, TwoBodyGravity, VelocityVerletIntegrator,
 };
 
 const ALTITUDE_M: f64 = 600_000.0;
@@ -50,10 +50,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     two_body_states.write_from_state(0, &initial_state)?;
     j2_states.write_from_state(0, &initial_state)?;
 
-    let initial_raan = raan_degrees(&OrbitalElements::from_states(
-        &two_body_states.view(),
-        0,
+    let initial_state = two_body_states.view().read_state(0)?;
+    let initial_raan = raan_degrees(&OrbitalElements::from_state(
+        &initial_state,
         mu,
+        OrbitalElementClassification::default(),
     )?)
     .ok_or("initial RAAN is undefined")?;
 
@@ -66,13 +67,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     propagate(&integrator, &j2_gravity, &mut j2_states, duration, dt)?;
 
-    let final_two_body_raan = raan_degrees(&OrbitalElements::from_states(
-        &two_body_states.view(),
-        0,
+    let final_two_body_state = two_body_states.view().read_state(0)?;
+    let final_two_body_raan = raan_degrees(&OrbitalElements::from_state(
+        &final_two_body_state,
         mu,
+        OrbitalElementClassification::default(),
     )?)
     .ok_or("final two-body RAAN is undefined")?;
-    let final_j2_raan = raan_degrees(&OrbitalElements::from_states(&j2_states.view(), 0, mu)?)
+    let final_j2_state = j2_states.view().read_state(0)?;
+    let final_j2_raan = raan_degrees(&OrbitalElements::from_state(&final_j2_state, mu, OrbitalElementClassification::default())?)
         .ok_or("final J2 RAAN is undefined")?;
     let two_body_drift = angle_delta_degrees(final_two_body_raan, initial_raan);
     let j2_drift = angle_delta_degrees(final_j2_raan, initial_raan);

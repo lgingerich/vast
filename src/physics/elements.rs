@@ -1,6 +1,6 @@
 use nalgebra::Vector3;
 
-use super::state::{CartesianState, CartesianStates};
+use super::state::CartesianState;
 use super::types::{Angle, Distance, Eccentricity, GravitationalParameter, Position, Velocity};
 use crate::errors::NumericalError;
 
@@ -132,21 +132,12 @@ pub struct EquatorialEllipticElements {
 impl OrbitalElements {
     /// Computes bound two-body orbital elements from an inertial Cartesian state.
     ///
+    /// `classification` controls when singular-safe variants are used instead
+    /// of classical elements. See [`OrbitalElementClassification`] for details.
+    ///
     /// Returns an error if the state is unbound, has zero angular momentum,
     /// or a computed quantity is non-finite.
     pub fn from_state(
-        state: &CartesianState,
-        mu: GravitationalParameter,
-    ) -> Result<Self, NumericalError> {
-        Self::from_state_with_classification(
-            state,
-            mu,
-            OrbitalElementClassification::default(),
-        )
-    }
-
-    /// Computes bound two-body orbital elements using an explicit classification policy.
-    pub fn from_state_with_classification(
         state: &CartesianState,
         mu: GravitationalParameter,
         classification: OrbitalElementClassification,
@@ -157,37 +148,6 @@ impl OrbitalElements {
             mu,
             classification,
         )
-    }
-
-    /// Computes bound two-body orbital elements from an indexed Cartesian state view.
-    pub fn from_states(
-        states: &CartesianStates<'_>,
-        index: usize,
-        mu: GravitationalParameter,
-    ) -> Result<Self, crate::errors::StateError> {
-        Self::from_states_with_classification(
-            states,
-            index,
-            mu,
-            OrbitalElementClassification::default(),
-        )
-    }
-
-    /// Computes bound two-body orbital elements from a state view using an explicit
-    /// classification policy.
-    pub fn from_states_with_classification(
-        states: &CartesianStates<'_>,
-        index: usize,
-        mu: GravitationalParameter,
-        classification: OrbitalElementClassification,
-    ) -> Result<Self, crate::errors::StateError> {
-        let components = states.components(index)?;
-        Ok(Self::from_components(
-            components.position.vector(),
-            components.velocity.vector(),
-            mu,
-            classification,
-        )?)
     }
 
     fn from_components(
@@ -695,13 +655,7 @@ fn angle_from_radians(radians: f64) -> Result<Angle, NumericalError> {
 }
 
 fn normalize_angle(radians: f64) -> f64 {
-    let two_pi = 2.0 * std::f64::consts::PI;
-    let normalized = radians.rem_euclid(two_pi);
-    if normalized == two_pi {
-        0.0
-    } else {
-        normalized
-    }
+    radians.rem_euclid(2.0 * std::f64::consts::PI)
 }
 
 #[cfg(test)]
@@ -810,7 +764,12 @@ mod tests {
         let integrator = VelocityVerletIntegrator;
         let dt = TimeStep::from_seconds(30.0)?;
         let duration = Duration::from_seconds(3.0 * 86_400.0)?;
-        let initial_raan = raan_degrees(&OrbitalElements::from_states(&states.view(), 0, mu)?)
+        let initial_state = states.view().read_state(0)?;
+        let initial_raan = raan_degrees(&OrbitalElements::from_state(
+            &initial_state,
+            mu,
+            OrbitalElementClassification::default(),
+        )?)
             .ok_or("initial RAAN undefined")?;
         let mut epoch = Epoch::from_seconds(0.0)?;
 
@@ -821,7 +780,12 @@ mod tests {
             epoch = epoch.advance_by(step)?;
         }
 
-        let final_raan = raan_degrees(&OrbitalElements::from_states(&states.view(), 0, mu)?)
+        let final_state = states.view().read_state(0)?;
+        let final_raan = raan_degrees(&OrbitalElements::from_state(
+            &final_state,
+            mu,
+            OrbitalElementClassification::default(),
+        )?)
             .ok_or("final RAAN undefined")?;
         let simulated_drift_degrees_per_day =
             angle_delta_degrees(final_raan, initial_raan) / (duration.seconds() / 86_400.0);
@@ -848,7 +812,7 @@ mod tests {
         let orbit = circular_orbit(inclination, raan)?;
         let state = orbit.to_cartesian_state()?;
 
-        let elements = OrbitalElements::from_state(&state, orbit.mu())?;
+        let elements = OrbitalElements::from_state(&state, orbit.mu(), OrbitalElementClassification::default())?;
 
         let OrbitalElements::CircularInclined(elements) = elements else {
             return Err("expected circular inclined elements".into());
@@ -872,7 +836,7 @@ mod tests {
         let orbit = circular_orbit(Angle::ZERO, Angle::ZERO)?;
         let state = orbit.to_cartesian_state()?;
 
-        let elements = OrbitalElements::from_state(&state, orbit.mu())?;
+        let elements = OrbitalElements::from_state(&state, orbit.mu(), OrbitalElementClassification::default())?;
 
         let OrbitalElements::CircularEquatorial(elements) = elements else {
             return Err("expected circular equatorial elements".into());
@@ -906,7 +870,8 @@ mod tests {
             epoch = epoch.advance_by(step)?;
         }
 
-        let elements = OrbitalElements::from_states(&states.view(), 0, orbit.mu())?;
+        let state = states.view().read_state(0)?;
+        let elements = OrbitalElements::from_state(&state, orbit.mu(), OrbitalElementClassification::default())?;
 
         let OrbitalElements::CircularInclined(elements) = elements else {
             return Err("expected circular inclined elements".into());
@@ -954,9 +919,9 @@ mod tests {
             Eccentricity::from_scalar(1.0e-10)?,
             Angle::from_radians(DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE_RAD)?,
         );
-        let elements = OrbitalElements::from_states_with_classification(
-            &states.view(),
-            0,
+        let state = states.view().read_state(0)?;
+        let elements = OrbitalElements::from_state(
+            &state,
             orbit.mu(),
             strict_classification,
         )?;
@@ -980,7 +945,7 @@ mod tests {
             Vector3::new(-1_000.0, 7_200.0, 1_500.0),
         )?;
 
-        let elements = OrbitalElements::from_state(&state, earth_mu()?)?;
+        let elements = OrbitalElements::from_state(&state, earth_mu()?, OrbitalElementClassification::default())?;
 
         let OrbitalElements::Classical(elements) = elements else {
             return Err("expected classical elements".into());
@@ -1008,7 +973,7 @@ mod tests {
             Vector3::new(0.0, 8_000.0, 0.0),
         )?;
 
-        let elements = OrbitalElements::from_state(&state, earth_mu()?)?;
+        let elements = OrbitalElements::from_state(&state, earth_mu()?, OrbitalElementClassification::default())?;
 
         let OrbitalElements::EquatorialElliptic(elements) = elements else {
             return Err("expected equatorial elliptic elements".into());
@@ -1045,7 +1010,7 @@ mod tests {
         );
 
         let state = elements.to_cartesian_state(mu)?;
-        let recovered = OrbitalElements::from_state(&state, mu)?;
+        let recovered = OrbitalElements::from_state(&state, mu, OrbitalElementClassification::default())?;
         let OrbitalElements::Classical(recovered) = recovered else {
             return Err("expected classical elements after round trip".into());
         };
@@ -1085,7 +1050,7 @@ mod tests {
         );
 
         let state = elements.to_cartesian_state(mu)?;
-        let recovered = OrbitalElements::from_state(&state, mu)?;
+        let recovered = OrbitalElements::from_state(&state, mu, OrbitalElementClassification::default())?;
         let OrbitalElements::CircularInclined(recovered) = recovered else {
             return Err("expected circular inclined elements after round trip".into());
         };
@@ -1114,7 +1079,7 @@ mod tests {
         );
 
         let state = elements.to_cartesian_state(mu)?;
-        let recovered = OrbitalElements::from_state(&state, mu)?;
+        let recovered = OrbitalElements::from_state(&state, mu, OrbitalElementClassification::default())?;
         let OrbitalElements::CircularEquatorial(recovered) = recovered else {
             return Err("expected circular equatorial elements after round trip".into());
         };
@@ -1144,7 +1109,7 @@ mod tests {
         );
 
         let state = elements.to_cartesian_state(mu)?;
-        let recovered = OrbitalElements::from_state(&state, mu)?;
+        let recovered = OrbitalElements::from_state(&state, mu, OrbitalElementClassification::default())?;
         let OrbitalElements::EquatorialElliptic(recovered) = recovered else {
             return Err("expected equatorial elliptic elements after round trip".into());
         };
@@ -1171,7 +1136,7 @@ mod tests {
     fn zero_radius_state_has_no_elements() -> TestResult {
         let state = state_at(Vector3::zeros(), Vector3::zeros())?;
 
-        assert!(OrbitalElements::from_state(&state, earth_mu()?).is_err());
+        assert!(OrbitalElements::from_state(&state, earth_mu()?, OrbitalElementClassification::default()).is_err());
         Ok(())
     }
 

@@ -273,7 +273,7 @@ impl Propagator {
 }
 
 fn orbital_phase_angle_rad(state: &CartesianState, mu: GravitationalParameter) -> Option<f64> {
-    crate::physics::elements::OrbitalElements::from_state(state, mu)
+    crate::physics::elements::OrbitalElements::from_state(state, mu, crate::physics::elements::OrbitalElementClassification::default())
         .ok()
         .map(|elements| elements.orbital_phase_angle().radians())
 }

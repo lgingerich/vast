@@ -618,7 +618,7 @@ pub fn hohmann_delta_v_mps(
 mod tests {
     use super::*;
     use crate::physics::constants::{MU_EARTH, R_EARTH};
-    use crate::physics::elements::OrbitalElements;
+    use crate::physics::elements::{OrbitalElementClassification, OrbitalElements};
     use crate::physics::types::GravitationalParameter;
 
     fn elements_semi_major_axis_m(elements: &OrbitalElements) -> f64 {
@@ -724,7 +724,7 @@ mod tests {
         let mu =
             GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu");
         let elements =
-            OrbitalElements::from_state(&result.final_state, mu).expect("elements");
+            OrbitalElements::from_state(&result.final_state, mu, OrbitalElementClassification::default()).expect("elements");
         let semi_major_axis = elements_semi_major_axis_m(&elements);
         assert!(
             (semi_major_axis - arrival_radius_m).abs() / arrival_radius_m < 0.02,

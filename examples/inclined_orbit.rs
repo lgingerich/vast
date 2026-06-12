@@ -3,7 +3,7 @@
 use vast::{
     Angle, CartesianStateBuffer, Distance, Duration, Eccentricity, EllipticOrbit, Epoch,
     GravitationalParameter, Integrator, MU_EARTH, OrbitDirection, OrbitalDiagnostics,
-    OrbitalElements, R_EARTH, SpecificAngularMomentum, SpecificEnergy, TimeStep, TwoBodyGravity,
+    OrbitalElementClassification, OrbitalElements, R_EARTH, SpecificAngularMomentum, SpecificEnergy, TimeStep, TwoBodyGravity,
     VelocityVerletIntegrator,
 };
 
@@ -54,7 +54,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         dt,
         PERIODS,
     )?;
-    let elements = OrbitalElements::from_states(&states.view(), 0, mu)?;
+    let state = states.view().read_state(0)?;
+    let elements = OrbitalElements::from_state(&state, mu, OrbitalElementClassification::default())?;
 
     println!(
         "Inclined circular orbit: altitude {:.0} km | inclination {:.1} deg | RAAN {:.1} deg",
