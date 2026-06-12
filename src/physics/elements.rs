@@ -159,25 +159,6 @@ impl OrbitalElements {
         )
     }
 
-    /// Computes bound two-body orbital elements from an inertial Cartesian state.
-    #[inline]
-    pub fn from_state(
-        state: &CartesianState,
-        mu: GravitationalParameter,
-    ) -> Result<Self, NumericalError> {
-        Self::from_cartesian_state(state, mu)
-    }
-
-    /// Computes bound two-body orbital elements using an explicit classification policy.
-    #[inline]
-    pub fn from_state_with_classification(
-        state: &CartesianState,
-        mu: GravitationalParameter,
-        classification: OrbitalElementClassification,
-    ) -> Result<Self, NumericalError> {
-        Self::from_cartesian_state_with_classification(state, mu, classification)
-    }
-
     /// Computes bound two-body orbital elements from an indexed Cartesian state view.
     pub fn from_states(
         states: &CartesianStates<'_>,
