@@ -29,12 +29,13 @@ pub use physics::{
     },
     types::{
         Acceleration, Angle, AngularRate, AreaPerMass, Distance, Duration, Eccentricity, Epoch,
-        GravitationalParameter, MassDensity, Position, Speed, TimeStep, Velocity,
+        GravitationalParameter, J2Coefficient, MassDensity, Position, Speed, TimeStep, Velocity,
     },
 };
 
 pub use errors::{
-    DynamicsError, EnvironmentError, MissionError, PropagationError, RecordingError, StateError,
+    DynamicsError, EnvironmentError, MissionError, NumericalError, PropagationError,
+    RecordingError, StateError,
 };
 
 pub use sim::{

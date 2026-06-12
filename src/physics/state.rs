@@ -42,7 +42,6 @@ impl CartesianPositionComponents {
 
     fn from_position(position: Position) -> Self {
         let v = position.vector();
-        debug_assert!(v.x.is_finite() && v.y.is_finite() && v.z.is_finite());
         Self {
             x_m: v.x,
             y_m: v.y,
@@ -107,7 +106,6 @@ impl CartesianVelocityComponents {
 
     fn from_velocity(velocity: Velocity) -> Self {
         let v = velocity.vector();
-        debug_assert!(v.x.is_finite() && v.y.is_finite() && v.z.is_finite());
         Self {
             x_mps: v.x,
             y_mps: v.y,
@@ -209,6 +207,28 @@ impl CartesianStateComponents {
         Self {
             position: CartesianPositionComponents::from_position(state.position),
             velocity: CartesianVelocityComponents::from_velocity(state.velocity),
+        }
+    }
+
+    pub(crate) fn from_values(
+        px_m: f64,
+        py_m: f64,
+        pz_m: f64,
+        vx_mps: f64,
+        vy_mps: f64,
+        vz_mps: f64,
+    ) -> Self {
+        Self {
+            position: CartesianPositionComponents {
+                x_m: px_m,
+                y_m: py_m,
+                z_m: pz_m,
+            },
+            velocity: CartesianVelocityComponents {
+                x_mps: vx_mps,
+                y_mps: vy_mps,
+                z_mps: vz_mps,
+            },
         }
     }
 }
@@ -399,18 +419,14 @@ impl<'a> CartesianStates<'a> {
 
     pub(crate) fn components(&self, index: usize) -> Result<CartesianStateComponents, StateError> {
         self.validate_index(index)?;
-        Ok(CartesianStateComponents {
-            position: CartesianPositionComponents::from_meters(
-                self.pos_x[index],
-                self.pos_y[index],
-                self.pos_z[index],
-            )?,
-            velocity: CartesianVelocityComponents::from_meters_per_second(
-                self.vel_x[index],
-                self.vel_y[index],
-                self.vel_z[index],
-            )?,
-        })
+        Ok(CartesianStateComponents::from_values(
+            self.pos_x[index],
+            self.pos_y[index],
+            self.pos_z[index],
+            self.vel_x[index],
+            self.vel_y[index],
+            self.vel_z[index],
+        ))
     }
 
     fn validate_index(&self, index: usize) -> Result<(), StateError> {
@@ -495,10 +511,6 @@ impl<'a> CartesianStatesMut<'a> {
         }
     }
 
-    pub(crate) fn components(&self, index: usize) -> Result<CartesianStateComponents, StateError> {
-        self.as_view().components(index)
-    }
-
     pub(crate) fn write_components(
         &mut self,
         index: usize,
@@ -507,13 +519,6 @@ impl<'a> CartesianStatesMut<'a> {
         self.validate_index(index)?;
         let position = components.position;
         let velocity = components.velocity;
-
-        if !components_are_finite(position.x_m, position.y_m, position.z_m) {
-            return Err(NumericalError::NotFinite { field: "position" }.into());
-        }
-        if !components_are_finite(velocity.x_mps, velocity.y_mps, velocity.z_mps) {
-            return Err(NumericalError::NotFinite { field: "velocity" }.into());
-        }
 
         self.pos_x[index] = position.x_m;
         self.pos_y[index] = position.y_m;

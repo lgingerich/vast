@@ -25,19 +25,19 @@ struct PropagationSummary {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
-    let orbit = EllipticOrbit {
-        semi_major_axis: Distance::from_meters(R_EARTH + ALTITUDE_M)?,
-        eccentricity: Eccentricity::from_scalar(0.0)?,
+    let orbit = EllipticOrbit::new(
+        Distance::from_meters(R_EARTH + ALTITUDE_M)?,
+        Eccentricity::from_scalar(0.0)?,
         mu,
-        inclination: Angle::from_radians(INCLINATION_DEG.to_radians())?,
-        right_ascension_of_ascending_node: Angle::from_radians(RAAN_DEG.to_radians())?,
-        argument_of_periapsis: Angle::ZERO,
-        true_anomaly: Angle::from_radians(0.0)?,
-        direction: OrbitDirection::Prograde,
-    };
+        Angle::from_radians(INCLINATION_DEG.to_radians())?,
+        Angle::from_radians(RAAN_DEG.to_radians())?,
+        Angle::ZERO,
+        Angle::from_radians(0.0)?,
+        OrbitDirection::Prograde,
+    )?;
     let initial_state = orbit.to_cartesian_state()?;
     let initial_diagnostics = OrbitalDiagnostics::from_state(&initial_state, mu)?;
-    let gravity = TwoBodyGravity { mu };
+    let gravity = TwoBodyGravity::new(mu);
     let integrator = VelocityVerletIntegrator;
     let dt = TimeStep::from_seconds(STEP_SECONDS)?;
     let period = orbit.period()?;
@@ -111,7 +111,7 @@ fn propagate<I: Integrator>(
         steps += 1;
     }
 
-    let diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, gravity.mu)?;
+    let diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, gravity.mu())?;
     let radius_drift = Distance::from_meters(
         (diagnostics.radius.meters() - initial_diagnostics.radius.meters())
             .abs()

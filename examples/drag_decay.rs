@@ -13,30 +13,30 @@ const PROPAGATION_HOURS: f64 = 6.0;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
-    let orbit = EllipticOrbit {
-        semi_major_axis: Distance::from_meters(R_EARTH + ALTITUDE_M)?,
-        eccentricity: Eccentricity::from_scalar(0.0)?,
+    let orbit = EllipticOrbit::new(
+        Distance::from_meters(R_EARTH + ALTITUDE_M)?,
+        Eccentricity::from_scalar(0.0)?,
         mu,
-        inclination: Angle::ZERO,
-        right_ascension_of_ascending_node: Angle::ZERO,
-        argument_of_periapsis: Angle::ZERO,
-        true_anomaly: Angle::from_radians(0.0)?,
-        direction: OrbitDirection::Prograde,
-    };
+        Angle::ZERO,
+        Angle::ZERO,
+        Angle::ZERO,
+        Angle::from_radians(0.0)?,
+        OrbitDirection::Prograde,
+    )?;
     let initial_state = orbit.to_cartesian_state()?;
-    let atmosphere = ExponentialAtmosphere {
-        reference_radius: Distance::from_meters(R_EARTH)?,
-        reference_altitude: Distance::from_meters(ALTITUDE_M)?,
-        reference_density: MassDensity::from_kilograms_per_cubic_meter(1.0e-10)?,
-        scale_height: Distance::from_meters(50_000.0)?,
-        angular_rate: AngularRate::from_radians_per_second(7.292_115_9e-5)?,
-    };
+    let atmosphere = ExponentialAtmosphere::new(
+        Distance::from_meters(R_EARTH)?,
+        Distance::from_meters(ALTITUDE_M)?,
+        MassDensity::from_kilograms_per_cubic_meter(1.0e-10)?,
+        Distance::from_meters(50_000.0)?,
+        AngularRate::from_radians_per_second(7.292_115_9e-5)?,
+    );
     let dynamics = CompositeDynamics {
-        first: TwoBodyGravity { mu },
-        second: AtmosphericDrag {
+        first: TwoBodyGravity::new(mu),
+        second: AtmosphericDrag::new(
             atmosphere,
-            area_per_mass: AreaPerMass::from_square_meters_per_kilogram(0.02)?,
-        },
+            AreaPerMass::from_square_meters_per_kilogram(0.02)?,
+        ),
     };
     let integrator = RungeKutta4Integrator;
     let dt = TimeStep::from_seconds(STEP_SECONDS)?;

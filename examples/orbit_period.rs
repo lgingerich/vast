@@ -24,21 +24,21 @@ struct PropagationSummary {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
-    let orbit = EllipticOrbit {
-        semi_major_axis: Distance::from_meters(R_EARTH + ALTITUDE_M)?,
-        eccentricity: Eccentricity::from_scalar(0.0)?,
+    let orbit = EllipticOrbit::new(
+        Distance::from_meters(R_EARTH + ALTITUDE_M)?,
+        Eccentricity::from_scalar(0.0)?,
         mu,
-        inclination: Angle::ZERO,
-        right_ascension_of_ascending_node: Angle::ZERO,
-        argument_of_periapsis: Angle::ZERO,
-        true_anomaly: Angle::from_radians(0.0)?,
-        direction: OrbitDirection::Prograde,
-    };
+        Angle::ZERO,
+        Angle::ZERO,
+        Angle::ZERO,
+        Angle::from_radians(0.0)?,
+        OrbitDirection::Prograde,
+    )?;
 
     let speed = orbit.speed()?;
     let period = orbit.period()?;
     let initial_state = orbit.to_cartesian_state()?;
-    let gravity = TwoBodyGravity { mu };
+    let gravity = TwoBodyGravity::new(mu);
     let euler = EulerIntegrator;
     let rk4 = RungeKutta4Integrator;
     let verlet = VelocityVerletIntegrator;
@@ -50,7 +50,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!(
         "radius: {:.3} km | speed: {:.3} km/s | period: {:.3} min",
-        orbit.semi_major_axis.meters() / 1000.0,
+        orbit.semi_major_axis().meters() / 1000.0,
         speed.meters_per_second() / 1000.0,
         period.seconds() / 60.0,
     );
@@ -97,7 +97,7 @@ fn propagate_one_period<I: Integrator>(
     dt: TimeStep,
 ) -> Result<PropagationSummary, Box<dyn std::error::Error>> {
     let initial_position = initial_state.position;
-    let initial_diagnostics = OrbitalDiagnostics::from_state(initial_state, gravity.mu)?;
+    let initial_diagnostics = OrbitalDiagnostics::from_state(initial_state, gravity.mu())?;
     let mut epoch = Epoch::from_seconds(0.0)?;
     let mut states = CartesianStateBuffer::<1>::new();
     states.write_from_state(0, initial_state)?;
@@ -122,7 +122,7 @@ fn propagate_one_period<I: Integrator>(
     let speed_error = Speed::from_meters_per_second(
         (state.velocity.vector().norm() - circular_speed.meters_per_second()).abs(),
     )?;
-    let final_diagnostics = OrbitalDiagnostics::from_state(&state, gravity.mu)?;
+    let final_diagnostics = OrbitalDiagnostics::from_state(&state, gravity.mu())?;
     let specific_energy_error = SpecificEnergy::from_square_meters_per_second_squared(
         (final_diagnostics
             .specific_energy

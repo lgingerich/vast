@@ -2,8 +2,8 @@
 
 use vast::{
     Angle, CartesianStateBuffer, Distance, Duration, Eccentricity, EllipticOrbit, Epoch,
-    GravitationalParameter, Integrator, J2_EARTH, MU_EARTH, OblateBodyGravity, OrbitDirection,
-    OrbitalElements, R_EARTH, TimeStep, TwoBodyGravity, VelocityVerletIntegrator,
+    GravitationalParameter, Integrator, J2_EARTH, J2Coefficient, MU_EARTH, OblateBodyGravity,
+    OrbitDirection, OrbitalElements, R_EARTH, TimeStep, TwoBodyGravity, VelocityVerletIntegrator,
 };
 
 const ALTITUDE_M: f64 = 600_000.0;
@@ -14,30 +14,30 @@ const PROPAGATION_DAYS: f64 = 300.0;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
-    let orbit = EllipticOrbit {
-        semi_major_axis: Distance::from_meters(R_EARTH + ALTITUDE_M)?,
-        eccentricity: Eccentricity::from_scalar(0.0)?,
+    let orbit = EllipticOrbit::new(
+        Distance::from_meters(R_EARTH + ALTITUDE_M)?,
+        Eccentricity::from_scalar(0.0)?,
         mu,
-        inclination: Angle::from_radians(INCLINATION_DEG.to_radians())?,
-        right_ascension_of_ascending_node: Angle::from_radians(RAAN_DEG.to_radians())?,
-        argument_of_periapsis: Angle::ZERO,
-        true_anomaly: Angle::from_radians(0.0)?,
-        direction: OrbitDirection::Prograde,
-    };
+        Angle::from_radians(INCLINATION_DEG.to_radians())?,
+        Angle::from_radians(RAAN_DEG.to_radians())?,
+        Angle::ZERO,
+        Angle::from_radians(0.0)?,
+        OrbitDirection::Prograde,
+    )?;
     let initial_state = orbit.to_cartesian_state()?;
-    let two_body_gravity = TwoBodyGravity { mu };
-    let j2_gravity = OblateBodyGravity {
+    let two_body_gravity = TwoBodyGravity::new(mu);
+    let j2_gravity = OblateBodyGravity::new(
         mu,
-        equatorial_radius: Distance::from_meters(R_EARTH)?,
-        j2: J2_EARTH,
-    };
+        Distance::from_meters(R_EARTH)?,
+        J2Coefficient::from_scalar(J2_EARTH)?,
+    );
     let integrator = VelocityVerletIntegrator;
     let dt = TimeStep::from_seconds(STEP_SECONDS)?;
     let duration = Duration::from_seconds(PROPAGATION_DAYS * 86_400.0)?;
     // First-order J2 secular RAAN drift for comparison.
     let mean_motion =
-        (mu.meters_cubed_per_second_squared() / orbit.semi_major_axis.meters().powi(3)).sqrt();
-    let radius_ratio = R_EARTH / orbit.semi_major_axis.meters();
+        (mu.meters_cubed_per_second_squared() / orbit.semi_major_axis().meters().powi(3)).sqrt();
+    let radius_ratio = R_EARTH / orbit.semi_major_axis().meters();
     let analytical_raan_rad_per_sec = -1.5
         * J2_EARTH
         * mean_motion

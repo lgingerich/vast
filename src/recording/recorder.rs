@@ -339,16 +339,17 @@ mod tests {
     fn sample_state() -> CartesianState {
         let mu =
             GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu");
-        EllipticOrbit {
-            semi_major_axis: Distance::from_meters(R_EARTH + 400_000.0).expect("radius"),
-            eccentricity: Eccentricity::from_scalar(0.0).expect("eccentricity"),
+        EllipticOrbit::new(
+            Distance::from_meters(R_EARTH + 400_000.0).expect("radius"),
+            Eccentricity::from_scalar(0.0).expect("eccentricity"),
             mu,
-            inclination: Angle::ZERO,
-            right_ascension_of_ascending_node: Angle::ZERO,
-            argument_of_periapsis: Angle::ZERO,
-            true_anomaly: Angle::from_radians(0.0).expect("phase"),
-            direction: OrbitDirection::Prograde,
-        }
+            Angle::ZERO,
+            Angle::ZERO,
+            Angle::ZERO,
+            Angle::from_radians(0.0).expect("phase"),
+            OrbitDirection::Prograde,
+        )
+        .expect("orbit")
         .to_cartesian_state()
         .expect("state")
     }

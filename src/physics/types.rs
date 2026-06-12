@@ -11,6 +11,14 @@ pub struct Angle(f64);
 impl Angle {
     /// Zero radians.
     pub const ZERO: Self = Self(0.0);
+    pub(crate) const DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE: Self = {
+        const {
+            assert!(
+                crate::physics::constants::DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE_RAD.is_finite()
+            );
+        }
+        Self(crate::physics::constants::DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE_RAD)
+    };
 
     /// Creates an angle from radians.
     pub fn from_radians(value: f64) -> Result<Self, NumericalError> {
@@ -34,22 +42,18 @@ impl Angle {
 }
 
 impl Add for Angle {
-    type Output = Angle;
+    type Output = Result<Angle, NumericalError>;
 
-    fn add(self, rhs: Angle) -> Angle {
-        let result = self.0 + rhs.0;
-        debug_assert!(result.is_finite());
-        Angle(result)
+    fn add(self, rhs: Angle) -> Result<Angle, NumericalError> {
+        Angle::from_radians(self.0 + rhs.0)
     }
 }
 
 impl Sub for Angle {
-    type Output = Angle;
+    type Output = Result<Angle, NumericalError>;
 
-    fn sub(self, rhs: Angle) -> Angle {
-        let result = self.0 - rhs.0;
-        debug_assert!(result.is_finite());
-        Angle(result)
+    fn sub(self, rhs: Angle) -> Result<Angle, NumericalError> {
+        Angle::from_radians(self.0 - rhs.0)
     }
 }
 
@@ -112,7 +116,10 @@ impl Epoch {
     #[must_use]
     pub fn duration_since(self, earlier: Epoch) -> Duration {
         debug_assert!(self.seconds() >= earlier.seconds());
-        Duration::from_seconds_unchecked(self.seconds() - earlier.seconds())
+        let seconds = self.seconds() - earlier.seconds();
+        debug_assert!(seconds.is_finite());
+        debug_assert!(seconds >= 0.0);
+        Duration(seconds)
     }
 
     /// Returns seconds since the simulation epoch.
@@ -149,12 +156,10 @@ impl TimeStep {
 }
 
 impl Add for TimeStep {
-    type Output = TimeStep;
+    type Output = Result<TimeStep, NumericalError>;
 
-    fn add(self, rhs: TimeStep) -> TimeStep {
-        let result = self.0 + rhs.0;
-        debug_assert!(result.is_finite());
-        TimeStep(result)
+    fn add(self, rhs: TimeStep) -> Result<TimeStep, NumericalError> {
+        TimeStep::from_seconds(self.0 + rhs.0)
     }
 }
 
@@ -183,15 +188,6 @@ impl Duration {
         Ok(Self(value))
     }
 
-    /// Creates a duration without invariant checks.
-    ///
-    /// Callers must guarantee the value is finite and non-negative.
-    /// Forward-only time arithmetic (e.g., `Epoch::duration_since`)
-    /// satisfies this by construction.
-    pub(crate) const fn from_seconds_unchecked(value: f64) -> Self {
-        Self(value)
-    }
-
     /// Returns this duration in seconds.
     #[inline]
     pub const fn seconds(self) -> f64 {
@@ -212,12 +208,10 @@ impl From<TimeStep> for Duration {
 }
 
 impl Add for Duration {
-    type Output = Duration;
+    type Output = Result<Duration, NumericalError>;
 
-    fn add(self, rhs: Duration) -> Duration {
-        let result = self.0 + rhs.0;
-        debug_assert!(result.is_finite());
-        Duration(result)
+    fn add(self, rhs: Duration) -> Result<Duration, NumericalError> {
+        Duration::from_seconds(self.0 + rhs.0)
     }
 }
 
@@ -254,12 +248,10 @@ impl Distance {
 }
 
 impl Add for Distance {
-    type Output = Distance;
+    type Output = Result<Distance, NumericalError>;
 
-    fn add(self, rhs: Distance) -> Distance {
-        let result = self.0 + rhs.0;
-        debug_assert!(result.is_finite());
-        Distance(result)
+    fn add(self, rhs: Distance) -> Result<Distance, NumericalError> {
+        Distance::from_meters(self.0 + rhs.0)
     }
 }
 
@@ -368,12 +360,10 @@ impl Speed {
 }
 
 impl Add for Speed {
-    type Output = Speed;
+    type Output = Result<Speed, NumericalError>;
 
-    fn add(self, rhs: Speed) -> Speed {
-        let result = self.0 + rhs.0;
-        debug_assert!(result.is_finite());
-        Speed(result)
+    fn add(self, rhs: Speed) -> Result<Speed, NumericalError> {
+        Speed::from_meters_per_second(self.0 + rhs.0)
     }
 }
 
@@ -453,12 +443,42 @@ impl Div<GravitationalParameter> for GravitationalParameter {
     }
 }
 
+/// Dimensionless second zonal harmonic coefficient, commonly called J2.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct J2Coefficient(f64);
+
+impl J2Coefficient {
+    /// Creates a J2 coefficient from a dimensionless scalar.
+    pub fn from_scalar(value: f64) -> Result<Self, NumericalError> {
+        if value.is_finite() {
+            Ok(Self(value))
+        } else {
+            Err(NumericalError::NotFinite { field: "j2" })
+        }
+    }
+
+    /// Returns this J2 coefficient as a dimensionless scalar.
+    #[inline]
+    pub const fn scalar(self) -> f64 {
+        self.0
+    }
+}
+
 /// Orbital eccentricity, dimensionless.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
 pub struct Eccentricity(f64);
 
 impl Eccentricity {
+    pub(crate) const DEFAULT_CIRCULAR_CLASSIFICATION_TOLERANCE: Self = {
+        const {
+            assert!(crate::physics::constants::DEFAULT_CIRCULAR_ECCENTRICITY_TOLERANCE.is_finite());
+            assert!(crate::physics::constants::DEFAULT_CIRCULAR_ECCENTRICITY_TOLERANCE >= 0.0);
+        }
+        Self(crate::physics::constants::DEFAULT_CIRCULAR_ECCENTRICITY_TOLERANCE)
+    };
+
     /// Creates an eccentricity from a dimensionless scalar.
     pub fn from_scalar(value: f64) -> Result<Self, NumericalError> {
         if !value.is_finite() {
@@ -760,8 +780,18 @@ mod tests {
     fn angle_add_and_subtract() -> TestResult {
         let a = Angle::from_radians(1.0)?;
         let b = Angle::from_radians(0.5)?;
-        assert_close((a + b).radians(), 1.5, EPS);
-        assert_close((a - b).radians(), 0.5, EPS);
+        assert_close((a + b)?.radians(), 1.5, EPS);
+        assert_close((a - b)?.radians(), 0.5, EPS);
+        Ok(())
+    }
+
+    #[test]
+    fn angle_arithmetic_rejects_nonfinite_results() -> TestResult {
+        let a = Angle::from_radians(f64::MAX)?;
+        let b = Angle::from_radians(f64::MAX)?;
+
+        assert!((a + b).is_err());
+        assert!((Angle::from_radians(-f64::MAX)? - b).is_err());
         Ok(())
     }
 
@@ -769,8 +799,17 @@ mod tests {
     fn time_step_add_and_ratio() -> TestResult {
         let a = TimeStep::from_seconds(10.0)?;
         let b = TimeStep::from_seconds(5.0)?;
-        assert_close((a + b).seconds(), 15.0, EPS);
+        assert_close((a + b)?.seconds(), 15.0, EPS);
         assert_close(a / b, 2.0, EPS);
+        Ok(())
+    }
+
+    #[test]
+    fn time_step_add_rejects_nonfinite_result() -> TestResult {
+        let a = TimeStep::from_seconds(f64::MAX)?;
+        let b = TimeStep::from_seconds(f64::MAX)?;
+
+        assert!((a + b).is_err());
         Ok(())
     }
 
@@ -778,8 +817,17 @@ mod tests {
     fn duration_add_and_subtract() -> TestResult {
         let a = Duration::from_seconds(10.0)?;
         let b = Duration::from_seconds(3.0)?;
-        assert_close((a + b).seconds(), 13.0, EPS);
+        assert_close((a + b)?.seconds(), 13.0, EPS);
         assert_close((a - b).unwrap().seconds(), 7.0, EPS);
+        Ok(())
+    }
+
+    #[test]
+    fn duration_add_rejects_nonfinite_result() -> TestResult {
+        let a = Duration::from_seconds(f64::MAX)?;
+        let b = Duration::from_seconds(f64::MAX)?;
+
+        assert!((a + b).is_err());
         Ok(())
     }
 
@@ -795,8 +843,17 @@ mod tests {
     fn distance_add_and_ratio() -> TestResult {
         let a = Distance::from_meters(100.0)?;
         let b = Distance::from_meters(50.0)?;
-        assert_close((a + b).meters(), 150.0, EPS);
+        assert_close((a + b)?.meters(), 150.0, EPS);
         assert_close(a / b, 2.0, EPS);
+        Ok(())
+    }
+
+    #[test]
+    fn distance_add_rejects_nonfinite_result() -> TestResult {
+        let a = Distance::from_meters(f64::MAX)?;
+        let b = Distance::from_meters(f64::MAX)?;
+
+        assert!((a + b).is_err());
         Ok(())
     }
 
@@ -840,8 +897,17 @@ mod tests {
     fn speed_add_and_ratio() -> TestResult {
         let a = Speed::from_meters_per_second(100.0)?;
         let b = Speed::from_meters_per_second(50.0)?;
-        assert_close((a + b).meters_per_second(), 150.0, EPS);
+        assert_close((a + b)?.meters_per_second(), 150.0, EPS);
         assert_close(a / b, 2.0, EPS);
+        Ok(())
+    }
+
+    #[test]
+    fn speed_add_rejects_nonfinite_result() -> TestResult {
+        let a = Speed::from_meters_per_second(f64::MAX)?;
+        let b = Speed::from_meters_per_second(f64::MAX)?;
+
+        assert!((a + b).is_err());
         Ok(())
     }
 

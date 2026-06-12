@@ -130,7 +130,7 @@ impl OrbitalDiagnostics {
             velocity.cross(&specific_angular_momentum_vector) / mu_f64 - position / radius;
         let eccentricity = eccentricity_vector.norm();
 
-        let semi_major_axis = bound_semi_major_axis(mu, specific_energy);
+        let semi_major_axis = bound_semi_major_axis(mu, specific_energy)?;
         let periapsis_radius = match semi_major_axis {
             Some(axis) => Some((axis * (1.0 - eccentricity))?),
             None => None,
@@ -159,13 +159,18 @@ impl OrbitalDiagnostics {
     }
 }
 
-fn bound_semi_major_axis(mu: GravitationalParameter, specific_energy: f64) -> Option<Distance> {
+fn bound_semi_major_axis(
+    mu: GravitationalParameter,
+    specific_energy: f64,
+) -> Result<Option<Distance>, NumericalError> {
     if specific_energy >= 0.0 {
-        return None;
+        return Ok(None);
     }
 
     let mu_f64 = mu.meters_cubed_per_second_squared();
-    Distance::from_meters(-mu_f64 / (2.0 * specific_energy)).ok()
+    Ok(Some(Distance::from_meters(
+        -mu_f64 / (2.0 * specific_energy),
+    )?))
 }
 
 #[cfg(test)]
@@ -182,16 +187,16 @@ mod tests {
     const EPS: f64 = 1.0e-6;
 
     fn circular_orbit() -> Result<EllipticOrbit, Box<dyn std::error::Error>> {
-        Ok(EllipticOrbit {
-            semi_major_axis: Distance::from_meters(R_EARTH + ALTITUDE_M)?,
-            eccentricity: Eccentricity::from_scalar(0.0)?,
-            mu: earth_mu()?,
-            inclination: Angle::ZERO,
-            right_ascension_of_ascending_node: Angle::ZERO,
-            argument_of_periapsis: Angle::ZERO,
-            true_anomaly: Angle::from_radians(0.0)?,
-            direction: OrbitDirection::Prograde,
-        })
+        Ok(EllipticOrbit::new(
+            Distance::from_meters(R_EARTH + ALTITUDE_M)?,
+            Eccentricity::from_scalar(0.0)?,
+            earth_mu()?,
+            Angle::ZERO,
+            Angle::ZERO,
+            Angle::ZERO,
+            Angle::from_radians(0.0)?,
+            OrbitDirection::Prograde,
+        )?)
     }
 
     fn earth_mu() -> Result<GravitationalParameter, Box<dyn std::error::Error>> {
@@ -212,9 +217,9 @@ mod tests {
         let mut states = CartesianStateBuffer::<1>::new();
         states.write_from_state(0, &state)?;
 
-        let diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, orbit.mu)?;
+        let diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, orbit.mu())?;
 
-        let radius = orbit.semi_major_axis.meters();
+        let radius = orbit.semi_major_axis().meters();
         let speed = orbit.speed()?.meters_per_second();
 
         assert_close(diagnostics.radius.meters(), radius, EPS);

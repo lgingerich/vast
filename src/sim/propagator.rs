@@ -299,16 +299,17 @@ mod tests {
     fn leo_initial_state() -> CartesianState {
         let mu =
             GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu");
-        let orbit = EllipticOrbit {
-            semi_major_axis: Distance::from_meters(R_EARTH + 400_000.0).expect("radius"),
-            eccentricity: Eccentricity::from_scalar(0.0).expect("eccentricity"),
+        let orbit = EllipticOrbit::new(
+            Distance::from_meters(R_EARTH + 400_000.0).expect("radius"),
+            Eccentricity::from_scalar(0.0).expect("eccentricity"),
             mu,
-            inclination: Angle::ZERO,
-            right_ascension_of_ascending_node: Angle::ZERO,
-            argument_of_periapsis: Angle::ZERO,
-            true_anomaly: Angle::from_radians(0.0).expect("phase"),
-            direction: OrbitDirection::Prograde,
-        };
+            Angle::ZERO,
+            Angle::ZERO,
+            Angle::ZERO,
+            Angle::from_radians(0.0).expect("phase"),
+            OrbitDirection::Prograde,
+        )
+        .expect("orbit");
         orbit.to_cartesian_state().expect("state")
     }
 
@@ -316,19 +317,20 @@ mod tests {
     fn propagates_exactly_one_period() {
         let mu =
             GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu");
-        let orbit = EllipticOrbit {
-            semi_major_axis: Distance::from_meters(R_EARTH + 400_000.0).expect("radius"),
-            eccentricity: Eccentricity::from_scalar(0.0).expect("eccentricity"),
+        let orbit = EllipticOrbit::new(
+            Distance::from_meters(R_EARTH + 400_000.0).expect("radius"),
+            Eccentricity::from_scalar(0.0).expect("eccentricity"),
             mu,
-            inclination: Angle::ZERO,
-            right_ascension_of_ascending_node: Angle::ZERO,
-            argument_of_periapsis: Angle::ZERO,
-            true_anomaly: Angle::from_radians(0.0).expect("phase"),
-            direction: OrbitDirection::Prograde,
-        };
+            Angle::ZERO,
+            Angle::ZERO,
+            Angle::ZERO,
+            Angle::from_radians(0.0).expect("phase"),
+            OrbitDirection::Prograde,
+        )
+        .expect("orbit");
         let period = orbit.period().expect("period");
         let dt = TimeStep::from_seconds(10.0).expect("dt");
-        let gravity = TwoBodyGravity { mu };
+        let gravity = TwoBodyGravity::new(mu);
         let integrator = LeapfrogIntegrator;
 
         let mut propagator = Propagator::new(leo_initial_state(), dt).expect("propagator");
@@ -350,7 +352,7 @@ mod tests {
     fn respects_step_count_termination() {
         let mu =
             GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu");
-        let gravity = TwoBodyGravity { mu };
+        let gravity = TwoBodyGravity::new(mu);
         let integrator = LeapfrogIntegrator;
         let dt = TimeStep::from_seconds(10.0).expect("dt");
 
@@ -373,7 +375,7 @@ mod tests {
     fn collects_samples_on_interval() {
         let mu =
             GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu");
-        let gravity = TwoBodyGravity { mu };
+        let gravity = TwoBodyGravity::new(mu);
         let integrator = LeapfrogIntegrator;
         let dt = TimeStep::from_seconds(10.0).expect("dt");
 
@@ -406,16 +408,17 @@ mod tests {
         )
         .expect("delta-v");
 
-        let orbit = EllipticOrbit {
-            semi_major_axis: Distance::from_meters(departure_radius_m).expect("radius"),
-            eccentricity: Eccentricity::from_scalar(0.0).expect("eccentricity"),
+        let orbit = EllipticOrbit::new(
+            Distance::from_meters(departure_radius_m).expect("radius"),
+            Eccentricity::from_scalar(0.0).expect("eccentricity"),
             mu,
-            inclination: Angle::ZERO,
-            right_ascension_of_ascending_node: Angle::ZERO,
-            argument_of_periapsis: Angle::ZERO,
-            true_anomaly: Angle::from_radians(0.0).expect("phase"),
-            direction: OrbitDirection::Prograde,
-        };
+            Angle::ZERO,
+            Angle::ZERO,
+            Angle::ZERO,
+            Angle::from_radians(0.0).expect("phase"),
+            OrbitDirection::Prograde,
+        )
+        .expect("orbit");
         let mut propagator = Propagator::new(
             orbit.to_cartesian_state().expect("state"),
             TimeStep::from_seconds(30.0).expect("dt"),
@@ -428,7 +431,7 @@ mod tests {
             )
             .expect("burn");
 
-        let gravity = TwoBodyGravity { mu };
+        let gravity = TwoBodyGravity::new(mu);
         let integrator = LeapfrogIntegrator;
         let result = propagator
             .propagate_until(

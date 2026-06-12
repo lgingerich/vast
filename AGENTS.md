@@ -44,6 +44,12 @@ not copy TigerBeetle-specific constraints blindly.
 - Stay in scope. Only modify files and code directly related to the current task.
 - Do not refactor, rename, reformat, or reorganize unrelated code. Mention worthwhile follow-ups instead of making them.
 - Ask before big changes that restructure existing code, remove behavior, change public APIs, or alter project conventions.
+- Do not preserve backwards compatibility for internal Rust APIs unless the user
+  explicitly asks. When an internal API needs different semantics, update the
+  existing method/type directly and migrate call sites.
+- Do not add parallel helper methods such as `*_trusted`, `*_unchecked`, or
+  alternate constructors merely to avoid changing existing internal callers.
+  Prefer one clear method with the correct invariant boundary.
 - Admit uncertainty before it costs the user. If a fact, version, API, or approach is uncertain, say so before relying on it.
 - Before destructive or irreversible actions, explain the impact and wait for explicit confirmation.
 
@@ -97,6 +103,14 @@ not copy TigerBeetle-specific constraints blindly.
 - Prefer `Result`-returning constructors with typed errors (`NumericalError`)
   over panics. Use `debug_assert!` for debug-only backstops, not as the primary
   enforcement mechanism.
+- Internal physics values should be valid by construction. Do not introduce
+  extra "trusted" or "unchecked" method variants to route around validation.
+  Instead, move the invariant boundary into the existing constructor/accessor or
+  write path and update all internal call sites to use the revised contract.
+- Once a value has crossed a construction or write boundary, hot-path physics
+  code should trust that invariant. Avoid repeated finite/range checks on stored
+  state or typed domain values unless a new floating-point result is being
+  created.
 - **Do not re-assert domain constraints already guaranteed by the type.**
   When a type's constructor enforces `> 0.0`, its `Add` impl should not repeat
   `debug_assert!(result > 0.0)` — the sum of two positives is provably positive.
@@ -104,10 +118,10 @@ not copy TigerBeetle-specific constraints blindly.
   - **Float overflow** in arithmetic on domain types.
     Rust does not check float arithmetic; `f64::MAX + f64::MAX` produces `+Inf`
     silently. Guard `Add` and `Sub` impls with `debug_assert!(result.is_finite())`.
-  - **Preconditions for `_unchecked` constructors.**
-    When a hot path needs an unchecked constructor (e.g.,
-    `Duration::from_seconds_unchecked`), pair it with a debug assertion that
-    verifies the caller's obligation was met.
+  - **Preconditions for truly exceptional internal shortcuts.**
+    Add a shortcut only when the existing method cannot own the invariant
+    cleanly, and document why a second method is unavoidable. This should be
+    rare; replacing the existing method is usually preferred.
 - Split unrelated assertions over compound assertions:
 
   ```rust
@@ -164,6 +178,9 @@ not copy TigerBeetle-specific constraints blindly.
   storage path when stepping simulations.
 - Integrators should implement indexed stepping over `CartesianStatesMut` and
   remain allocation-free.
+- State storage should enforce validity when data enters the buffer, then expose
+  one internal read path that trusts stored values. Do not stack read-time
+  validation, "trusted" variants, and scalar bypass methods for the same data.
 - Prefer `VelocityVerletIntegrator` or `LeapfrogIntegrator` for long orbital
   rollouts with position-dependent conservative dynamics. Use RK4 for
   comparison, controls, thrust, drag, or other dissipative/non-conservative

@@ -45,24 +45,25 @@ struct OrbitVizScenario {
 
 impl OrbitVizScenario {
     fn new() -> Option<Self> {
-        let earth = TwoBodyGravity {
-            mu: GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).ok()?,
-        };
+        let earth = TwoBodyGravity::new(
+            GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).ok()?,
+        );
         let integrator = LeapfrogIntegrator;
 
         let altitude_m = 400_000.0;
         let earth_radius_m = R_EARTH;
         let orbital_radius_m = earth_radius_m + altitude_m;
-        let orbit = EllipticOrbit {
-            semi_major_axis: Distance::from_meters(orbital_radius_m).ok()?,
-            eccentricity: Eccentricity::from_scalar(0.0).ok()?,
-            mu: earth.mu,
-            inclination: Angle::ZERO,
-            right_ascension_of_ascending_node: Angle::ZERO,
-            argument_of_periapsis: Angle::ZERO,
-            true_anomaly: Angle::from_radians(0.0).ok()?,
-            direction: OrbitDirection::Prograde,
-        };
+        let orbit = EllipticOrbit::new(
+            Distance::from_meters(orbital_radius_m).ok()?,
+            Eccentricity::from_scalar(0.0).ok()?,
+            earth.mu(),
+            Angle::ZERO,
+            Angle::ZERO,
+            Angle::ZERO,
+            Angle::from_radians(0.0).ok()?,
+            OrbitDirection::Prograde,
+        )
+        .ok()?;
 
         let mut states = CartesianStateBuffer::<1>::new();
         states
@@ -76,7 +77,7 @@ impl OrbitVizScenario {
             t: Epoch::from_seconds(0.0).ok()?,
             dt: TimeStep::from_seconds(1.0).ok()?,
             earth_radius_m,
-            ideal_orbital_radius: orbit.semi_major_axis,
+            ideal_orbital_radius: orbit.semi_major_axis(),
             circular_speed: orbit.speed().ok()?,
             orbital_period: orbit.period().ok()?,
             meters_per_pixel: 40_000.0,
@@ -150,7 +151,7 @@ impl OrbitVizScenario {
 
     fn draw_hud(&self) {
         let Some(diagnostics) =
-            OrbitalDiagnostics::from_states(&self.states.view(), 0, self.earth.mu).ok()
+            OrbitalDiagnostics::from_states(&self.states.view(), 0, self.earth.mu()).ok()
         else {
             draw_text("orbital diagnostics unavailable", 20.0, 30.0, 24.0, RED);
             return;

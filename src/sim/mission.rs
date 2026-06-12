@@ -183,7 +183,7 @@ impl MissionScenarioConfig {
 
         let integrator = parse_integrator(&self.propagation.integrator)?;
         let gravity = parse_force_model(&self.propagation.force_model)?;
-        let mu = gravity.mu;
+        let mu = gravity.mu();
 
         let initial_state = build_initial_state(&self.initial_orbit, mu)?;
         let propagator = Propagator::new(initial_state, dt)?.with_sampling(
@@ -298,7 +298,7 @@ impl MissionRunner {
         let mut segment_results = Vec::new();
 
         for burn in &scenario.initial_burns {
-            apply_burn(&mut scenario.propagator, *burn, scenario.gravity.mu)?;
+            apply_burn(&mut scenario.propagator, *burn, scenario.gravity.mu())?;
         }
 
         for (segment_index, segment) in scenario.segments.clone().into_iter().enumerate() {
@@ -307,7 +307,7 @@ impl MissionRunner {
 
             let mut burns_applied = 0_usize;
             for burn in &segment.burns {
-                apply_burn(&mut scenario.propagator, *burn, scenario.gravity.mu)?;
+                apply_burn(&mut scenario.propagator, *burn, scenario.gravity.mu())?;
                 burns_applied += 1;
             }
 
@@ -339,7 +339,7 @@ fn propagate_segment(
     termination: TerminationCondition,
     segment_index: usize,
 ) -> Result<PropagationResult, MissionError> {
-    let mu = scenario.gravity.mu;
+    let mu = scenario.gravity.mu();
     match scenario.integrator {
         IntegratorKind::Leapfrog => Ok(scenario.propagator.propagate_until_with_segment(
             &LeapfrogIntegrator,
@@ -425,16 +425,16 @@ fn build_initial_state(
     match initial_orbit {
         InitialOrbitConfig::Circular { altitude_m } => {
             let radius = Distance::from_meters(R_EARTH + altitude_m)?;
-            let orbit = EllipticOrbit {
-                semi_major_axis: radius,
-                eccentricity: Eccentricity::from_scalar(0.0)?,
+            let orbit = EllipticOrbit::new(
+                radius,
+                Eccentricity::from_scalar(0.0)?,
                 mu,
-                inclination: Angle::ZERO,
-                right_ascension_of_ascending_node: Angle::ZERO,
-                argument_of_periapsis: Angle::ZERO,
-                true_anomaly: Angle::from_radians(0.0)?,
-                direction: OrbitDirection::Prograde,
-            };
+                Angle::ZERO,
+                Angle::ZERO,
+                Angle::ZERO,
+                Angle::from_radians(0.0)?,
+                OrbitDirection::Prograde,
+            )?;
             Ok(orbit.to_cartesian_state()?)
         }
         InitialOrbitConfig::Classical {

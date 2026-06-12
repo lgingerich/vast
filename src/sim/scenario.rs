@@ -76,16 +76,16 @@ impl ScenarioConfig {
         let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
         let radius = Distance::from_meters(R_EARTH + self.altitude_m)?;
 
-        let orbit = EllipticOrbit {
-            semi_major_axis: radius,
-            eccentricity: Eccentricity::from_scalar(0.0)?,
+        let orbit = EllipticOrbit::new(
+            radius,
+            Eccentricity::from_scalar(0.0)?,
             mu,
-            inclination: Angle::ZERO,
-            right_ascension_of_ascending_node: Angle::ZERO,
-            argument_of_periapsis: Angle::ZERO,
-            true_anomaly: Angle::from_radians(0.0)?,
-            direction: OrbitDirection::Prograde,
-        };
+            Angle::ZERO,
+            Angle::ZERO,
+            Angle::ZERO,
+            Angle::from_radians(0.0)?,
+            OrbitDirection::Prograde,
+        )?;
 
         let initial_state = orbit.to_cartesian_state()?;
 
@@ -124,7 +124,7 @@ pub(crate) fn parse_force_model(name: &str) -> Result<TwoBodyGravity, MissionErr
     match name {
         "two_body" => {
             let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
-            Ok(TwoBodyGravity { mu })
+            Ok(TwoBodyGravity::new(mu))
         }
         other => Err(MissionError::UnknownForceModel(other.to_string())),
     }
@@ -172,25 +172,25 @@ impl IntegratorKind {
                 &LeapfrogIntegrator,
                 &scenario.gravity,
                 scenario.termination.clone(),
-                scenario.gravity.mu,
+                scenario.gravity.mu(),
             ),
             Self::VelocityVerlet => scenario.propagator.propagate_until(
                 &VelocityVerletIntegrator,
                 &scenario.gravity,
                 scenario.termination.clone(),
-                scenario.gravity.mu,
+                scenario.gravity.mu(),
             ),
             Self::Euler => scenario.propagator.propagate_until(
                 &EulerIntegrator,
                 &scenario.gravity,
                 scenario.termination.clone(),
-                scenario.gravity.mu,
+                scenario.gravity.mu(),
             ),
             Self::RungeKutta4 => scenario.propagator.propagate_until(
                 &RungeKutta4Integrator,
                 &scenario.gravity,
                 scenario.termination.clone(),
-                scenario.gravity.mu,
+                scenario.gravity.mu(),
             ),
         }
     }
