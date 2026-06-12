@@ -7,7 +7,7 @@ use crate::errors::{DynamicsError, NumericalError};
 /// Point-mass gravity model for a single central body.
 pub struct TwoBodyGravity {
     /// Standard gravitational parameter in cubic meters per second squared.
-    pub mu: GravitationalParameter,
+    mu: GravitationalParameter,
 }
 
 impl TwoBodyGravity {
@@ -18,7 +18,7 @@ impl TwoBodyGravity {
     }
 
     /// Returns the central body's gravitational parameter.
-    #[inline] // NOTE: Do we for sure need this? If yes, other Gravity impl's likely need something similar.
+    #[inline]
     pub const fn mu(&self) -> GravitationalParameter {
         self.mu
     }
@@ -27,11 +27,11 @@ impl TwoBodyGravity {
 /// Gravity model for an oblate central body with J2 perturbation.
 pub struct OblateBodyGravity {
     /// Standard gravitational parameter in cubic meters per second squared.
-    pub mu: GravitationalParameter,
+    mu: GravitationalParameter,
     /// Equatorial reference radius in meters.
-    pub equatorial_radius: Distance,
+    equatorial_radius: Distance,
     /// Dimensionless second zonal harmonic coefficient.
-    pub j2: J2Coefficient,
+    j2: J2Coefficient,
 }
 
 impl OblateBodyGravity {
@@ -48,20 +48,38 @@ impl OblateBodyGravity {
             j2,
         }
     }
+
+    /// Returns the central body's gravitational parameter.
+    #[inline]
+    pub const fn mu(&self) -> GravitationalParameter {
+        self.mu
+    }
+
+    /// Returns the equatorial reference radius.
+    #[inline]
+    pub const fn equatorial_radius(&self) -> Distance {
+        self.equatorial_radius
+    }
+
+    /// Returns the J2 coefficient.
+    #[inline]
+    pub const fn j2(&self) -> J2Coefficient {
+        self.j2
+    }
 }
 
 /// Spherical exponential atmosphere rotating about the inertial z axis.
 pub struct ExponentialAtmosphere {
     /// Planet reference radius in meters.
-    pub reference_radius: Distance,
+    reference_radius: Distance,
     /// Reference altitude above `reference_radius`.
-    pub reference_altitude: Distance,
+    reference_altitude: Distance,
     /// Density at `reference_altitude`.
-    pub reference_density: MassDensity,
+    reference_density: MassDensity,
     /// Exponential scale height.
-    pub scale_height: Distance,
+    scale_height: Distance,
     /// Planet angular rate about the inertial z axis.
-    pub angular_rate: AngularRate,
+    angular_rate: AngularRate,
 }
 
 impl ExponentialAtmosphere {
@@ -82,14 +100,44 @@ impl ExponentialAtmosphere {
             angular_rate,
         }
     }
+
+    /// Returns the planet reference radius.
+    #[inline]
+    pub const fn reference_radius(&self) -> Distance {
+        self.reference_radius
+    }
+
+    /// Returns the reference altitude.
+    #[inline]
+    pub const fn reference_altitude(&self) -> Distance {
+        self.reference_altitude
+    }
+
+    /// Returns the atmospheric density at the reference altitude.
+    #[inline]
+    pub const fn reference_density(&self) -> MassDensity {
+        self.reference_density
+    }
+
+    /// Returns the exponential scale height.
+    #[inline]
+    pub const fn scale_height(&self) -> Distance {
+        self.scale_height
+    }
+
+    /// Returns the planet angular rate.
+    #[inline]
+    pub const fn angular_rate(&self) -> AngularRate {
+        self.angular_rate
+    }
 }
 
 /// Cannonball atmospheric drag model.
 pub struct AtmosphericDrag {
     /// Atmosphere model.
-    pub atmosphere: ExponentialAtmosphere,
+    atmosphere: ExponentialAtmosphere,
     /// Drag coefficient times reference area divided by mass.
-    pub area_per_mass: AreaPerMass,
+    area_per_mass: AreaPerMass,
 }
 
 impl AtmosphericDrag {
@@ -101,14 +149,38 @@ impl AtmosphericDrag {
             area_per_mass,
         }
     }
+
+    /// Returns the atmosphere model.
+    #[inline]
+    pub const fn atmosphere(&self) -> &ExponentialAtmosphere {
+        &self.atmosphere
+    }
+
+    /// Returns the drag coefficient times reference area divided by mass.
+    #[inline]
+    pub const fn area_per_mass(&self) -> AreaPerMass {
+        self.area_per_mass
+    }
 }
 
 /// Allocation-free composition of two local dynamics models.
 pub struct CompositeDynamics<A, B> {  // NOTE: What if we have more than two dynamics models?
-    /// First dynamics model.
-    pub first: A,
-    /// Second dynamics model.
-    pub second: B,
+    first: A,
+    second: B,
+}
+
+impl<A, B> CompositeDynamics<A, B> {
+    /// Returns a reference to the first dynamics model.
+    #[inline]
+    pub const fn first(&self) -> &A {
+        &self.first
+    }
+
+    /// Returns a reference to the second dynamics model.
+    #[inline]
+    pub const fn second(&self) -> &B {
+        &self.second
+    }
 }
 
 /// Computes acceleration for a state at a given simulation time.
@@ -750,7 +822,7 @@ mod tests {
             second: drag_model(0.05)?,
         };
         let initial_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
-            .specific_energy
+            .specific_energy()
             .square_meters_per_square_second();
         let integrator = RungeKutta4Integrator;
         let dt = TimeStep::from_seconds(10.0)?;
@@ -762,7 +834,7 @@ mod tests {
         }
 
         let final_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
-            .specific_energy
+            .specific_energy()
             .square_meters_per_square_second();
 
         assert!(final_energy < initial_energy);
@@ -786,10 +858,10 @@ mod tests {
         let mut states = CartesianStateBuffer::<1>::new();
         states.write_from_state(0, &orbit.to_cartesian_state()?)?;
         let initial_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
-            .specific_energy
+            .specific_energy()
             .square_meters_per_square_second();
         let initial_altitude_m = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
-            .radius
+            .radius()
             .meters()
             - R_EARTH;
         let dynamics = CompositeDynamics {
@@ -810,9 +882,9 @@ mod tests {
 
         let diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?;
         let final_energy = diagnostics
-            .specific_energy
+            .specific_energy()
             .square_meters_per_square_second();
-        let final_altitude_m = diagnostics.radius.meters() - R_EARTH;
+        let final_altitude_m = diagnostics.radius().meters() - R_EARTH;
         let energy_loss = initial_energy - final_energy;
 
         let min_energy_loss = 1.0;

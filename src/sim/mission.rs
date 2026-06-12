@@ -448,14 +448,14 @@ fn build_initial_state(
             use crate::physics::elements::ClassicalOrbitalElements;
             use crate::physics::types::Eccentricity;
 
-            let elements = ClassicalOrbitalElements {
-                semi_major_axis: Distance::from_meters(*semi_major_axis_m)?,
-                eccentricity: Eccentricity::from_scalar(*eccentricity)?,
-                inclination: Angle::from_degrees(*inclination_deg)?,
-                right_ascension_of_ascending_node: Angle::from_degrees(*raan_deg)?,
-                argument_of_periapsis: Angle::from_degrees(*arg_periapsis_deg)?,
-                true_anomaly: Angle::from_degrees(*true_anomaly_deg)?,
-            };
+            let elements = ClassicalOrbitalElements::new(
+                Distance::from_meters(*semi_major_axis_m)?,
+                Eccentricity::from_scalar(*eccentricity)?,
+                Angle::from_degrees(*inclination_deg)?,
+                Angle::from_degrees(*raan_deg)?,
+                Angle::from_degrees(*arg_periapsis_deg)?,
+                Angle::from_degrees(*true_anomaly_deg)?,
+            );
             Ok(elements.to_cartesian_state(mu)?)
         }
     }
@@ -623,10 +623,10 @@ mod tests {
 
     fn elements_semi_major_axis_m(elements: &OrbitalElements) -> f64 {
         match elements {
-            OrbitalElements::Classical(elements) => elements.semi_major_axis.meters(),
-            OrbitalElements::CircularInclined(elements) => elements.semi_major_axis.meters(),
-            OrbitalElements::CircularEquatorial(elements) => elements.semi_major_axis.meters(),
-            OrbitalElements::EquatorialElliptic(elements) => elements.semi_major_axis.meters(),
+            OrbitalElements::Classical(elements) => elements.semi_major_axis().meters(),
+            OrbitalElements::CircularInclined(elements) => elements.semi_major_axis().meters(),
+            OrbitalElements::CircularEquatorial(elements) => elements.semi_major_axis().meters(),
+            OrbitalElements::EquatorialElliptic(elements) => elements.semi_major_axis().meters(),
         }
     }
 

@@ -12,9 +12,9 @@ use crate::errors::NumericalError;
 #[derive(Debug, Clone, Copy)]
 pub struct OrbitalElementClassification {
     /// Eccentricities at or below this value are treated as circular.
-    pub circular_eccentricity_tolerance: Eccentricity,
+    circular_eccentricity_tolerance: Eccentricity,
     /// Inclinations within this angle of 0 or pi are treated as equatorial.
-    pub equatorial_inclination_tolerance: Angle,
+    equatorial_inclination_tolerance: Angle,
 }
 
 impl OrbitalElementClassification {
@@ -27,6 +27,18 @@ impl OrbitalElementClassification {
             circular_eccentricity_tolerance,
             equatorial_inclination_tolerance,
         }
+    }
+
+    /// Returns the eccentricity tolerance for circular classification.
+    #[inline]
+    pub const fn circular_eccentricity_tolerance(&self) -> Eccentricity {
+        self.circular_eccentricity_tolerance
+    }
+
+    /// Returns the inclination tolerance for equatorial classification.
+    #[inline]
+    pub const fn equatorial_inclination_tolerance(&self) -> Angle {
+        self.equatorial_inclination_tolerance
     }
 }
 
@@ -61,60 +73,60 @@ pub enum OrbitalElements {
 #[derive(Debug, Clone, Copy)]
 pub struct ClassicalOrbitalElements {
     /// Semi-major axis for the bound orbit.
-    pub semi_major_axis: Distance,
+    semi_major_axis: Distance,
     /// Orbital eccentricity.
-    pub eccentricity: Eccentricity,
+    eccentricity: Eccentricity,
     /// Inclination from the inertial x-y plane.
-    pub inclination: Angle,
+    inclination: Angle,
     /// Right ascension of the ascending node.
-    pub right_ascension_of_ascending_node: Angle,
+    right_ascension_of_ascending_node: Angle,
     /// Argument of periapsis.
-    pub argument_of_periapsis: Angle,
+    argument_of_periapsis: Angle,
     /// True anomaly.
-    pub true_anomaly: Angle,
+    true_anomaly: Angle,
 }
 
 /// Elements for a circular inclined bound orbit.
 #[derive(Debug, Clone, Copy)]
 pub struct CircularInclinedElements {
     /// Semi-major axis for the bound orbit.
-    pub semi_major_axis: Distance,
+    semi_major_axis: Distance,
     /// Orbital eccentricity.
-    pub eccentricity: Eccentricity,
+    eccentricity: Eccentricity,
     /// Inclination from the inertial x-y plane.
-    pub inclination: Angle,
+    inclination: Angle,
     /// Right ascension of the ascending node.
-    pub right_ascension_of_ascending_node: Angle,
+    right_ascension_of_ascending_node: Angle,
     /// Argument of latitude measured from the ascending node.
-    pub argument_of_latitude: Angle,
+    argument_of_latitude: Angle,
 }
 
 /// Elements for a circular equatorial bound orbit.
 #[derive(Debug, Clone, Copy)]
 pub struct CircularEquatorialElements {
     /// Semi-major axis for the bound orbit.
-    pub semi_major_axis: Distance,
+    semi_major_axis: Distance,
     /// Orbital eccentricity.
-    pub eccentricity: Eccentricity,
+    eccentricity: Eccentricity,
     /// Inclination from the inertial x-y plane.
-    pub inclination: Angle,
+    inclination: Angle,
     /// True longitude measured in the inertial x-y plane.
-    pub true_longitude: Angle,
+    true_longitude: Angle,
 }
 
 /// Elements for an eccentric equatorial bound orbit.
 #[derive(Debug, Clone, Copy)]
 pub struct EquatorialEllipticElements {
     /// Semi-major axis for the bound orbit.
-    pub semi_major_axis: Distance,
+    semi_major_axis: Distance,
     /// Orbital eccentricity.
-    pub eccentricity: Eccentricity,
+    eccentricity: Eccentricity,
     /// Inclination from the inertial x-y plane.
-    pub inclination: Angle,
+    inclination: Angle,
     /// Longitude of periapsis measured in the inertial x-y plane.
-    pub longitude_of_periapsis: Angle,
+    longitude_of_periapsis: Angle,
     /// True anomaly measured from periapsis.
-    pub true_anomaly: Angle,
+    true_anomaly: Angle,
 }
 
 impl OrbitalElements {
@@ -207,7 +219,7 @@ impl OrbitalElements {
             super::diagnostics::OrbitalDiagnostics::from_components(position, velocity, mu)?;
 
         if diagnostics
-            .specific_energy
+            .specific_energy()
             .square_meters_per_square_second()
             >= 0.0
         {
@@ -219,17 +231,17 @@ impl OrbitalElements {
 
         let semi_major_axis =
             diagnostics
-                .semi_major_axis
+                .semi_major_axis()
                 .ok_or(NumericalError::ConstraintViolation {
                     field: "semi-major axis",
                     reason: "not defined for unbound orbits",
                 })?;
-        let eccentricity = diagnostics.eccentricity;
+        let eccentricity = diagnostics.eccentricity();
         let eccentricity_scalar = eccentricity.scalar();
-        let eccentricity_vector = diagnostics.eccentricity_vector;
-        let h = diagnostics.specific_angular_momentum_vector;
+        let eccentricity_vector = *diagnostics.eccentricity_vector();
+        let h = *diagnostics.specific_angular_momentum_vector();
         let h_norm = diagnostics
-            .specific_angular_momentum
+            .specific_angular_momentum()
             .square_meters_per_second();
         if h_norm == 0.0 {
             return Err(NumericalError::ZeroNorm {
@@ -344,6 +356,26 @@ impl OrbitalElements {
 }
 
 impl ClassicalOrbitalElements {
+    /// Creates a classical orbital-element set from domain quantities.
+    #[inline]
+    pub const fn new(
+        semi_major_axis: Distance,
+        eccentricity: Eccentricity,
+        inclination: Angle,
+        right_ascension_of_ascending_node: Angle,
+        argument_of_periapsis: Angle,
+        true_anomaly: Angle,
+    ) -> Self {
+        Self {
+            semi_major_axis,
+            eccentricity,
+            inclination,
+            right_ascension_of_ascending_node,
+            argument_of_periapsis,
+            true_anomaly,
+        }
+    }
+
     /// Builds an inertial Cartesian state from classical Keplerian elements.
     ///
     /// Returns an error if the orbital parameters are physically invalid or
@@ -362,6 +394,132 @@ impl ClassicalOrbitalElements {
             true_anomaly: self.true_anomaly,
             velocity_sign: 1.0,
         })
+    }
+
+    /// Returns the semi-major axis.
+    #[inline]
+    pub const fn semi_major_axis(&self) -> Distance {
+        self.semi_major_axis
+    }
+
+    /// Returns the orbital eccentricity.
+    #[inline]
+    pub const fn eccentricity(&self) -> Eccentricity {
+        self.eccentricity
+    }
+
+    /// Returns the inclination.
+    #[inline]
+    pub const fn inclination(&self) -> Angle {
+        self.inclination
+    }
+
+    /// Returns the right ascension of the ascending node.
+    #[inline]
+    pub const fn right_ascension_of_ascending_node(&self) -> Angle {
+        self.right_ascension_of_ascending_node
+    }
+
+    /// Returns the argument of periapsis.
+    #[inline]
+    pub const fn argument_of_periapsis(&self) -> Angle {
+        self.argument_of_periapsis
+    }
+
+    /// Returns the true anomaly.
+    #[inline]
+    pub const fn true_anomaly(&self) -> Angle {
+        self.true_anomaly
+    }
+}
+
+impl CircularInclinedElements {
+    /// Returns the semi-major axis.
+    #[inline]
+    pub const fn semi_major_axis(&self) -> Distance {
+        self.semi_major_axis
+    }
+
+    /// Returns the orbital eccentricity.
+    #[inline]
+    pub const fn eccentricity(&self) -> Eccentricity {
+        self.eccentricity
+    }
+
+    /// Returns the inclination.
+    #[inline]
+    pub const fn inclination(&self) -> Angle {
+        self.inclination
+    }
+
+    /// Returns the right ascension of the ascending node.
+    #[inline]
+    pub const fn right_ascension_of_ascending_node(&self) -> Angle {
+        self.right_ascension_of_ascending_node
+    }
+
+    /// Returns the argument of latitude.
+    #[inline]
+    pub const fn argument_of_latitude(&self) -> Angle {
+        self.argument_of_latitude
+    }
+}
+
+impl CircularEquatorialElements {
+    /// Returns the semi-major axis.
+    #[inline]
+    pub const fn semi_major_axis(&self) -> Distance {
+        self.semi_major_axis
+    }
+
+    /// Returns the orbital eccentricity.
+    #[inline]
+    pub const fn eccentricity(&self) -> Eccentricity {
+        self.eccentricity
+    }
+
+    /// Returns the inclination.
+    #[inline]
+    pub const fn inclination(&self) -> Angle {
+        self.inclination
+    }
+
+    /// Returns the true longitude.
+    #[inline]
+    pub const fn true_longitude(&self) -> Angle {
+        self.true_longitude
+    }
+}
+
+impl EquatorialEllipticElements {
+    /// Returns the semi-major axis.
+    #[inline]
+    pub const fn semi_major_axis(&self) -> Distance {
+        self.semi_major_axis
+    }
+
+    /// Returns the orbital eccentricity.
+    #[inline]
+    pub const fn eccentricity(&self) -> Eccentricity {
+        self.eccentricity
+    }
+
+    /// Returns the inclination.
+    #[inline]
+    pub const fn inclination(&self) -> Angle {
+        self.inclination
+    }
+
+    /// Returns the longitude of periapsis.
+    #[inline]
+    pub const fn longitude_of_periapsis(&self) -> Angle {
+        self.longitude_of_periapsis
+    }
+
+    /// Returns the true anomaly.
+    #[inline]
+    pub const fn true_anomaly(&self) -> Angle {
+        self.true_anomaly
     }
 }
 

@@ -63,25 +63,25 @@ impl SpecificAngularMomentum {
 /// Two-body orbital diagnostics for a Cartesian state.
 pub struct OrbitalDiagnostics {
     /// Current radius from the central body's center of mass.
-    pub radius: Distance,
+    radius: Distance,
     /// Current inertial speed.
-    pub speed: Speed,
+    speed: Speed,
     /// Specific orbital energy.
-    pub specific_energy: SpecificEnergy,
+    specific_energy: SpecificEnergy,
     /// Specific angular momentum vector.
-    pub specific_angular_momentum_vector: Vector3<f64>,
+    specific_angular_momentum_vector: Vector3<f64>,
     /// Specific angular momentum magnitude.
-    pub specific_angular_momentum: SpecificAngularMomentum,
+    specific_angular_momentum: SpecificAngularMomentum,
     /// Eccentricity vector.
-    pub eccentricity_vector: Vector3<f64>,
+    eccentricity_vector: Vector3<f64>,
     /// Eccentricity magnitude.
-    pub eccentricity: Eccentricity,
+    eccentricity: Eccentricity,
     /// Semi-major axis for bound elliptical orbits.
-    pub semi_major_axis: Option<Distance>,
+    semi_major_axis: Option<Distance>,
     /// Periapsis radius for bound elliptical orbits.
-    pub periapsis_radius: Option<Distance>,
+    periapsis_radius: Option<Distance>,
     /// Apoapsis radius for bound elliptical orbits.
-    pub apoapsis_radius: Option<Distance>,
+    apoapsis_radius: Option<Distance>,
 }
 
 impl OrbitalDiagnostics {
@@ -156,6 +156,66 @@ impl OrbitalDiagnostics {
             periapsis_radius,
             apoapsis_radius,
         })
+    }
+
+    /// Returns the current radius from the central body's center of mass.
+    #[inline]
+    pub const fn radius(&self) -> Distance {
+        self.radius
+    }
+
+    /// Returns the current inertial speed.
+    #[inline]
+    pub const fn speed(&self) -> Speed {
+        self.speed
+    }
+
+    /// Returns the specific orbital energy.
+    #[inline]
+    pub const fn specific_energy(&self) -> SpecificEnergy {
+        self.specific_energy
+    }
+
+    /// Returns the specific angular momentum vector.
+    #[inline]
+    pub fn specific_angular_momentum_vector(&self) -> &Vector3<f64> {
+        &self.specific_angular_momentum_vector
+    }
+
+    /// Returns the specific angular momentum magnitude.
+    #[inline]
+    pub const fn specific_angular_momentum(&self) -> SpecificAngularMomentum {
+        self.specific_angular_momentum
+    }
+
+    /// Returns the eccentricity vector.
+    #[inline]
+    pub fn eccentricity_vector(&self) -> &Vector3<f64> {
+        &self.eccentricity_vector
+    }
+
+    /// Returns the eccentricity magnitude.
+    #[inline]
+    pub const fn eccentricity(&self) -> Eccentricity {
+        self.eccentricity
+    }
+
+    /// Returns the semi-major axis for bound elliptical orbits.
+    #[inline]
+    pub const fn semi_major_axis(&self) -> Option<Distance> {
+        self.semi_major_axis
+    }
+
+    /// Returns the periapsis radius for bound elliptical orbits.
+    #[inline]
+    pub const fn periapsis_radius(&self) -> Option<Distance> {
+        self.periapsis_radius
+    }
+
+    /// Returns the apoapsis radius for bound elliptical orbits.
+    #[inline]
+    pub const fn apoapsis_radius(&self) -> Option<Distance> {
+        self.apoapsis_radius
     }
 }
 

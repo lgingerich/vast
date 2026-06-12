@@ -614,16 +614,16 @@ mod tests {
         let final_one = OrbitalDiagnostics::from_states(&states.view(), 1, mu)?;
 
         assert_close(
-            final_zero.specific_energy.square_meters_per_square_second(),
+            final_zero.specific_energy().square_meters_per_square_second(),
             initial_zero
-                .specific_energy
+                .specific_energy()
                 .square_meters_per_square_second(),
             1.0,
         );
         assert_close(
-            final_one.specific_energy.square_meters_per_square_second(),
+            final_one.specific_energy().square_meters_per_square_second(),
             initial_one
-                .specific_energy
+                .specific_energy()
                 .square_meters_per_square_second(),
             1.0,
         );
@@ -662,9 +662,9 @@ mod tests {
 
         assert_close(
             final_diagnostics
-                .specific_energy
+                .specific_energy()
                 .square_meters_per_square_second(),
-            initial.specific_energy.square_meters_per_square_second(),
+            initial.specific_energy().square_meters_per_square_second(),
             tolerance,
         );
         Ok(())
@@ -742,7 +742,7 @@ mod tests {
         states.write_from_state(0, &orbit.to_cartesian_state()?)?;
 
         let initial_h = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
-            .specific_angular_momentum
+            .specific_angular_momentum()
             .square_meters_per_second();
 
         let mut epoch = Epoch::from_seconds(0.0)?;
@@ -757,7 +757,7 @@ mod tests {
         }
 
         let final_h = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
-            .specific_angular_momentum
+            .specific_angular_momentum()
             .square_meters_per_second();
 
         assert!(final_h.is_finite(), "angular momentum is non-finite");
@@ -801,7 +801,7 @@ mod tests {
         states.write_from_state(0, &orbit.to_cartesian_state()?)?;
 
         let initial_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
-            .specific_energy
+            .specific_energy()
             .square_meters_per_square_second();
 
         let mut epoch = Epoch::from_seconds(0.0)?;
@@ -816,7 +816,7 @@ mod tests {
         }
 
         let final_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
-            .specific_energy
+            .specific_energy()
             .square_meters_per_square_second();
 
         Ok((final_energy - initial_energy).abs())
