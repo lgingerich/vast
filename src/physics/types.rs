@@ -247,7 +247,13 @@ impl Mul<f64> for Distance {
     type Output = Result<Distance, NumericalError>;
 
     fn mul(self, rhs: f64) -> Result<Distance, NumericalError> {
-        Distance::from_meters(self.0 * rhs)
+        let result = self.0 * rhs;
+        if !result.is_finite() {
+            return Err(NumericalError::NotFinite {
+                field: "distance * scalar",
+            });
+        }
+        Ok(Distance(result))
     }
 }
 
@@ -255,7 +261,13 @@ impl Div<f64> for Distance {
     type Output = Result<Distance, NumericalError>;
 
     fn div(self, rhs: f64) -> Result<Distance, NumericalError> {
-        Distance::from_meters(self.0 / rhs)
+        let result = self.0 / rhs;
+        if !result.is_finite() {
+            return Err(NumericalError::NotFinite {
+                field: "distance / scalar",
+            });
+        }
+        Ok(Distance(result))
     }
 }
 
@@ -359,7 +371,13 @@ impl Mul<f64> for Speed {
     type Output = Result<Speed, NumericalError>;
 
     fn mul(self, rhs: f64) -> Result<Speed, NumericalError> {
-        Speed::from_meters_per_second(self.0 * rhs)
+        let result = self.0 * rhs;
+        if !result.is_finite() {
+            return Err(NumericalError::NotFinite {
+                field: "speed * scalar",
+            });
+        }
+        Ok(Speed(result))
     }
 }
 
@@ -367,7 +385,13 @@ impl Div<f64> for Speed {
     type Output = Result<Speed, NumericalError>;
 
     fn div(self, rhs: f64) -> Result<Speed, NumericalError> {
-        Speed::from_meters_per_second(self.0 / rhs)
+        let result = self.0 / rhs;
+        if !result.is_finite() {
+            return Err(NumericalError::NotFinite {
+                field: "speed / scalar",
+            });
+        }
+        Ok(Speed(result))
     }
 }
 
@@ -411,7 +435,13 @@ impl Mul<f64> for GravitationalParameter {
     type Output = Result<GravitationalParameter, NumericalError>;
 
     fn mul(self, rhs: f64) -> Result<GravitationalParameter, NumericalError> {
-        GravitationalParameter::from_meters_cubed_per_second_squared(self.0 * rhs)
+        let result = self.0 * rhs;
+        if !result.is_finite() {
+            return Err(NumericalError::NotFinite {
+                field: "gravitational parameter * scalar",
+            });
+        }
+        Ok(GravitationalParameter(result))
     }
 }
 
@@ -419,7 +449,13 @@ impl Div<f64> for GravitationalParameter {
     type Output = Result<GravitationalParameter, NumericalError>;
 
     fn div(self, rhs: f64) -> Result<GravitationalParameter, NumericalError> {
-        GravitationalParameter::from_meters_cubed_per_second_squared(self.0 / rhs)
+        let result = self.0 / rhs;
+        if !result.is_finite() {
+            return Err(NumericalError::NotFinite {
+                field: "gravitational parameter / scalar",
+            });
+        }
+        Ok(GravitationalParameter(result))
     }
 }
 
@@ -604,6 +640,14 @@ mod tests {
     }
 
     #[test]
+    fn epoch_duration_since_returns_elapsed_time() -> TestResult {
+        let start = Epoch::from_seconds(5.0)?;
+        let end = Epoch::from_seconds(12.5)?;
+        assert_close(end.duration_since(start).seconds(), 7.5, EPS);
+        Ok(())
+    }
+
+    #[test]
     fn time_step_accepts_positive_finite_values() {
         for value in [f64::MIN_POSITIVE, 1.0] {
             assert!(TimeStep::from_seconds(value).is_ok());
@@ -745,6 +789,13 @@ mod tests {
     }
 
     #[test]
+    fn angular_rate_accepts_finite_values() {
+        for value in [-1.0, 0.0, 1.0] {
+            assert!(AngularRate::from_radians_per_second(value).is_ok());
+        }
+    }
+
+    #[test]
     fn position_velocity_and_acceleration_reject_nonfinite_components() {
         for vector in [
             Vector3::new(f64::NAN, 0.0, 0.0),
@@ -754,6 +805,34 @@ mod tests {
             assert!(Position::from_vector(vector).is_err());
             assert!(Velocity::from_vector(vector).is_err());
             assert!(Acceleration::from_vector(vector).is_err());
+        }
+    }
+
+    #[test]
+    fn eccentricity_accepts_nonnegative_finite_values() {
+        for value in [0.0, f64::MIN_POSITIVE, 1.0] {
+            assert!(Eccentricity::from_scalar(value).is_ok());
+        }
+    }
+
+    #[test]
+    fn eccentricity_rejects_negative_and_nonfinite_values() {
+        for value in [-1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(Eccentricity::from_scalar(value).is_err());
+        }
+    }
+
+    #[test]
+    fn j2_coefficient_accepts_finite_values() {
+        for value in [-1.0, 0.0, 1.0] {
+            assert!(J2Coefficient::from_scalar(value).is_ok());
+        }
+    }
+
+    #[test]
+    fn j2_coefficient_rejects_nonfinite_values() {
+        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(J2Coefficient::from_scalar(value).is_err());
         }
     }
 
@@ -849,16 +928,16 @@ mod tests {
     }
 
     #[test]
-    fn distance_multiply_by_zero_fails() -> TestResult {
+    fn distance_multiply_by_zero_succeeds() -> TestResult {
         let d = Distance::from_meters(10.0)?;
-        assert!((d * 0.0).is_err());
+        assert_close((d * 0.0)?.meters(), 0.0, EPS);
         Ok(())
     }
 
     #[test]
-    fn distance_multiply_by_negative_fails() -> TestResult {
+    fn distance_multiply_by_negative_succeeds() -> TestResult {
         let d = Distance::from_meters(10.0)?;
-        assert!((d * -1.0).is_err());
+        assert_close((d * -1.0)?.meters(), -10.0, EPS);
         Ok(())
     }
 
@@ -870,9 +949,9 @@ mod tests {
     }
 
     #[test]
-    fn distance_divide_by_negative_fails() -> TestResult {
+    fn distance_divide_by_negative_succeeds() -> TestResult {
         let d = Distance::from_meters(10.0)?;
-        assert!((d / -1.0).is_err());
+        assert_close((d / -1.0)?.meters(), -10.0, EPS);
         Ok(())
     }
 
@@ -910,9 +989,9 @@ mod tests {
     }
 
     #[test]
-    fn speed_multiply_by_negative_fails() -> TestResult {
+    fn speed_multiply_by_negative_succeeds() -> TestResult {
         let s = Speed::from_meters_per_second(10.0)?;
-        assert!((s * -1.0).is_err());
+        assert_close((s * -1.0)?.meters_per_second(), -10.0, EPS);
         Ok(())
     }
 
@@ -948,9 +1027,9 @@ mod tests {
     }
 
     #[test]
-    fn gravitational_parameter_multiply_by_zero_fails() -> TestResult {
+    fn gravitational_parameter_multiply_by_zero_succeeds() -> TestResult {
         let mu = GravitationalParameter::from_meters_cubed_per_second_squared(1.0e14)?;
-        assert!((mu * 0.0).is_err());
+        assert_close((mu * 0.0)?.meters_cubed_per_second_squared(), 0.0, EPS);
         Ok(())
     }
 }
