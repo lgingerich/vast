@@ -10,9 +10,41 @@ helpers in `elements.rs`; element extraction now relies on the type's own
 normalization. Narrower-range quantities (inclination in `[0, π]`) are unaffected
 because wrapping `[0, 2π)` leaves them unchanged.
 
-**Rejected:** Making `Add`/`Sub` infallible (`Output = Angle`) — kept `Result`
-for consistency with the other scalar domain types, even though normalized inputs
-cannot overflow.
+**Update (2026-06-13):** `Angle` `Add`/`Sub` are now infallible (`Output = Angle`).
+See the operator-validation contract entry below — a total operation must not
+advertise a failure it cannot produce.
+
+## 2026-06-13 — Constructor-vs-operator validation contract
+
+**Decision:** Validation lives at the raw-`f64` boundary (constructors), not in
+domain arithmetic. Each operator's signature reflects its single real failure
+mode:
+
+- **Total operations** (`Angle::add`/`sub`): infallible, return the bare type. A
+  private `Angle::wrapped` folds a known-finite value via `rem_euclid`;
+  `from_radians` = finite check + `wrapped`.
+- **Overflow-only operations** (`TimeStep`/`Distance`/`Speed`/`Duration` `add`,
+  `Epoch::advance_by`): infallible. The sum's sign is provable, so the only
+  failure is `f64` overflow to `±inf` — a programming error, guarded by
+  `debug_assert!(result.is_finite())` rather than `Result`.
+- **Genuinely fallible operations** (`Duration::sub`): keep `Result`. Subtracting
+  a larger duration is an input-dependent, recoverable outcome
+  (`NumericalError::Negative`); finiteness is provable, so it stays a debug
+  backstop.
+
+This matches the `AGENTS.md` rule "guard `Add`/`Sub` with
+`debug_assert!(result.is_finite())`" and "do not re-assert constraints the type
+proves." Constructors keep full `Result` validation since their inputs are
+arbitrary.
+
+**Rejected:** Routing operators through full constructors (re-runs dead
+finite/sign checks and forces callers to `?`-handle impossible errors); adding
+`_unchecked` constructors (the operator owns and documents its own invariant
+inline instead).
+
+**Migration:** Dropped `?` at every `advance_by`/operator call site across
+`integrators`, `dynamics`, `elements`, `propagator`, and examples; overflow tests
+became `#[cfg(debug_assertions)] #[should_panic]`.
 
 ## 2025-05-21 — Simulation layer architecture
 

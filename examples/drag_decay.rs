@@ -56,8 +56,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         - initial_diagnostics
             .specific_energy()
             .square_meters_per_square_second();
-    let speed_delta =
-        final_diagnostics.speed().meters_per_second() - initial_diagnostics.speed().meters_per_second();
+    let speed_delta = final_diagnostics.speed().meters_per_second()
+        - initial_diagnostics.speed().meters_per_second();
 
     println!(
         "Drag decay demo: initial altitude {:.0} km | duration {:.1} h",
@@ -94,7 +94,7 @@ fn propagate<I: Integrator, D: vast::Dynamics>(
         let remaining_seconds = duration.seconds() - epoch.seconds();
         let step = TimeStep::from_seconds(dt.seconds().min(remaining_seconds))?;
         integrator.step(dynamics, &mut states.view_mut(), 0, epoch, step)?;
-        epoch = epoch.advance_by(step)?;
+        epoch = epoch.advance_by(step);
     }
 
     Ok(())

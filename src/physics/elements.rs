@@ -770,7 +770,7 @@ mod tests {
             let remaining_seconds = duration.seconds() - epoch.seconds();
             let step = TimeStep::from_seconds(dt.seconds().min(remaining_seconds))?;
             integrator.step(&gravity, &mut states.view_mut(), 0, epoch, step)?;
-            epoch = epoch.advance_by(step)?;
+            epoch = epoch.advance_by(step);
         }
 
         let final_state = states.view().read_state(0)?;
@@ -868,7 +868,7 @@ mod tests {
             let remaining_seconds = target_seconds - epoch.seconds();
             let step = TimeStep::from_seconds(dt.seconds().min(remaining_seconds))?;
             integrator.step(&gravity, &mut states.view_mut(), 0, epoch, step)?;
-            epoch = epoch.advance_by(step)?;
+            epoch = epoch.advance_by(step);
         }
 
         let state = states.view().read_state(0)?;
@@ -917,7 +917,7 @@ mod tests {
             let remaining_seconds = target_seconds - epoch.seconds();
             let step = TimeStep::from_seconds(dt.seconds().min(remaining_seconds))?;
             integrator.step(&gravity, &mut states.view_mut(), 0, epoch, step)?;
-            epoch = epoch.advance_by(step)?;
+            epoch = epoch.advance_by(step);
         }
 
         let strict_classification = OrbitalElementClassification::new(

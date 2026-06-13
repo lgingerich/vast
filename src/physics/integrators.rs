@@ -99,7 +99,7 @@ impl Integrator for VelocityVerletIntegrator {
         let position = state.position.vector();
         let velocity = state.velocity.vector();
         let acceleration = dynamics.acceleration_at(state, t)?.vector();
-        let next_t = t.advance_by(dt)?;
+        let next_t = t.advance_by(dt);
 
         let new_pos = position + velocity * dt_s + acceleration * (0.5 * dt_s * dt_s);
         let next_velocity_estimate = velocity + acceleration * dt_s;
@@ -126,7 +126,7 @@ impl Integrator for LeapfrogIntegrator {
         let position = state.position.vector();
         let velocity = state.velocity.vector();
         let acceleration = dynamics.acceleration_at(state, t)?.vector();
-        let next_t = t.advance_by(dt)?;
+        let next_t = t.advance_by(dt);
 
         let half_velocity = velocity + acceleration * (0.5 * dt_s);
         let new_pos = position + half_velocity * dt_s;
@@ -151,8 +151,8 @@ impl Integrator for RungeKutta4Integrator {
         let state = states.as_view().components(index)?;
         let dt_s = dt.seconds();
         let half_dt_s = 0.5 * dt_s;
-        let half_t = t.advance_by(TimeStep::from_seconds(half_dt_s)?)?;
-        let full_t = t.advance_by(dt)?;
+        let half_t = t.advance_by(TimeStep::from_seconds(half_dt_s)?);
+        let full_t = t.advance_by(dt);
         let position = state.position.vector();
         let velocity = state.velocity.vector();
 
@@ -736,7 +736,7 @@ mod tests {
             let remaining_s = period_s - epoch.seconds();
             let step = TimeStep::from_seconds(base_step.seconds().min(remaining_s))?;
             integrator.step(gravity, &mut states.view_mut(), index, epoch, step)?;
-            epoch = epoch.advance_by(step)?;
+            epoch = epoch.advance_by(step);
         }
 
         Ok(())

@@ -28,7 +28,19 @@ impl Angle {
         if !value.is_finite() {
             return Err(NumericalError::NotFinite { field: "angle" });
         }
-        Ok(Self(value.rem_euclid(std::f64::consts::TAU)))
+        Ok(Self::wrapped(value))
+    }
+
+    /// Folds a finite radian value into `[0, 2π)` without re-validating finiteness.
+    ///
+    /// This is the shared wrapping primitive behind `from_radians` and `Angle`
+    /// arithmetic. Callers must pass a finite value; angle arithmetic guarantees
+    /// this because operands already live in `[0, 2π)`, so a debug assertion is
+    /// the appropriate backstop rather than a `Result`.
+    #[inline]
+    fn wrapped(value: f64) -> Self {
+        debug_assert!(value.is_finite());
+        Self(value.rem_euclid(std::f64::consts::TAU))
     }
 
     /// Creates an angle from degrees, wrapped into `[0, 2π)`.
@@ -40,7 +52,9 @@ impl Angle {
         if !degrees.is_finite() {
             return Err(NumericalError::NotFinite { field: "degrees" });
         }
-        Self::from_radians(degrees.rem_euclid(360.0).to_radians())
+        // `degrees` is finite, so wrapping then converting stays finite; the
+        // finite check already happened, so fold directly via `wrapped`.
+        Ok(Self::wrapped(degrees.rem_euclid(360.0).to_radians()))
     }
 
     /// Returns this angle in radians, in `[0, 2π)`.
@@ -57,20 +71,26 @@ impl Angle {
 }
 
 impl Add for Angle {
-    type Output = Result<Angle, NumericalError>;
+    type Output = Angle;
 
     /// Adds two angles, wrapping the result back into `[0, 2π)`.
-    fn add(self, rhs: Angle) -> Result<Angle, NumericalError> {
-        Angle::from_radians(self.0 + rhs.0)
+    ///
+    /// Total: both operands lie in `[0, 2π)`, so the sum is finite and `wrapped`
+    /// always yields a valid angle.
+    fn add(self, rhs: Angle) -> Angle {
+        Angle::wrapped(self.0 + rhs.0)
     }
 }
 
 impl Sub for Angle {
-    type Output = Result<Angle, NumericalError>;
+    type Output = Angle;
 
     /// Subtracts two angles, wrapping the result back into `[0, 2π)`.
-    fn sub(self, rhs: Angle) -> Result<Angle, NumericalError> {
-        Angle::from_radians(self.0 - rhs.0)
+    ///
+    /// Total: both operands lie in `[0, 2π)`, so the difference is finite and
+    /// `wrapped` always yields a valid angle.
+    fn sub(self, rhs: Angle) -> Angle {
+        Angle::wrapped(self.0 - rhs.0)
     }
 }
 
@@ -82,13 +102,12 @@ pub struct AngularRate(f64);
 impl AngularRate {
     /// Creates an angular rate from radians per second.
     pub fn from_radians_per_second(value: f64) -> Result<Self, NumericalError> {
-        if value.is_finite() {
-            Ok(Self(value))
-        } else {
-            Err(NumericalError::NotFinite {
+        if !value.is_finite() {
+            return Err(NumericalError::NotFinite {
                 field: "angular rate",
-            })
+            });
         }
+        Ok(Self(value))
     }
 
     /// Returns this angular rate in radians per second.
@@ -114,16 +133,23 @@ pub struct Epoch(f64);
 impl Epoch {
     /// Creates an epoch from seconds since the simulation epoch.
     pub fn from_seconds(value: f64) -> Result<Self, NumericalError> {
-        if value.is_finite() {
-            Ok(Self(value))
-        } else {
-            Err(NumericalError::NotFinite { field: "epoch" })
+        if !value.is_finite() {
+            return Err(NumericalError::NotFinite { field: "epoch" });
         }
+        Ok(Self(value))
     }
 
     /// Advances this epoch by a positive time step.
-    pub fn advance_by(self, dt: TimeStep) -> Result<Self, NumericalError> {
-        Self::from_seconds(self.seconds() + dt.seconds())
+    ///
+    /// Infallible: both operands are finite, so the only way the sum could be
+    /// non-finite is `f64` overflow (~1e300 s past the epoch), which is a
+    /// programming error rather than a recoverable runtime condition. A debug
+    /// assertion guards that boundary without burdening the step loop.
+    #[must_use]
+    pub fn advance_by(self, dt: TimeStep) -> Self {
+        let seconds = self.seconds() + dt.seconds();
+        debug_assert!(seconds.is_finite());
+        Self(seconds)
     }
 
     /// Returns the elapsed `Duration` from an earlier epoch.
@@ -134,8 +160,10 @@ impl Epoch {
     pub fn duration_since(self, earlier: Epoch) -> Duration {
         debug_assert!(self >= earlier);
         let seconds = self.seconds() - earlier.seconds();
+        // `self >= earlier` already implies a non-negative difference; the only
+        // way this construction can break `Duration`'s invariant is `f64`
+        // overflow when the epochs span the full representable range.
         debug_assert!(seconds.is_finite());
-        debug_assert!(seconds >= 0.0);
         Duration(seconds)
     }
 
@@ -173,10 +201,17 @@ impl TimeStep {
 }
 
 impl Add for TimeStep {
-    type Output = Result<TimeStep, NumericalError>;
+    type Output = TimeStep;
 
-    fn add(self, rhs: TimeStep) -> Result<TimeStep, NumericalError> {
-        TimeStep::from_seconds(self.0 + rhs.0)
+    /// Adds two time steps.
+    ///
+    /// Infallible: the sum of two positive values is positive, so the only
+    /// possible failure is `f64` overflow to `+inf`, which a debug assertion
+    /// guards as a programming error.
+    fn add(self, rhs: TimeStep) -> TimeStep {
+        let seconds = self.0 + rhs.0;
+        debug_assert!(seconds.is_finite());
+        Self(seconds)
     }
 }
 
@@ -211,18 +246,36 @@ impl From<TimeStep> for Duration {
 }
 
 impl Add for Duration {
-    type Output = Result<Duration, NumericalError>;
+    type Output = Duration;
 
-    fn add(self, rhs: Duration) -> Result<Duration, NumericalError> {
-        Duration::from_seconds(self.0 + rhs.0)
+    /// Adds two durations.
+    ///
+    /// Infallible: the sum of two non-negative values is non-negative, so the
+    /// only possible failure is `f64` overflow to `+inf`, which a debug
+    /// assertion guards as a programming error.
+    fn add(self, rhs: Duration) -> Duration {
+        let seconds = self.0 + rhs.0;
+        debug_assert!(seconds.is_finite());
+        Self(seconds)
     }
 }
 
 impl Sub for Duration {
     type Output = Result<Duration, NumericalError>;
 
+    /// Subtracts `rhs` from this duration.
+    ///
+    /// Fallible: subtracting a larger duration is a legitimate, input-dependent
+    /// outcome that the caller may need to handle, so it returns
+    /// `NumericalError::Negative`. The difference of two finite non-negative
+    /// values cannot overflow, so finiteness is a debug-only backstop.
     fn sub(self, rhs: Duration) -> Result<Duration, NumericalError> {
-        Duration::from_seconds(self.0 - rhs.0)
+        let seconds = self.0 - rhs.0;
+        debug_assert!(seconds.is_finite());
+        if seconds < 0.0 {
+            return Err(NumericalError::Negative { field: "duration" });
+        }
+        Ok(Self(seconds))
     }
 }
 
@@ -251,10 +304,17 @@ impl Distance {
 }
 
 impl Add for Distance {
-    type Output = Result<Distance, NumericalError>;
+    type Output = Distance;
 
-    fn add(self, rhs: Distance) -> Result<Distance, NumericalError> {
-        Distance::from_meters(self.0 + rhs.0)
+    /// Adds two distances.
+    ///
+    /// Infallible: the sum of two positive values is positive, so the only
+    /// possible failure is `f64` overflow to `+inf`, which a debug assertion
+    /// guards as a programming error.
+    fn add(self, rhs: Distance) -> Distance {
+        let meters = self.0 + rhs.0;
+        debug_assert!(meters.is_finite());
+        Self(meters)
     }
 }
 
@@ -339,10 +399,17 @@ impl Speed {
 }
 
 impl Add for Speed {
-    type Output = Result<Speed, NumericalError>;
+    type Output = Speed;
 
-    fn add(self, rhs: Speed) -> Result<Speed, NumericalError> {
-        Speed::from_meters_per_second(self.0 + rhs.0)
+    /// Adds two speeds.
+    ///
+    /// Infallible: the sum of two non-negative values is non-negative, so the
+    /// only possible failure is `f64` overflow to `+inf`, which a debug
+    /// assertion guards as a programming error.
+    fn add(self, rhs: Speed) -> Speed {
+        let meters_per_second = self.0 + rhs.0;
+        debug_assert!(meters_per_second.is_finite());
+        Self(meters_per_second)
     }
 }
 
@@ -382,11 +449,10 @@ pub struct J2Coefficient(f64);
 impl J2Coefficient {
     /// Creates a J2 coefficient from a dimensionless scalar.
     pub fn from_scalar(value: f64) -> Result<Self, NumericalError> {
-        if value.is_finite() {
-            Ok(Self(value))
-        } else {
-            Err(NumericalError::NotFinite { field: "j2" })
+        if !value.is_finite() {
+            return Err(NumericalError::NotFinite { field: "j2" });
         }
+        Ok(Self(value))
     }
 
     /// Returns this J2 coefficient as a dimensionless scalar.
@@ -435,7 +501,7 @@ pub struct Position(Vector3<f64>);
 impl Position {
     /// Creates a position from a finite Cartesian vector.
     pub fn from_vector(value: Vector3<f64>) -> Result<Self, NumericalError> {
-        if vector_is_finite(value) {
+        if value.x.is_finite() && value.y.is_finite() && value.z.is_finite() {
             Ok(Self(value))
         } else {
             Err(NumericalError::NotFinite { field: "position" })
@@ -457,7 +523,7 @@ pub struct Velocity(Vector3<f64>);
 impl Velocity {
     /// Creates a velocity from a finite Cartesian vector.
     pub fn from_vector(value: Vector3<f64>) -> Result<Self, NumericalError> {
-        if vector_is_finite(value) {
+        if value.x.is_finite() && value.y.is_finite() && value.z.is_finite() {
             Ok(Self(value))
         } else {
             Err(NumericalError::NotFinite { field: "velocity" })
@@ -479,7 +545,7 @@ pub struct Acceleration(Vector3<f64>);
 impl Acceleration {
     /// Creates an acceleration from a finite Cartesian vector.
     pub fn from_vector(value: Vector3<f64>) -> Result<Self, NumericalError> {
-        if vector_is_finite(value) {
+        if value.x.is_finite() && value.y.is_finite() && value.z.is_finite() {
             Ok(Self(value))
         } else {
             Err(NumericalError::NotFinite {
@@ -494,11 +560,6 @@ impl Acceleration {
         self.0
     }
 }
-
-fn vector_is_finite(value: Vector3<f64>) -> bool {
-    value.x.is_finite() && value.y.is_finite() && value.z.is_finite()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -519,7 +580,7 @@ mod tests {
         let epoch = Epoch::from_seconds(10.0)?;
         let dt = TimeStep::from_seconds(2.5)?;
 
-        assert_close(epoch.advance_by(dt)?.seconds(), 12.5, EPS);
+        assert_close(epoch.advance_by(dt).seconds(), 12.5, EPS);
         Ok(())
     }
 
@@ -537,13 +598,14 @@ mod tests {
         }
     }
 
+    #[cfg(debug_assertions)]
     #[test]
-    fn epoch_advance_rejects_nonfinite_result() -> TestResult {
-        let epoch = Epoch::from_seconds(f64::MAX)?;
-        let dt = TimeStep::from_seconds(f64::MAX)?;
+    #[should_panic(expected = "is_finite")]
+    fn epoch_advance_panics_on_nonfinite_result() {
+        let epoch = Epoch::from_seconds(f64::MAX).expect("finite epoch");
+        let dt = TimeStep::from_seconds(f64::MAX).expect("positive finite step");
 
-        assert!(epoch.advance_by(dt).is_err());
-        Ok(())
+        let _ = epoch.advance_by(dt);
     }
 
     #[test]
@@ -552,6 +614,16 @@ mod tests {
         let end = Epoch::from_seconds(12.5)?;
         assert_close(end.duration_since(start).seconds(), 7.5, EPS);
         Ok(())
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic(expected = "self >= earlier")]
+    fn epoch_duration_since_panics_when_earlier_is_later() {
+        let start = Epoch::from_seconds(5.0).expect("finite epoch");
+        let end = Epoch::from_seconds(12.5).expect("finite epoch");
+
+        let _ = start.duration_since(end);
     }
 
     #[test]
@@ -767,8 +839,8 @@ mod tests {
     fn angle_add_and_subtract() -> TestResult {
         let a = Angle::from_radians(1.0)?;
         let b = Angle::from_radians(0.5)?;
-        assert_close((a + b)?.radians(), 1.5, EPS);
-        assert_close((a - b)?.radians(), 0.5, EPS);
+        assert_close((a + b).radians(), 1.5, EPS);
+        assert_close((a - b).radians(), 0.5, EPS);
         Ok(())
     }
 
@@ -789,12 +861,12 @@ mod tests {
         // Crossing a full turn folds back to the start of the interval.
         let near_turn = Angle::from_radians(tau - 0.5)?;
         let step = Angle::from_radians(1.0)?;
-        assert_close((near_turn + step)?.radians(), 0.5, EPS);
+        assert_close((near_turn + step).radians(), 0.5, EPS);
 
         // A negative raw difference is reported as its positive-turn equivalent.
         let small = Angle::from_radians(0.25)?;
         let large = Angle::from_radians(1.0)?;
-        assert_close((small - large)?.radians(), tau - 0.75, EPS);
+        assert_close((small - large).radians(), tau - 0.75, EPS);
         Ok(())
     }
 
@@ -802,36 +874,38 @@ mod tests {
     fn time_step_add_and_ratio() -> TestResult {
         let a = TimeStep::from_seconds(10.0)?;
         let b = TimeStep::from_seconds(5.0)?;
-        assert_close((a + b)?.seconds(), 15.0, EPS);
+        assert_close((a + b).seconds(), 15.0, EPS);
         assert_close(a.seconds() / b.seconds(), 2.0, EPS);
         Ok(())
     }
 
+    #[cfg(debug_assertions)]
     #[test]
-    fn time_step_add_rejects_nonfinite_result() -> TestResult {
-        let a = TimeStep::from_seconds(f64::MAX)?;
-        let b = TimeStep::from_seconds(f64::MAX)?;
+    #[should_panic(expected = "is_finite")]
+    fn time_step_add_panics_on_nonfinite_result() {
+        let a = TimeStep::from_seconds(f64::MAX).expect("positive finite step");
+        let b = TimeStep::from_seconds(f64::MAX).expect("positive finite step");
 
-        assert!((a + b).is_err());
-        Ok(())
+        let _ = a + b;
     }
 
     #[test]
     fn duration_add_and_subtract() -> TestResult {
         let a = Duration::from_seconds(10.0)?;
         let b = Duration::from_seconds(3.0)?;
-        assert_close((a + b)?.seconds(), 13.0, EPS);
-        assert_close((a - b).unwrap().seconds(), 7.0, EPS);
+        assert_close((a + b).seconds(), 13.0, EPS);
+        assert_close((a - b)?.seconds(), 7.0, EPS);
         Ok(())
     }
 
+    #[cfg(debug_assertions)]
     #[test]
-    fn duration_add_rejects_nonfinite_result() -> TestResult {
-        let a = Duration::from_seconds(f64::MAX)?;
-        let b = Duration::from_seconds(f64::MAX)?;
+    #[should_panic(expected = "is_finite")]
+    fn duration_add_panics_on_nonfinite_result() {
+        let a = Duration::from_seconds(f64::MAX).expect("non-negative finite duration");
+        let b = Duration::from_seconds(f64::MAX).expect("non-negative finite duration");
 
-        assert!((a + b).is_err());
-        Ok(())
+        let _ = a + b;
     }
 
     #[test]
@@ -846,36 +920,38 @@ mod tests {
     fn distance_add_and_ratio() -> TestResult {
         let a = Distance::from_meters(100.0)?;
         let b = Distance::from_meters(50.0)?;
-        assert_close((a + b)?.meters(), 150.0, EPS);
+        assert_close((a + b).meters(), 150.0, EPS);
         assert_close(a.meters() / b.meters(), 2.0, EPS);
         Ok(())
     }
 
+    #[cfg(debug_assertions)]
     #[test]
-    fn distance_add_rejects_nonfinite_result() -> TestResult {
-        let a = Distance::from_meters(f64::MAX)?;
-        let b = Distance::from_meters(f64::MAX)?;
+    #[should_panic(expected = "is_finite")]
+    fn distance_add_panics_on_nonfinite_result() {
+        let a = Distance::from_meters(f64::MAX).expect("positive finite distance");
+        let b = Distance::from_meters(f64::MAX).expect("positive finite distance");
 
-        assert!((a + b).is_err());
-        Ok(())
+        let _ = a + b;
     }
 
     #[test]
     fn speed_add_and_ratio() -> TestResult {
         let a = Speed::from_meters_per_second(100.0)?;
         let b = Speed::from_meters_per_second(50.0)?;
-        assert_close((a + b)?.meters_per_second(), 150.0, EPS);
+        assert_close((a + b).meters_per_second(), 150.0, EPS);
         assert_close(a.meters_per_second() / b.meters_per_second(), 2.0, EPS);
         Ok(())
     }
 
+    #[cfg(debug_assertions)]
     #[test]
-    fn speed_add_rejects_nonfinite_result() -> TestResult {
-        let a = Speed::from_meters_per_second(f64::MAX)?;
-        let b = Speed::from_meters_per_second(f64::MAX)?;
+    #[should_panic(expected = "is_finite")]
+    fn speed_add_panics_on_nonfinite_result() {
+        let a = Speed::from_meters_per_second(f64::MAX).expect("non-negative finite speed");
+        let b = Speed::from_meters_per_second(f64::MAX).expect("non-negative finite speed");
 
-        assert!((a + b).is_err());
-        Ok(())
+        let _ = a + b;
     }
 
     #[test]
