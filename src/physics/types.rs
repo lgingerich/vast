@@ -5,7 +5,7 @@ use nalgebra::Vector3;
 
 /// Angle, measured in radians.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Angle(f64);
 
 impl Angle {
@@ -53,7 +53,7 @@ impl Sub for Angle {
 
 /// Angular rate, measured in radians per second.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct AngularRate(f64);
 
 impl AngularRate {
@@ -205,7 +205,7 @@ impl Sub for Duration {
 
 /// Scalar distance, measured in meters.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Distance(f64);
 
 impl Distance {
@@ -237,7 +237,7 @@ impl Add for Distance {
 
 /// Mass density, measured in kilograms per cubic meter.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct MassDensity(f64);
 
 impl MassDensity {
@@ -265,7 +265,7 @@ impl MassDensity {
 
 /// Area per mass, measured in square meters per kilogram.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct AreaPerMass(f64);
 
 impl AreaPerMass {
@@ -293,7 +293,7 @@ impl AreaPerMass {
 
 /// Scalar speed, measured in meters per second.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Speed(f64);
 
 impl Speed {
@@ -325,7 +325,7 @@ impl Add for Speed {
 
 /// Standard gravitational parameter, measured in cubic meters per second squared.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct GravitationalParameter(f64);
 
 impl GravitationalParameter {
@@ -353,7 +353,7 @@ impl GravitationalParameter {
 
 /// Dimensionless second zonal harmonic coefficient, commonly called J2.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct J2Coefficient(f64);
 
 impl J2Coefficient {
@@ -375,7 +375,7 @@ impl J2Coefficient {
 
 /// Orbital eccentricity, dimensionless.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Eccentricity(f64);
 
 impl Eccentricity {
