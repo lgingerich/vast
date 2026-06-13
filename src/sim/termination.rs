@@ -90,8 +90,8 @@ impl TerminationCondition {
                 if elapsed >= *duration {
                     return None;
                 }
-                let remaining_seconds = duration.seconds() - elapsed.seconds();
-                TimeStep::from_seconds(remaining_seconds).ok()
+                let remaining = duration.checked_sub(elapsed).ok()?;
+                TimeStep::from_seconds(remaining.seconds()).ok()
             }
             Self::AnyOf(conditions) => conditions
                 .iter()

@@ -34,12 +34,11 @@ impl Angle {
     /// Folds a finite radian value into `[0, 2π)` without re-validating finiteness.
     ///
     /// This is the shared wrapping primitive behind `from_radians` and `Angle`
-    /// arithmetic. Callers must pass a finite value; angle arithmetic guarantees
-    /// this because operands already live in `[0, 2π)`, so a debug assertion is
-    /// the appropriate backstop rather than a `Result`.
+    /// arithmetic. Callers must pass a finite value: `from_radians` and
+    /// `from_degrees` validate before calling, and `Angle` arithmetic operates on
+    /// operands already in `[0, 2π)`, whose sum and difference are provably finite.
     #[inline]
     fn wrapped(value: f64) -> Self {
-        debug_assert!(value.is_finite());
         Self(value.rem_euclid(std::f64::consts::TAU))
     }
 
@@ -50,10 +49,11 @@ impl Angle {
     /// avoid the double-rounding that wrapping after `to_radians` would cause.
     pub fn from_degrees(degrees: f64) -> Result<Self, NumericalError> {
         if !degrees.is_finite() {
-            return Err(NumericalError::NotFinite { field: "degrees" });
+            return Err(NumericalError::NotFinite { field: "angle" });
         }
-        // `degrees` is finite, so wrapping then converting stays finite; the
-        // finite check already happened, so fold directly via `wrapped`.
+        // Wrap in the degree domain first to avoid double rounding. The result
+        // already lies in `[0, 2π)`; `wrapped`'s own fold is a finite-input
+        // backstop and a no-op for values produced here.
         Ok(Self::wrapped(degrees.rem_euclid(360.0).to_radians()))
     }
 
@@ -65,7 +65,7 @@ impl Angle {
 
     /// Returns this angle in degrees, in `[0, 360)`.
     #[inline]
-    pub fn degrees(self) -> f64 {
+    pub const fn degrees(self) -> f64 {
         self.0.to_degrees()
     }
 }
@@ -118,7 +118,7 @@ impl AngularRate {
 
     /// Returns this angular rate in degrees per day.
     #[inline]
-    pub fn degrees_per_day(self) -> f64 {
+    pub const fn degrees_per_day(self) -> f64 {
         self.0.to_degrees() * 86_400.0
     }
 }
@@ -177,6 +177,9 @@ impl Epoch {
 /// Positive integration step size, measured in seconds.
 ///
 /// Use `TimeStep` when advancing a simulation state forward in time.
+///
+/// Only `Add` is provided: subtracting two steps can be non-positive, which
+/// would break the positivity invariant, so there is no `Sub`.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct TimeStep(f64);
@@ -237,6 +240,21 @@ impl Duration {
     pub const fn seconds(self) -> f64 {
         self.0
     }
+
+    /// Subtracts `rhs`, returning the remaining duration.
+    ///
+    /// Fallible because subtracting a larger duration is a legitimate,
+    /// input-dependent outcome the caller may need to handle; it returns
+    /// `NumericalError::Negative`. The difference of two finite non-negative
+    /// values cannot overflow, so finiteness is a debug-only backstop.
+    pub fn checked_sub(self, rhs: Duration) -> Result<Duration, NumericalError> {
+        let seconds = self.0 - rhs.0;
+        debug_assert!(seconds.is_finite());
+        if seconds < 0.0 {
+            return Err(NumericalError::Negative { field: "duration" });
+        }
+        Ok(Self(seconds))
+    }
 }
 
 impl From<TimeStep> for Duration {
@@ -260,26 +278,10 @@ impl Add for Duration {
     }
 }
 
-impl Sub for Duration {
-    type Output = Result<Duration, NumericalError>;
-
-    /// Subtracts `rhs` from this duration.
-    ///
-    /// Fallible: subtracting a larger duration is a legitimate, input-dependent
-    /// outcome that the caller may need to handle, so it returns
-    /// `NumericalError::Negative`. The difference of two finite non-negative
-    /// values cannot overflow, so finiteness is a debug-only backstop.
-    fn sub(self, rhs: Duration) -> Result<Duration, NumericalError> {
-        let seconds = self.0 - rhs.0;
-        debug_assert!(seconds.is_finite());
-        if seconds < 0.0 {
-            return Err(NumericalError::Negative { field: "duration" });
-        }
-        Ok(Self(seconds))
-    }
-}
-
 /// Scalar distance, measured in meters.
+///
+/// Only `Add` is provided: subtracting two distances can be non-positive, which
+/// would break the positivity invariant, so there is no `Sub`.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Distance(f64);
@@ -375,6 +377,9 @@ impl AreaPerMass {
 }
 
 /// Scalar speed, measured in meters per second.
+///
+/// Only `Add` is provided: subtracting two speeds can be negative, which would
+/// break the non-negativity invariant, so there is no `Sub`.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Speed(f64);
@@ -463,6 +468,9 @@ impl J2Coefficient {
 }
 
 /// Orbital eccentricity, dimensionless.
+///
+/// Values `>= 1` are permitted and represent open (parabolic or hyperbolic)
+/// trajectories; only the lower bound `>= 0` is enforced.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Eccentricity(f64);
@@ -894,7 +902,7 @@ mod tests {
         let a = Duration::from_seconds(10.0)?;
         let b = Duration::from_seconds(3.0)?;
         assert_close((a + b).seconds(), 13.0, EPS);
-        assert_close((a - b)?.seconds(), 7.0, EPS);
+        assert_close(a.checked_sub(b)?.seconds(), 7.0, EPS);
         Ok(())
     }
 
@@ -912,7 +920,7 @@ mod tests {
     fn duration_subtract_beyond_zero_fails() -> TestResult {
         let a = Duration::from_seconds(3.0)?;
         let b = Duration::from_seconds(5.0)?;
-        assert!((a - b).is_err());
+        assert!(a.checked_sub(b).is_err());
         Ok(())
     }
 
