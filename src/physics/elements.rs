@@ -192,7 +192,7 @@ impl OrbitalElements {
 
         let h_hat = h / h_norm;
         let node = Vector3::new(-h.y, h.x, 0.0);
-        let inclination = angle_from_radians((h.z / h_norm).clamp(-1.0, 1.0).acos())?;
+        let inclination = Angle::from_radians((h.z / h_norm).clamp(-1.0, 1.0).acos())?;
 
         let is_circular =
             eccentricity_scalar <= classification.circular_eccentricity_tolerance.scalar();
@@ -204,7 +204,7 @@ impl OrbitalElements {
                 semi_major_axis,
                 eccentricity,
                 inclination,
-                angle_from_radians(node.y.atan2(node.x))?,
+                Angle::from_radians(node.y.atan2(node.x))?,
                 angle_between_in_plane(node, eccentricity_vector, h_hat)?,
                 angle_between_in_plane(eccentricity_vector, position, h_hat)?,
             ))),
@@ -212,20 +212,20 @@ impl OrbitalElements {
                 semi_major_axis,
                 eccentricity,
                 inclination,
-                angle_from_radians(node.y.atan2(node.x))?,
+                Angle::from_radians(node.y.atan2(node.x))?,
                 angle_between_in_plane(node, position, h_hat)?,
             ))),
             (true, true) => Ok(Self::CircularEquatorial(CircularEquatorialElements::new(
                 semi_major_axis,
                 eccentricity,
                 inclination,
-                angle_from_radians(position.y.atan2(position.x))?,
+                Angle::from_radians(position.y.atan2(position.x))?,
             ))),
             (false, true) => Ok(Self::EquatorialElliptic(EquatorialEllipticElements::new(
                 semi_major_axis,
                 eccentricity,
                 inclination,
-                angle_from_radians(eccentricity_vector.y.atan2(eccentricity_vector.x))?,
+                Angle::from_radians(eccentricity_vector.y.atan2(eccentricity_vector.x))?,
                 angle_between_in_plane(eccentricity_vector, position, h_hat)?,
             ))),
         }
@@ -647,15 +647,8 @@ fn angle_between_in_plane(
 ) -> Result<Angle, NumericalError> {
     let x = from.dot(&to);
     let y = from.cross(&to).dot(&plane_normal);
-    angle_from_radians(y.atan2(x))
-}
-
-fn angle_from_radians(radians: f64) -> Result<Angle, NumericalError> {
-    Angle::from_radians(normalize_angle(radians))
-}
-
-fn normalize_angle(radians: f64) -> f64 {
-    radians.rem_euclid(2.0 * std::f64::consts::PI)
+    // `Angle::from_radians` wraps the signed `atan2` result into `[0, 2π)`.
+    Angle::from_radians(y.atan2(x))
 }
 
 #[cfg(test)]
@@ -1187,7 +1180,7 @@ mod tests {
 
     #[test]
     fn angles_are_normalized_to_positive_turn() -> TestResult {
-        let angle = angle_from_radians(-0.25)?;
+        let angle = Angle::from_radians(-0.25)?;
 
         assert_close(angle.radians(), 2.0 * std::f64::consts::PI - 0.25, EPS);
         Ok(())

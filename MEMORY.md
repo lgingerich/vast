@@ -1,5 +1,19 @@
 # Project Memory
 
+## 2026-06-13 — `Angle` is always normalized to `[0, 2π)`
+
+**Decision:** `Angle` normalizes to the half-open turn `[0, 2π)` at construction
+(`from_radians`/`from_degrees` apply `rem_euclid(2π)` after the finite check), so
+all `Angle` arithmetic wraps. Added a `degrees()` reader to pair with
+`from_degrees`. Removed the redundant `normalize_angle`/`angle_from_radians`
+helpers in `elements.rs`; element extraction now relies on the type's own
+normalization. Narrower-range quantities (inclination in `[0, π]`) are unaffected
+because wrapping `[0, 2π)` leaves them unchanged.
+
+**Rejected:** Making `Add`/`Sub` infallible (`Output = Angle`) — kept `Result`
+for consistency with the other scalar domain types, even though normalized inputs
+cannot overflow.
+
 ## 2025-05-21 — Simulation layer architecture
 
 **Decision:** Document the simulator as layered architecture in

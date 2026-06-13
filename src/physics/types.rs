@@ -3,7 +3,13 @@ use std::ops::{Add, Sub};
 use crate::errors::NumericalError;
 use nalgebra::Vector3;
 
-/// Angle, measured in radians.
+/// Angle in radians, wrapped to the half-open turn `[0, 2π)`.
+///
+/// Every constructor folds its input into `[0, 2π)`, so arithmetic wraps too and
+/// negative inputs become their positive-turn equivalent. Inclination's physical
+/// range `[0, π]` is already inside this interval, so wrapping never alters it.
+/// Code needing a signed difference in `(-π, π]` must derive it from the radian
+/// value; `Angle` itself never reads back negative.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Angle(f64);
@@ -14,30 +20,39 @@ impl Angle {
     pub(crate) const DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE: Self =
         Self(crate::physics::constants::DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE_RAD);
 
-    /// Creates an angle from radians.
+    /// Creates an angle from radians, wrapped into `[0, 2π)`.
+    ///
+    /// Non-finite inputs are rejected before wrapping, since `rem_euclid` would
+    /// otherwise yield `NaN`.
     pub fn from_radians(value: f64) -> Result<Self, NumericalError> {
-        if value.is_finite() {
-            Ok(Self(value))
-        } else {
-            Err(NumericalError::NotFinite { field: "angle" })
+        if !value.is_finite() {
+            return Err(NumericalError::NotFinite { field: "angle" });
         }
+        Ok(Self(value.rem_euclid(std::f64::consts::TAU)))
     }
 
-    /// Creates an angle from degrees.
+    /// Creates an angle from degrees, wrapped into `[0, 2π)`.
     pub fn from_degrees(degrees: f64) -> Result<Self, NumericalError> {
         Self::from_radians(degrees.to_radians())
     }
 
-    /// Returns this angle in radians.
+    /// Returns this angle in radians, in `[0, 2π)`.
     #[inline]
     pub const fn radians(self) -> f64 {
         self.0
+    }
+
+    /// Returns this angle in degrees, in `[0, 360)`.
+    #[inline]
+    pub fn degrees(self) -> f64 {
+        self.0.to_degrees()
     }
 }
 
 impl Add for Angle {
     type Output = Result<Angle, NumericalError>;
 
+    /// Adds two angles, wrapping the result back into `[0, 2π)`.
     fn add(self, rhs: Angle) -> Result<Angle, NumericalError> {
         Angle::from_radians(self.0 + rhs.0)
     }
@@ -46,6 +61,7 @@ impl Add for Angle {
 impl Sub for Angle {
     type Output = Result<Angle, NumericalError>;
 
+    /// Subtracts two angles, wrapping the result back into `[0, 2π)`.
     fn sub(self, rhs: Angle) -> Result<Angle, NumericalError> {
         Angle::from_radians(self.0 - rhs.0)
     }
@@ -732,12 +748,28 @@ mod tests {
     }
 
     #[test]
-    fn angle_arithmetic_rejects_nonfinite_results() -> TestResult {
-        let a = Angle::from_radians(f64::MAX)?;
-        let b = Angle::from_radians(f64::MAX)?;
+    fn angle_construction_wraps_into_positive_turn() -> TestResult {
+        let tau = std::f64::consts::TAU;
 
-        assert!((a + b).is_err());
-        assert!((Angle::from_radians(-f64::MAX)? - b).is_err());
+        assert_close(Angle::from_radians(-0.25)?.radians(), tau - 0.25, EPS);
+        assert_close(Angle::from_radians(tau + 0.25)?.radians(), 0.25, EPS);
+        assert_close(Angle::from_degrees(-90.0)?.degrees(), 270.0, EPS);
+        Ok(())
+    }
+
+    #[test]
+    fn angle_arithmetic_wraps_into_positive_turn() -> TestResult {
+        let tau = std::f64::consts::TAU;
+
+        // Crossing a full turn folds back to the start of the interval.
+        let near_turn = Angle::from_radians(tau - 0.5)?;
+        let step = Angle::from_radians(1.0)?;
+        assert_close((near_turn + step)?.radians(), 0.5, EPS);
+
+        // A negative raw difference is reported as its positive-turn equivalent.
+        let small = Angle::from_radians(0.25)?;
+        let large = Angle::from_radians(1.0)?;
+        assert_close((small - large)?.radians(), tau - 0.75, EPS);
         Ok(())
     }
 
