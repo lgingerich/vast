@@ -1,4 +1,4 @@
-use std::ops::{Add, Div, Sub};
+use std::ops::{Add, Sub};
 
 use crate::errors::NumericalError;
 use nalgebra::Vector3;
@@ -157,14 +157,6 @@ impl Add for TimeStep {
     }
 }
 
-impl Div<TimeStep> for TimeStep {
-    type Output = f64;
-
-    fn div(self, rhs: TimeStep) -> f64 {
-        self.0 / rhs.0
-    }
-}
-
 /// Non-negative elapsed simulation time, measured in seconds.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
@@ -240,14 +232,6 @@ impl Add for Distance {
 
     fn add(self, rhs: Distance) -> Result<Distance, NumericalError> {
         Distance::from_meters(self.0 + rhs.0)
-    }
-}
-
-impl Div<Distance> for Distance {
-    type Output = f64;
-
-    fn div(self, rhs: Distance) -> f64 {
-        self.0 / rhs.0
     }
 }
 
@@ -339,14 +323,6 @@ impl Add for Speed {
     }
 }
 
-impl Div<Speed> for Speed {
-    type Output = f64;
-
-    fn div(self, rhs: Speed) -> f64 {
-        self.0 / rhs.0
-    }
-}
-
 /// Standard gravitational parameter, measured in cubic meters per second squared.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -372,14 +348,6 @@ impl GravitationalParameter {
     #[inline]
     pub const fn meters_cubed_per_second_squared(self) -> f64 {
         self.0
-    }
-}
-
-impl Div<GravitationalParameter> for GravitationalParameter {
-    type Output = f64;
-
-    fn div(self, rhs: GravitationalParameter) -> f64 {
-        self.0 / rhs.0
     }
 }
 
@@ -778,7 +746,7 @@ mod tests {
         let a = TimeStep::from_seconds(10.0)?;
         let b = TimeStep::from_seconds(5.0)?;
         assert_close((a + b)?.seconds(), 15.0, EPS);
-        assert_close(a / b, 2.0, EPS);
+        assert_close(a.seconds() / b.seconds(), 2.0, EPS);
         Ok(())
     }
 
@@ -822,7 +790,7 @@ mod tests {
         let a = Distance::from_meters(100.0)?;
         let b = Distance::from_meters(50.0)?;
         assert_close((a + b)?.meters(), 150.0, EPS);
-        assert_close(a / b, 2.0, EPS);
+        assert_close(a.meters() / b.meters(), 2.0, EPS);
         Ok(())
     }
 
@@ -840,7 +808,7 @@ mod tests {
         let a = Speed::from_meters_per_second(100.0)?;
         let b = Speed::from_meters_per_second(50.0)?;
         assert_close((a + b)?.meters_per_second(), 150.0, EPS);
-        assert_close(a / b, 2.0, EPS);
+        assert_close(a.meters_per_second() / b.meters_per_second(), 2.0, EPS);
         Ok(())
     }
 
@@ -857,7 +825,11 @@ mod tests {
     fn gravitational_parameter_ratio() -> TestResult {
         let mu1 = GravitationalParameter::from_meters_cubed_per_second_squared(1.0e14)?;
         let mu2 = GravitationalParameter::from_meters_cubed_per_second_squared(2.0e14)?;
-        assert_close(mu1 / mu2, 0.5, EPS);
+        assert_close(
+            mu1.meters_cubed_per_second_squared() / mu2.meters_cubed_per_second_squared(),
+            0.5,
+            EPS,
+        );
         Ok(())
     }
 }

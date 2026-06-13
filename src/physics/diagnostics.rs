@@ -6,7 +6,7 @@ use crate::errors::NumericalError;
 
 /// Specific orbital energy, measured in square meters per square second.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SpecificEnergy(f64);
 
 impl SpecificEnergy {
@@ -32,7 +32,7 @@ impl SpecificEnergy {
 
 /// Specific angular momentum, measured in square meters per second.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SpecificAngularMomentum(f64);
 
 impl SpecificAngularMomentum {
