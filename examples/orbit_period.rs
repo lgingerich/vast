@@ -99,7 +99,7 @@ fn propagate_one_period<I: Integrator>(
     let initial_position = initial_state.position;
     let initial_diagnostics = OrbitalDiagnostics::from_state(initial_state, gravity.mu())?;
     let mut epoch = Epoch::from_seconds(0.0)?;
-    let mut states = CartesianStateBuffer::<1>::new();
+    let mut states = CartesianStateBuffer::<1>::with_len(1)?;
     states.write_from_state(0, initial_state)?;
     let mut steps = 0;
 

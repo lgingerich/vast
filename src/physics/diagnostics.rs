@@ -104,8 +104,8 @@ impl OrbitalDiagnostics {
     ) -> Result<Self, crate::errors::StateError> {
         let components = states.components(index)?;
         Ok(Self::from_components(
-            components.position.vector(),
-            components.velocity.vector(),
+            components.position_vector(),
+            components.velocity_vector(),
             mu,
         )?)
     }
@@ -280,7 +280,7 @@ mod tests {
     fn circular_orbit_diagnostics_match_two_body_invariants() -> TestResult {
         let orbit = circular_orbit()?;
         let state = orbit.to_cartesian_state()?;
-        let mut states = CartesianStateBuffer::<1>::new();
+        let mut states = CartesianStateBuffer::<1>::with_len(1)?;
         states.write_from_state(0, &state)?;
 
         let diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, orbit.mu())?;
@@ -338,7 +338,7 @@ mod tests {
             Position::from_vector(Vector3::zeros())?,
             Velocity::from_vector(Vector3::zeros())?,
         );
-        let mut states = CartesianStateBuffer::<1>::new();
+        let mut states = CartesianStateBuffer::<1>::with_len(1)?;
         states.write_from_state(0, &state)?;
 
         assert!(OrbitalDiagnostics::from_states(&states.view(), 0, earth_mu()?).is_err());
@@ -363,7 +363,7 @@ mod tests {
 
     #[test]
     fn diagnostics_reject_invalid_state_index() -> TestResult {
-        let states = CartesianStateBuffer::<1>::new();
+        let states = CartesianStateBuffer::<1>::with_len(1)?;
 
         assert!(OrbitalDiagnostics::from_states(&states.view(), 1, earth_mu()?).is_err());
         Ok(())

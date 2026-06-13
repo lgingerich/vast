@@ -41,7 +41,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let integrator = RungeKutta4Integrator;
     let dt = TimeStep::from_seconds(STEP_SECONDS)?;
     let duration = Duration::from_seconds(PROPAGATION_HOURS * 3_600.0)?;
-    let mut states = CartesianStateBuffer::<1>::new();
+    let mut states = CartesianStateBuffer::<1>::with_len(1)?;
     states.write_from_state(0, &initial_state)?;
 
     let initial_diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?;

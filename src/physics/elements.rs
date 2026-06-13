@@ -747,7 +747,7 @@ mod tests {
             Angle::from_radians(0.0)?,
             OrbitDirection::Prograde,
         )?;
-        let mut states = CartesianStateBuffer::<1>::new();
+        let mut states = CartesianStateBuffer::<1>::with_len(1)?;
         states.write_from_state(0, &orbit.to_cartesian_state()?)?;
         let gravity = OblateBodyGravity::new(
             mu,
@@ -856,7 +856,7 @@ mod tests {
         let inclination = Angle::from_radians(0.9)?;
         let raan = Angle::from_radians(1.1)?;
         let orbit = circular_orbit(inclination, raan)?;
-        let mut states = CartesianStateBuffer::<1>::new();
+        let mut states = CartesianStateBuffer::<1>::with_len(1)?;
         states.write_from_state(0, &orbit.to_cartesian_state()?)?;
         let gravity = TwoBodyGravity::new(orbit.mu());
         let integrator = VelocityVerletIntegrator;
@@ -905,7 +905,7 @@ mod tests {
         let inclination = Angle::from_radians(0.9)?;
         let raan = Angle::from_radians(1.1)?;
         let orbit = circular_orbit(inclination, raan)?;
-        let mut states = CartesianStateBuffer::<1>::new();
+        let mut states = CartesianStateBuffer::<1>::with_len(1)?;
         states.write_from_state(0, &orbit.to_cartesian_state()?)?;
         let gravity = TwoBodyGravity::new(orbit.mu());
         let integrator = VelocityVerletIntegrator;

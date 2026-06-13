@@ -65,7 +65,7 @@ impl OrbitVizScenario {
         )
         .ok()?;
 
-        let mut states = CartesianStateBuffer::<1>::new();
+        let mut states = CartesianStateBuffer::<1>::with_len(1).ok()?;
         states
             .write_from_state(0, &orbit.to_cartesian_state().ok()?)
             .ok()?;
@@ -102,11 +102,11 @@ impl OrbitVizScenario {
                 };
                 self.t = self.t.advance_by(self.dt);
 
-                let Ok(position) = self.states.view().position(0) else {
+                let Ok(state) = self.states.view().read_state(0) else {
                     eprintln!("simulation state became invalid");
                     return;
                 };
-                let position = position.vector();
+                let position = state.position.vector();
                 let trail_next = (self.trail_start + self.trail_count) % TRAIL_POINTS_MAX;
                 self.trail[trail_next] =
                     world_to_screen(position.x, position.y, self.meters_per_pixel);
@@ -131,11 +131,11 @@ impl OrbitVizScenario {
                 draw_line(start.x, start.y, end.x, end.y, 1.0, GREEN);
             }
 
-            let Ok(position) = self.states.view().position(0) else {
+            let Ok(state) = self.states.view().read_state(0) else {
                 eprintln!("simulation state became invalid");
                 return;
             };
-            let position = position.vector();
+            let position = state.position.vector();
             let ship = world_to_screen(position.x, position.y, self.meters_per_pixel) + center;
             draw_circle(ship.x, ship.y, 4.0, WHITE);
 

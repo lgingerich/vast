@@ -1,7 +1,7 @@
 use nalgebra::Vector3;
 
-pub use super::types::{Position, Velocity};
-use crate::errors::{NumericalError, StateError};
+use super::types::{Position, Velocity};
+use crate::errors::StateError;
 
 /// Position in meters (SI), Cartesian frame.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -18,170 +18,103 @@ impl CartesianState {
     pub const fn new(position: Position, velocity: Velocity) -> Self {
         Self { position, velocity }
     }
-
-    /// Creates a Cartesian state directly from scalar SI values.
-    #[inline]
-    pub fn from_meters(
-        px_m: f64,
-        py_m: f64,
-        pz_m: f64,
-        vx_mps: f64,
-        vy_mps: f64,
-        vz_mps: f64,
-    ) -> Result<Self, NumericalError> {
-        Ok(Self::new(
-            Position::from_vector(Vector3::new(px_m, py_m, pz_m))?,
-            Velocity::from_vector(Vector3::new(vx_mps, vy_mps, vz_mps))?,
-        ))
-    }
-}
-
-/// Position components in an inertial Cartesian frame, measured in meters.
-#[derive(Debug, Clone, Copy)]
-pub struct CartesianPositionComponents {
-    x_m: f64,
-    y_m: f64,
-    z_m: f64,
-}
-
-impl CartesianPositionComponents {
-    /// Creates finite Cartesian position components from meters.
-    #[inline]
-    pub fn from_meters(x_m: f64, y_m: f64, z_m: f64) -> Result<Self, NumericalError> {
-        if x_m.is_finite() && y_m.is_finite() && z_m.is_finite() {
-            Ok(Self { x_m, y_m, z_m })
-        } else {
-            Err(NumericalError::NotFinite {
-                field: "position components",
-            })
-        }
-    }
-
-    fn from_position(position: Position) -> Self {
-        let v = position.vector();
-        Self {
-            x_m: v.x,
-            y_m: v.y,
-            z_m: v.z,
-        }
-    }
-
-    /// Returns the x component in meters.
-    #[inline]
-    pub const fn x_meters(self) -> f64 {
-        self.x_m
-    }
-
-    /// Returns the y component in meters.
-    #[inline]
-    pub const fn y_meters(self) -> f64 {
-        self.y_m
-    }
-
-    /// Returns the z component in meters.
-    #[inline]
-    pub const fn z_meters(self) -> f64 {
-        self.z_m
-    }
-
-    pub(crate) fn vector(self) -> Vector3<f64> {
-        Vector3::new(self.x_m, self.y_m, self.z_m)
-    }
-
-    fn to_position(self) -> Result<Position, StateError> {
-        Ok(Position::from_vector(self.vector())?)
-    }
-}
-
-/// Velocity components in an inertial Cartesian frame, measured in meters per second.
-#[derive(Debug, Clone, Copy)]
-pub struct CartesianVelocityComponents {
-    x_mps: f64,
-    y_mps: f64,
-    z_mps: f64,
-}
-
-impl CartesianVelocityComponents {
-    /// Creates finite Cartesian velocity components from meters per second.
-    #[inline]
-    pub fn from_meters_per_second(
-        x_mps: f64,
-        y_mps: f64,
-        z_mps: f64,
-    ) -> Result<Self, NumericalError> {
-        if x_mps.is_finite() && y_mps.is_finite() && z_mps.is_finite() {
-            Ok(Self {
-                x_mps,
-                y_mps,
-                z_mps,
-            })
-        } else {
-            Err(NumericalError::NotFinite {
-                field: "velocity components",
-            })
-        }
-    }
-
-    fn from_velocity(velocity: Velocity) -> Self {
-        let v = velocity.vector();
-        Self {
-            x_mps: v.x,
-            y_mps: v.y,
-            z_mps: v.z,
-        }
-    }
-
-    /// Returns the x component in meters per second.
-    #[inline]
-    pub const fn x_meters_per_second(self) -> f64 {
-        self.x_mps
-    }
-
-    /// Returns the y component in meters per second.
-    #[inline]
-    pub const fn y_meters_per_second(self) -> f64 {
-        self.y_mps
-    }
-
-    /// Returns the z component in meters per second.
-    #[inline]
-    pub const fn z_meters_per_second(self) -> f64 {
-        self.z_mps
-    }
-
-    pub(crate) fn vector(self) -> Vector3<f64> {
-        Vector3::new(self.x_mps, self.y_mps, self.z_mps)
-    }
-
-    fn to_velocity(self) -> Result<Velocity, StateError> {
-        Ok(Velocity::from_vector(self.vector())?)
-    }
 }
 
 /// Position and velocity components for one Cartesian state.
+///
+/// Flat scalar storage lets dynamics models and integrators read components
+/// directly in the hot path. Validation lives at the typed [`Position`] and
+/// [`Velocity`] domain-type boundaries.
 #[derive(Debug, Clone, Copy)]
 pub struct CartesianStateComponents {
-    /// Position components.
-    pub(crate) position: CartesianPositionComponents,
-    /// Velocity components.
-    pub(crate) velocity: CartesianVelocityComponents,
+    px_m: f64,
+    py_m: f64,
+    pz_m: f64,
+    vx_mps: f64,
+    vy_mps: f64,
+    vz_mps: f64,
 }
 
 impl CartesianStateComponents {
-    /// Creates Cartesian state components from typed position and velocity.
-    #[inline]
-    fn from_state(state: &CartesianState) -> Self {
+    pub(crate) fn from_vectors(position: Vector3<f64>, velocity: Vector3<f64>) -> Self {
         Self {
-            position: CartesianPositionComponents::from_position(state.position),
-            velocity: CartesianVelocityComponents::from_velocity(state.velocity),
+            px_m: position.x,
+            py_m: position.y,
+            pz_m: position.z,
+            vx_mps: velocity.x,
+            vy_mps: velocity.y,
+            vz_mps: velocity.z,
         }
     }
 
-    /// Converts these component values into a typed Cartesian state.
-    fn to_state(self) -> Result<CartesianState, StateError> {
-        Ok(CartesianState::new(
-            self.position.to_position()?,
-            self.velocity.to_velocity()?,
+    /// Returns the x position component in meters.
+    #[inline]
+    pub const fn px_meters(&self) -> f64 {
+        self.px_m
+    }
+
+    /// Returns the y position component in meters.
+    #[inline]
+    pub const fn py_meters(&self) -> f64 {
+        self.py_m
+    }
+
+    /// Returns the z position component in meters.
+    #[inline]
+    pub const fn pz_meters(&self) -> f64 {
+        self.pz_m
+    }
+
+    /// Returns the x velocity component in meters per second.
+    #[inline]
+    pub const fn vx_meters_per_second(&self) -> f64 {
+        self.vx_mps
+    }
+
+    /// Returns the y velocity component in meters per second.
+    #[inline]
+    pub const fn vy_meters_per_second(&self) -> f64 {
+        self.vy_mps
+    }
+
+    /// Returns the z velocity component in meters per second.
+    #[inline]
+    pub const fn vz_meters_per_second(&self) -> f64 {
+        self.vz_mps
+    }
+
+    /// Returns the position as a nalgebra vector.
+    #[inline]
+    pub fn position_vector(&self) -> Vector3<f64> {
+        Vector3::new(self.px_m, self.py_m, self.pz_m)
+    }
+
+    /// Returns the velocity as a nalgebra vector.
+    #[inline]
+    pub fn velocity_vector(&self) -> Vector3<f64> {
+        Vector3::new(self.vx_mps, self.vy_mps, self.vz_mps)
+    }
+}
+
+impl From<&CartesianState> for CartesianStateComponents {
+    fn from(state: &CartesianState) -> Self {
+        Self::from_vectors(state.position.vector(), state.velocity.vector())
+    }
+}
+
+impl From<(Position, Velocity)> for CartesianStateComponents {
+    fn from((position, velocity): (Position, Velocity)) -> Self {
+        Self::from_vectors(position.vector(), velocity.vector())
+    }
+}
+
+impl TryFrom<CartesianStateComponents> for CartesianState {
+    type Error = StateError;
+
+    fn try_from(components: CartesianStateComponents) -> Result<Self, Self::Error> {
+        Ok(Self::new(
+            Position::from_vector(components.position_vector())?,
+            Velocity::from_vector(components.velocity_vector())?,
         ))
     }
 }
@@ -201,23 +134,9 @@ pub struct CartesianStateBuffer<const N: usize> {
 }
 
 impl<const N: usize> CartesianStateBuffer<N> {
-    /// Creates a buffer with all capacity active and initialized to finite zero components.
-    #[inline]
-    pub const fn new() -> Self {
-        Self {
-            pos_x: [0.0; N],
-            pos_y: [0.0; N],
-            pos_z: [0.0; N],
-            vel_x: [0.0; N],
-            vel_y: [0.0; N],
-            vel_z: [0.0; N],
-            len: N,
-        }
-    }
-
     /// Creates a buffer with no active bodies.
     #[inline]
-    pub const fn empty() -> Self {
+    pub const fn new() -> Self {
         Self {
             pos_x: [0.0; N],
             pos_y: [0.0; N],
@@ -231,15 +150,21 @@ impl<const N: usize> CartesianStateBuffer<N> {
 
     /// Creates a buffer with `len` active finite zero-initialized bodies.
     pub fn with_len(len: usize) -> Result<Self, StateError> {
-        let mut buffer = Self::empty();
+        let mut buffer = Self::new();
         buffer.set_len(len)?;
         Ok(buffer)
     }
 
     /// Returns active body count.
     #[inline]
-    pub const fn body_count(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.len
+    }
+
+    /// Returns true when no bodies are active.
+    #[inline]
+    pub const fn is_empty(&self) -> bool {
+        self.len == 0
     }
 
     /// Returns maximum body capacity.
@@ -289,7 +214,7 @@ impl<const N: usize> CartesianStateBuffer<N> {
         state: &CartesianState,
     ) -> Result<(), StateError> {
         self.view_mut()
-            .write_components(index, CartesianStateComponents::from_state(state))
+            .write_components(index, CartesianStateComponents::from(state))
     }
 
     /// Reads the active body at `index` into a typed Cartesian state.
@@ -317,43 +242,35 @@ pub struct CartesianStates<'a> {
 impl<'a> CartesianStates<'a> {
     /// Returns active body count.
     #[inline]
-    pub const fn body_count(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.pos_x.len()
     }
 
-    /// Reads position for the active body at `index`.
-    pub fn position(&self, index: usize) -> Result<Position, StateError> {
-        self.components(index)?.position.to_position()
-    }
-
-    /// Reads velocity for the active body at `index`.
-    pub fn velocity(&self, index: usize) -> Result<Velocity, StateError> {
-        self.components(index)?.velocity.to_velocity()
+    /// Returns true when this view contains no active bodies.
+    #[inline]
+    pub const fn is_empty(&self) -> bool {
+        self.pos_x.is_empty()
     }
 
     /// Reads the active body at `index` into a typed Cartesian state.
     pub fn read_state(&self, index: usize) -> Result<CartesianState, StateError> {
-        self.components(index)?.to_state()
+        CartesianState::try_from(self.components(index)?)
     }
 
     pub(crate) fn components(&self, index: usize) -> Result<CartesianStateComponents, StateError> {
         self.validate_index(index)?;
         Ok(CartesianStateComponents {
-            position: CartesianPositionComponents {
-                x_m: self.pos_x[index],
-                y_m: self.pos_y[index],
-                z_m: self.pos_z[index],
-            },
-            velocity: CartesianVelocityComponents {
-                x_mps: self.vel_x[index],
-                y_mps: self.vel_y[index],
-                z_mps: self.vel_z[index],
-            },
+            px_m: self.pos_x[index],
+            py_m: self.pos_y[index],
+            pz_m: self.pos_z[index],
+            vx_mps: self.vel_x[index],
+            vy_mps: self.vel_y[index],
+            vz_mps: self.vel_z[index],
         })
     }
 
     fn validate_index(&self, index: usize) -> Result<(), StateError> {
-        if index >= self.body_count() {
+        if index >= self.len() {
             return Err(StateError::InvalidBodyIndex);
         }
 
@@ -374,22 +291,14 @@ pub struct CartesianStatesMut<'a> {
 impl<'a> CartesianStatesMut<'a> {
     /// Returns active body count.
     #[inline]
-    pub const fn body_count(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.pos_x.len()
     }
 
-    /// Reads the active body at `index` into a typed Cartesian state.
-    pub fn read_state(&self, index: usize) -> Result<CartesianState, StateError> {
-        self.as_view().read_state(index)
-    }
-
-    /// Writes a typed Cartesian state into the active body at `index`.
-    pub fn write_from_state(
-        &mut self,
-        index: usize,
-        state: &CartesianState,
-    ) -> Result<(), StateError> {
-        self.write_components(index, CartesianStateComponents::from_state(state))
+    /// Returns true when this view contains no active bodies.
+    #[inline]
+    pub const fn is_empty(&self) -> bool {
+        self.pos_x.is_empty()
     }
 
     /// Returns an immutable view over the same active bodies.
@@ -410,20 +319,17 @@ impl<'a> CartesianStatesMut<'a> {
         components: CartesianStateComponents,
     ) -> Result<(), StateError> {
         self.validate_index(index)?;
-        let position = components.position;
-        let velocity = components.velocity;
-
-        self.pos_x[index] = position.x_m;
-        self.pos_y[index] = position.y_m;
-        self.pos_z[index] = position.z_m;
-        self.vel_x[index] = velocity.x_mps;
-        self.vel_y[index] = velocity.y_mps;
-        self.vel_z[index] = velocity.z_mps;
+        self.pos_x[index] = components.px_m;
+        self.pos_y[index] = components.py_m;
+        self.pos_z[index] = components.pz_m;
+        self.vel_x[index] = components.vx_mps;
+        self.vel_y[index] = components.vy_mps;
+        self.vel_z[index] = components.vz_mps;
         Ok(())
     }
 
     fn validate_index(&self, index: usize) -> Result<(), StateError> {
-        if index >= self.body_count() {
+        if index >= self.len() {
             return Err(StateError::InvalidBodyIndex);
         }
 
@@ -453,7 +359,7 @@ mod tests {
 
     #[test]
     fn state_buffer_roundtrips_cartesian_state() -> TestResult {
-        let mut buffer = CartesianStateBuffer::<1>::new();
+        let mut buffer = CartesianStateBuffer::<1>::with_len(1)?;
         let state = state()?;
 
         buffer.write_from_state(0, &state)?;
@@ -478,7 +384,7 @@ mod tests {
 
     #[test]
     fn state_buffer_rejects_invalid_index() -> TestResult {
-        let mut buffer = CartesianStateBuffer::<1>::new();
+        let mut buffer = CartesianStateBuffer::<1>::with_len(1)?;
 
         assert!(matches!(
             buffer.write_from_state(1, &state()?),
@@ -492,8 +398,11 @@ mod tests {
     }
 
     #[test]
-    fn cartesian_state_from_meters_roundtrips() -> TestResult {
-        let state = CartesianState::from_meters(1.0, 2.0, 3.0, 4.0, 5.0, 6.0)?;
+    fn cartesian_state_new_holds_values() -> TestResult {
+        let state = CartesianState::new(
+            Position::from_vector(Vector3::new(1.0, 2.0, 3.0))?,
+            Velocity::from_vector(Vector3::new(4.0, 5.0, 6.0))?,
+        );
 
         assert_close(state.position.vector().x, 1.0);
         assert_close(state.position.vector().y, 2.0);
@@ -505,14 +414,8 @@ mod tests {
     }
 
     #[test]
-    fn cartesian_state_from_meters_rejects_non_finite() {
-        assert!(matches!(
-            CartesianState::from_meters(f64::NAN, 2.0, 3.0, 4.0, 5.0, 6.0),
-            Err(NumericalError::NotFinite { .. }),
-        ));
-        assert!(matches!(
-            CartesianState::from_meters(1.0, 2.0, 3.0, f64::INFINITY, 5.0, 6.0),
-            Err(NumericalError::NotFinite { .. }),
-        ));
+    fn position_and_velocity_reject_non_finite() {
+        assert!(Position::from_vector(Vector3::new(f64::NAN, 0.0, 0.0)).is_err());
+        assert!(Velocity::from_vector(Vector3::new(0.0, f64::INFINITY, 0.0)).is_err());
     }
 }

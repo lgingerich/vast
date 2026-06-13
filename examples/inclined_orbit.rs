@@ -42,7 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dt = TimeStep::from_seconds(STEP_SECONDS)?;
     let period = orbit.period()?;
 
-    let mut states = CartesianStateBuffer::<1>::new();
+    let mut states = CartesianStateBuffer::<1>::with_len(1)?;
     states.write_from_state(0, &initial_state)?;
 
     let summary = propagate(

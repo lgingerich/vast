@@ -23,8 +23,8 @@ pub use physics::{
     orbits::EllipticOrbit,
     orbits::OrbitDirection,
     state::{
-        CartesianPositionComponents, CartesianState, CartesianStateBuffer,
-        CartesianStateComponents, CartesianStates, CartesianStatesMut, CartesianVelocityComponents,
+        CartesianState, CartesianStateBuffer, CartesianStateComponents, CartesianStates,
+        CartesianStatesMut,
     },
     types::{
         Acceleration, Angle, AngularRate, AreaPerMass, Distance, Duration, Eccentricity, Epoch,

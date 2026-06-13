@@ -103,7 +103,7 @@ pub struct Propagator {
 impl Propagator {
     /// Creates a propagator starting from `initial_state` at epoch zero.
     pub fn new(initial_state: CartesianState, dt: TimeStep) -> Result<Self, PropagationError> {
-        let mut states = CartesianStateBuffer::<1>::new();
+        let mut states = CartesianStateBuffer::<1>::with_len(1)?;
         states.write_from_state(0, &initial_state)?;
 
         Ok(Self {

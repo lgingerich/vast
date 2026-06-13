@@ -1,9 +1,6 @@
 use super::dynamics::Dynamics;
-use super::state::{
-    CartesianPositionComponents, CartesianStateComponents, CartesianStatesMut,
-    CartesianVelocityComponents,
-};
-use super::types::{Epoch, TimeStep};
+use super::state::{CartesianStateComponents, CartesianStatesMut};
+use super::types::{Epoch, Position, TimeStep, Velocity};
 use crate::errors::PropagationError;
 use nalgebra::Vector3;
 
@@ -38,7 +35,7 @@ impl StateDerivative {
         velocity: Vector3<f64>,
         t: Epoch,
     ) -> Result<Self, PropagationError> {
-        let state = components_from_vectors(position, velocity)?;
+        let state = components_from_vectors(position, velocity);
         let acceleration = dynamics.acceleration_at(state, t)?;
 
         Ok(Self {
@@ -73,8 +70,8 @@ impl Integrator for EulerIntegrator {
         let state = states.as_view().components(index)?;
         let acceleration = dynamics.acceleration_at(state, t)?;
         let dt_s = dt.seconds();
-        let position = state.position.vector();
-        let velocity = state.velocity.vector();
+        let position = state.position_vector();
+        let velocity = state.velocity_vector();
         let acceleration = acceleration.vector();
 
         let new_vel = velocity + acceleration * dt_s;
@@ -96,14 +93,14 @@ impl Integrator for VelocityVerletIntegrator {
     ) -> Result<(), PropagationError> {
         let state = states.as_view().components(index)?;
         let dt_s = dt.seconds();
-        let position = state.position.vector();
-        let velocity = state.velocity.vector();
+        let position = state.position_vector();
+        let velocity = state.velocity_vector();
         let acceleration = dynamics.acceleration_at(state, t)?.vector();
         let next_t = t.advance_by(dt);
 
         let new_pos = position + velocity * dt_s + acceleration * (0.5 * dt_s * dt_s);
         let next_velocity_estimate = velocity + acceleration * dt_s;
-        let next_state = components_from_vectors(new_pos, next_velocity_estimate)?;
+        let next_state = components_from_vectors(new_pos, next_velocity_estimate);
         let next_acceleration = dynamics.acceleration_at(next_state, next_t)?.vector();
         let new_vel = velocity + (acceleration + next_acceleration) * (0.5 * dt_s);
 
@@ -123,14 +120,14 @@ impl Integrator for LeapfrogIntegrator {
     ) -> Result<(), PropagationError> {
         let state = states.as_view().components(index)?;
         let dt_s = dt.seconds();
-        let position = state.position.vector();
-        let velocity = state.velocity.vector();
+        let position = state.position_vector();
+        let velocity = state.velocity_vector();
         let acceleration = dynamics.acceleration_at(state, t)?.vector();
         let next_t = t.advance_by(dt);
 
         let half_velocity = velocity + acceleration * (0.5 * dt_s);
         let new_pos = position + half_velocity * dt_s;
-        let next_state = components_from_vectors(new_pos, half_velocity)?;
+        let next_state = components_from_vectors(new_pos, half_velocity);
         let next_acceleration = dynamics.acceleration_at(next_state, next_t)?.vector();
         let new_vel = half_velocity + next_acceleration * (0.5 * dt_s);
 
@@ -153,8 +150,8 @@ impl Integrator for RungeKutta4Integrator {
         let half_dt_s = 0.5 * dt_s;
         let half_t = t.advance_by(TimeStep::from_seconds(half_dt_s)?);
         let full_t = t.advance_by(dt);
-        let position = state.position.vector();
-        let velocity = state.velocity.vector();
+        let position = state.position_vector();
+        let velocity = state.velocity_vector();
 
         let k1 = StateDerivative::at(dynamics, position, velocity, t)?;
         let k2 = StateDerivative::at(
@@ -192,24 +189,18 @@ fn write_integrated_vectors(
     position: Vector3<f64>,
     velocity: Vector3<f64>,
 ) -> Result<(), PropagationError> {
-    let velocity =
-        CartesianVelocityComponents::from_meters_per_second(velocity.x, velocity.y, velocity.z)?;
-    let position = CartesianPositionComponents::from_meters(position.x, position.y, position.z)?;
-
-    states.write_components(index, CartesianStateComponents { position, velocity })?;
+    let position = Position::from_vector(position)?;
+    let velocity = Velocity::from_vector(velocity)?;
+    let components = CartesianStateComponents::from((position, velocity));
+    states.write_components(index, components)?;
     Ok(())
 }
 
 fn components_from_vectors(
     position: Vector3<f64>,
     velocity: Vector3<f64>,
-) -> Result<CartesianStateComponents, PropagationError> {
-    Ok(CartesianStateComponents {
-        position: CartesianPositionComponents::from_meters(position.x, position.y, position.z)?,
-        velocity: CartesianVelocityComponents::from_meters_per_second(
-            velocity.x, velocity.y, velocity.z,
-        )?,
-    })
+) -> CartesianStateComponents {
+    CartesianStateComponents::from_vectors(position, velocity)
 }
 
 #[cfg(test)]
@@ -282,7 +273,7 @@ mod tests {
             acceleration: Acceleration::from_vector(Vector3::new(0.0, 2.0, 0.0))?,
         };
         let state = state_at(Vector3::new(10.0, 20.0, 30.0), Vector3::new(1.0, 2.0, 3.0))?;
-        let mut states = CartesianStateBuffer::<1>::new();
+        let mut states = CartesianStateBuffer::<1>::with_len(1)?;
         states.write_from_state(0, &state)?;
 
         integrator.step(
@@ -310,7 +301,7 @@ mod tests {
             error: DynamicsError::PositionAtGravityCenter,
         };
         let state = state_at(Vector3::new(1.0, 0.0, 0.0), Vector3::zeros())?;
-        let mut states = CartesianStateBuffer::<1>::new();
+        let mut states = CartesianStateBuffer::<1>::with_len(1)?;
         states.write_from_state(0, &state)?;
 
         assert!(matches!(
@@ -355,7 +346,7 @@ mod tests {
             acceleration: Acceleration::from_vector(Vector3::new(f64::MAX, 0.0, 0.0))?,
         };
         let state = state_at(Vector3::zeros(), Vector3::zeros())?;
-        let mut states = CartesianStateBuffer::<1>::new();
+        let mut states = CartesianStateBuffer::<1>::with_len(1)?;
         states.write_from_state(0, &state)?;
 
         assert!(matches!(
@@ -381,7 +372,7 @@ mod tests {
             Vector3::new(f64::MAX, 0.0, 0.0),
             Vector3::new(f64::MAX, 0.0, 0.0),
         )?;
-        let mut states = CartesianStateBuffer::<1>::new();
+        let mut states = CartesianStateBuffer::<1>::with_len(1)?;
         states.write_from_state(0, &state)?;
 
         assert!(matches!(
@@ -448,7 +439,7 @@ mod tests {
             acceleration: Acceleration::from_vector(Vector3::new(0.0, 2.0, 0.0))?,
         };
         let state = state_at(Vector3::new(10.0, 20.0, 30.0), Vector3::new(1.0, 2.0, 3.0))?;
-        let mut states = CartesianStateBuffer::<1>::new();
+        let mut states = CartesianStateBuffer::<1>::with_len(1)?;
         states.write_from_state(0, &state)?;
 
         integrator.step(
@@ -476,7 +467,7 @@ mod tests {
             acceleration: Acceleration::from_vector(Vector3::new(0.0, 2.0, 0.0))?,
         };
         let state = state_at(Vector3::new(10.0, 20.0, 30.0), Vector3::new(1.0, 2.0, 3.0))?;
-        let mut states = CartesianStateBuffer::<1>::new();
+        let mut states = CartesianStateBuffer::<1>::with_len(1)?;
         states.write_from_state(0, &state)?;
 
         integrator.step(
@@ -504,7 +495,7 @@ mod tests {
             acceleration: Acceleration::from_vector(Vector3::new(0.0, 2.0, 0.0))?,
         };
         let state = state_at(Vector3::new(10.0, 20.0, 30.0), Vector3::new(1.0, 2.0, 3.0))?;
-        let mut states = CartesianStateBuffer::<1>::new();
+        let mut states = CartesianStateBuffer::<1>::with_len(1)?;
         states.write_from_state(0, &state)?;
 
         integrator.step(
@@ -531,7 +522,7 @@ mod tests {
         let dynamics = ConstantAcceleration {
             acceleration: Acceleration::from_vector(Vector3::zeros())?,
         };
-        let mut states = CartesianStateBuffer::<1>::new();
+        let mut states = CartesianStateBuffer::<1>::with_len(1)?;
 
         assert!(matches!(
             integrator.step(
@@ -552,7 +543,7 @@ mod tests {
         let dynamics = ConstantAcceleration {
             acceleration: Acceleration::from_vector(Vector3::new(0.0, 1.0, 0.0))?,
         };
-        let mut states = CartesianStateBuffer::<2>::new();
+        let mut states = CartesianStateBuffer::<2>::with_len(2)?;
         let body_zero = state_at(Vector3::new(1.0, 2.0, 3.0), Vector3::new(4.0, 5.0, 6.0))?;
         let body_one = state_at(
             Vector3::new(10.0, 20.0, 30.0),
@@ -608,7 +599,7 @@ mod tests {
         let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
         let gravity = TwoBodyGravity::new(mu);
         let integrator = RungeKutta4Integrator;
-        let mut states = CartesianStateBuffer::<2>::new();
+        let mut states = CartesianStateBuffer::<2>::with_len(2)?;
         let orbit_zero = circular_orbit(R_EARTH + 400_000.0, 0.0, mu)?;
         let orbit_one = circular_orbit(R_EARTH + 800_000.0, 0.5, mu)?;
         states.write_from_state(0, &orbit_zero.to_cartesian_state()?)?;
@@ -673,7 +664,7 @@ mod tests {
         let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
         let gravity = TwoBodyGravity::new(mu);
         let orbit = circular_orbit(R_EARTH + 400_000.0, 0.0, mu)?;
-        let mut states = CartesianStateBuffer::<2>::new();
+        let mut states = CartesianStateBuffer::<2>::with_len(2)?;
         states.write_from_state(0, &orbit.to_cartesian_state()?)?;
 
         let initial = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?;
@@ -764,7 +755,7 @@ mod tests {
         let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
         let gravity = TwoBodyGravity::new(mu);
         let orbit = circular_orbit(R_EARTH + 400_000.0, 0.0, mu)?;
-        let mut states = CartesianStateBuffer::<1>::new();
+        let mut states = CartesianStateBuffer::<1>::with_len(1)?;
         states.write_from_state(0, &orbit.to_cartesian_state()?)?;
 
         let initial_h = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
@@ -815,7 +806,7 @@ mod tests {
         let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
         let gravity = TwoBodyGravity::new(mu);
         let orbit = circular_orbit(R_EARTH + 400_000.0, 0.0, mu)?;
-        let mut states = CartesianStateBuffer::<1>::new();
+        let mut states = CartesianStateBuffer::<1>::with_len(1)?;
         states.write_from_state(0, &orbit.to_cartesian_state()?)?;
 
         let initial_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?

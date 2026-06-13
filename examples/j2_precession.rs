@@ -46,8 +46,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         * radius_ratio
         * INCLINATION_DEG.to_radians().cos();
     let analytical_drift_per_day = analytical_raan_rad_per_sec.to_degrees() * 86_400.0;
-    let mut two_body_states = CartesianStateBuffer::<1>::new();
-    let mut j2_states = CartesianStateBuffer::<1>::new();
+    let mut two_body_states = CartesianStateBuffer::<1>::with_len(1)?;
+    let mut j2_states = CartesianStateBuffer::<1>::with_len(1)?;
     two_body_states.write_from_state(0, &initial_state)?;
     j2_states.write_from_state(0, &initial_state)?;
 
