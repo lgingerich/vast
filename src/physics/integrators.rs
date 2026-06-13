@@ -186,7 +186,6 @@ impl Integrator for RungeKutta4Integrator {
     }
 }
 
-
 fn write_integrated_vectors(
     states: &mut CartesianStatesMut<'_>,
     index: usize,
