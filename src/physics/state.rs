@@ -48,7 +48,7 @@ impl CartesianPositionComponents {
     /// Creates finite Cartesian position components from meters.
     #[inline]
     pub fn from_meters(x_m: f64, y_m: f64, z_m: f64) -> Result<Self, NumericalError> {
-        if components_are_finite(x_m, y_m, z_m) {
+        if x_m.is_finite() && y_m.is_finite() && z_m.is_finite() {
             Ok(Self { x_m, y_m, z_m })
         } else {
             Err(NumericalError::NotFinite {
@@ -109,7 +109,7 @@ impl CartesianVelocityComponents {
         y_mps: f64,
         z_mps: f64,
     ) -> Result<Self, NumericalError> {
-        if components_are_finite(x_mps, y_mps, z_mps) {
+        if x_mps.is_finite() && y_mps.is_finite() && z_mps.is_finite() {
             Ok(Self {
                 x_mps,
                 y_mps,
@@ -174,7 +174,7 @@ impl CartesianAccelerationComponents {
         y_mps2: f64,
         z_mps2: f64,
     ) -> Result<Self, NumericalError> {
-        if components_are_finite(x_mps2, y_mps2, z_mps2) {
+        if x_mps2.is_finite() && y_mps2.is_finite() && z_mps2.is_finite() {
             Ok(Self {
                 x_mps2,
                 y_mps2,
@@ -404,36 +404,6 @@ pub struct CartesianStates<'a> {
 }
 
 impl<'a> CartesianStates<'a> {
-    /// Creates an immutable view from equal-length component slices.
-    pub fn from_slices(
-        pos_x: &'a [f64],
-        pos_y: &'a [f64],
-        pos_z: &'a [f64],
-        vel_x: &'a [f64],
-        vel_y: &'a [f64],
-        vel_z: &'a [f64],
-    ) -> Result<Self, StateError> {
-        if !slice_lengths_match(
-            pos_x.len(),
-            pos_y.len(),
-            pos_z.len(),
-            vel_x.len(),
-            vel_y.len(),
-            vel_z.len(),
-        ) {
-            return Err(StateError::MismatchedSliceLengths);
-        }
-
-        Ok(Self {
-            pos_x,
-            pos_y,
-            pos_z,
-            vel_x,
-            vel_y,
-            vel_z,
-        })
-    }
-
     /// Returns active body count.
     #[inline]
     pub const fn body_count(&self) -> usize {
@@ -487,36 +457,6 @@ pub struct CartesianStatesMut<'a> {
 }
 
 impl<'a> CartesianStatesMut<'a> {
-    /// Creates a mutable view from equal-length component slices.
-    pub fn from_slices(
-        pos_x: &'a mut [f64],
-        pos_y: &'a mut [f64],
-        pos_z: &'a mut [f64],
-        vel_x: &'a mut [f64],
-        vel_y: &'a mut [f64],
-        vel_z: &'a mut [f64],
-    ) -> Result<Self, StateError> {
-        if !slice_lengths_match(
-            pos_x.len(),
-            pos_y.len(),
-            pos_z.len(),
-            vel_x.len(),
-            vel_y.len(),
-            vel_z.len(),
-        ) {
-            return Err(StateError::MismatchedSliceLengths);
-        }
-
-        Ok(Self {
-            pos_x,
-            pos_y,
-            pos_z,
-            vel_x,
-            vel_y,
-            vel_z,
-        })
-    }
-
     /// Returns active body count.
     #[inline]
     pub const fn body_count(&self) -> usize {
@@ -576,24 +516,7 @@ impl<'a> CartesianStatesMut<'a> {
     }
 }
 
-fn components_are_finite(x: f64, y: f64, z: f64) -> bool {
-    x.is_finite() && y.is_finite() && z.is_finite()
-}
 
-fn slice_lengths_match(
-    pos_x_len: usize,
-    pos_y_len: usize,
-    pos_z_len: usize,
-    vel_x_len: usize,
-    vel_y_len: usize,
-    vel_z_len: usize,
-) -> bool {
-    pos_x_len == pos_y_len
-        && pos_x_len == pos_z_len
-        && pos_x_len == vel_x_len
-        && pos_x_len == vel_y_len
-        && pos_x_len == vel_z_len
-}
 
 #[cfg(test)]
 mod tests {
@@ -637,21 +560,6 @@ mod tests {
         assert!(matches!(
             CartesianStateBuffer::<1>::with_len(2),
             Err(StateError::InvalidLength),
-        ));
-    }
-
-    #[test]
-    fn state_views_reject_mismatched_slices() {
-        let pos_x = [0.0, 1.0];
-        let pos_y = [0.0];
-        let pos_z = [0.0, 1.0];
-        let vel_x = [0.0, 1.0];
-        let vel_y = [0.0, 1.0];
-        let vel_z = [0.0, 1.0];
-
-        assert!(matches!(
-            CartesianStates::from_slices(&pos_x, &pos_y, &pos_z, &vel_x, &vel_y, &vel_z),
-            Err(StateError::MismatchedSliceLengths),
         ));
     }
 

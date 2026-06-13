@@ -48,9 +48,6 @@ pub enum StateError {
     /// A requested active length exceeded the storage capacity.
     #[error("active state length exceeds storage capacity")]
     InvalidLength,
-    /// Borrowed state component slices did not have equal lengths.
-    #[error("state component slices have mismatched lengths")]
-    MismatchedSliceLengths,
 }
 
 /// Errors produced during propagation.
