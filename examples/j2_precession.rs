@@ -138,13 +138,13 @@ fn raan_degrees(elements: &OrbitalElements) -> Option<f64> {
     match elements {
         OrbitalElements::Classical(elements) => Some(
             elements
-                .right_ascension_of_ascending_node
+                .right_ascension_of_ascending_node()
                 .radians()
                 .to_degrees(),
         ),
         OrbitalElements::CircularInclined(elements) => Some(
             elements
-                .right_ascension_of_ascending_node
+                .right_ascension_of_ascending_node()
                 .radians()
                 .to_degrees(),
         ),

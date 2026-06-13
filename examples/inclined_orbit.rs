@@ -115,29 +115,29 @@ fn propagate<I: Integrator>(
 
     let diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, gravity.mu())?;
     let radius_drift = Distance::from_meters(
-        (diagnostics.radius.meters() - initial_diagnostics.radius.meters())
+        (diagnostics.radius().meters() - initial_diagnostics.radius().meters())
             .abs()
             .max(f64::EPSILON),
     )?;
     let specific_energy_error = SpecificEnergy::from_square_meters_per_second_squared(
         (diagnostics
-            .specific_energy
+            .specific_energy()
             .square_meters_per_square_second()
             - initial_diagnostics
-                .specific_energy
+                .specific_energy()
                 .square_meters_per_square_second())
         .abs(),
     )?;
     let specific_angular_momentum_error = SpecificAngularMomentum::from_square_meters_per_second(
         (diagnostics
-            .specific_angular_momentum
+            .specific_angular_momentum()
             .square_meters_per_second()
             - initial_diagnostics
-                .specific_angular_momentum
+                .specific_angular_momentum()
                 .square_meters_per_second())
         .abs(),
     )?;
-    let angular_momentum_direction = diagnostics.specific_angular_momentum_vector.normalize();
+    let angular_momentum_direction = diagnostics.specific_angular_momentum_vector().normalize();
 
     Ok(PropagationSummary {
         elapsed: Duration::from_seconds(epoch.seconds())?,
@@ -145,7 +145,7 @@ fn propagate<I: Integrator>(
         radius_drift,
         specific_energy_error,
         specific_angular_momentum_error,
-        eccentricity: diagnostics.eccentricity.scalar(),
+        eccentricity: diagnostics.eccentricity().scalar(),
         angular_momentum_direction: (
             angular_momentum_direction.x,
             angular_momentum_direction.y,
@@ -160,59 +160,59 @@ fn print_elements(elements: &OrbitalElements) {
             println!("elements: classical");
             println!(
                 "a = {:.3} km | e = {:.9} | i = {:.3} deg",
-                elements.semi_major_axis.meters() / 1000.0,
-                elements.eccentricity.scalar(),
-                elements.inclination.radians().to_degrees(),
+                elements.semi_major_axis().meters() / 1000.0,
+                elements.eccentricity().scalar(),
+                elements.inclination().radians().to_degrees(),
             );
             println!(
                 "RAAN = {:.3} deg | arg periapsis = {:.3} deg | true anomaly = {:.3} deg",
                 elements
-                    .right_ascension_of_ascending_node
+                    .right_ascension_of_ascending_node()
                     .radians()
                     .to_degrees(),
-                elements.argument_of_periapsis.radians().to_degrees(),
-                elements.true_anomaly.radians().to_degrees(),
+                elements.argument_of_periapsis().radians().to_degrees(),
+                elements.true_anomaly().radians().to_degrees(),
             );
         }
         OrbitalElements::CircularInclined(elements) => {
             println!("elements: circular inclined");
             println!(
                 "a = {:.3} km | e = {:.9} | i = {:.3} deg",
-                elements.semi_major_axis.meters() / 1000.0,
-                elements.eccentricity.scalar(),
-                elements.inclination.radians().to_degrees(),
+                elements.semi_major_axis().meters() / 1000.0,
+                elements.eccentricity().scalar(),
+                elements.inclination().radians().to_degrees(),
             );
             println!(
                 "RAAN = {:.3} deg | argument of latitude = {:.3} deg",
                 elements
-                    .right_ascension_of_ascending_node
+                    .right_ascension_of_ascending_node()
                     .radians()
                     .to_degrees(),
-                elements.argument_of_latitude.radians().to_degrees(),
+                elements.argument_of_latitude().radians().to_degrees(),
             );
         }
         OrbitalElements::CircularEquatorial(elements) => {
             println!("elements: circular equatorial");
             println!(
                 "a = {:.3} km | e = {:.9} | i = {:.3} deg | true longitude = {:.3} deg",
-                elements.semi_major_axis.meters() / 1000.0,
-                elements.eccentricity.scalar(),
-                elements.inclination.radians().to_degrees(),
-                elements.true_longitude.radians().to_degrees(),
+                elements.semi_major_axis().meters() / 1000.0,
+                elements.eccentricity().scalar(),
+                elements.inclination().radians().to_degrees(),
+                elements.true_longitude().radians().to_degrees(),
             );
         }
         OrbitalElements::EquatorialElliptic(elements) => {
             println!("elements: equatorial elliptic");
             println!(
                 "a = {:.3} km | e = {:.9} | i = {:.3} deg",
-                elements.semi_major_axis.meters() / 1000.0,
-                elements.eccentricity.scalar(),
-                elements.inclination.radians().to_degrees(),
+                elements.semi_major_axis().meters() / 1000.0,
+                elements.eccentricity().scalar(),
+                elements.inclination().radians().to_degrees(),
             );
             println!(
                 "longitude of periapsis = {:.3} deg | true anomaly = {:.3} deg",
-                elements.longitude_of_periapsis.radians().to_degrees(),
-                elements.true_anomaly.radians().to_degrees(),
+                elements.longitude_of_periapsis().radians().to_degrees(),
+                elements.true_anomaly().radians().to_degrees(),
             );
         }
     }

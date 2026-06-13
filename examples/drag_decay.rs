@@ -48,16 +48,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     propagate(&integrator, &dynamics, &mut states, duration, dt)?;
     let final_diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?;
 
-    let initial_altitude_m = initial_diagnostics.radius.meters() - R_EARTH;
-    let final_altitude_m = final_diagnostics.radius.meters() - R_EARTH;
+    let initial_altitude_m = initial_diagnostics.radius().meters() - R_EARTH;
+    let final_altitude_m = final_diagnostics.radius().meters() - R_EARTH;
     let energy_delta = final_diagnostics
-        .specific_energy
+        .specific_energy()
         .square_meters_per_square_second()
         - initial_diagnostics
-            .specific_energy
+            .specific_energy()
             .square_meters_per_square_second();
     let speed_delta =
-        final_diagnostics.speed.meters_per_second() - initial_diagnostics.speed.meters_per_second();
+        final_diagnostics.speed().meters_per_second() - initial_diagnostics.speed().meters_per_second();
 
     println!(
         "Drag decay demo: initial altitude {:.0} km | duration {:.1} h",
@@ -75,7 +75,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!(
         "eccentricity: {:.9}",
-        final_diagnostics.eccentricity.scalar(),
+        final_diagnostics.eccentricity().scalar(),
     );
 
     Ok(())

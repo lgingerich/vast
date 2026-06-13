@@ -125,19 +125,19 @@ fn propagate_one_period<I: Integrator>(
     let final_diagnostics = OrbitalDiagnostics::from_state(&state, gravity.mu())?;
     let specific_energy_error = SpecificEnergy::from_square_meters_per_second_squared(
         (final_diagnostics
-            .specific_energy
+            .specific_energy()
             .square_meters_per_square_second()
             - initial_diagnostics
-                .specific_energy
+                .specific_energy()
                 .square_meters_per_square_second())
         .abs(),
     )?;
     let specific_angular_momentum_error = SpecificAngularMomentum::from_square_meters_per_second(
         (final_diagnostics
-            .specific_angular_momentum
+            .specific_angular_momentum()
             .square_meters_per_second()
             - initial_diagnostics
-                .specific_angular_momentum
+                .specific_angular_momentum()
                 .square_meters_per_second())
         .abs(),
     )?;
@@ -151,7 +151,7 @@ fn propagate_one_period<I: Integrator>(
         speed_error,
         specific_energy_error,
         specific_angular_momentum_error,
-        eccentricity: final_diagnostics.eccentricity.scalar(),
+        eccentricity: final_diagnostics.eccentricity().scalar(),
     })
 }
 

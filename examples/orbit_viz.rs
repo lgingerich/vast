@@ -157,8 +157,8 @@ impl OrbitVizScenario {
             return;
         };
 
-        let altitude_m = diagnostics.radius.meters() - self.earth_radius_m;
-        let radius_drift_m = diagnostics.radius.meters() - self.ideal_orbital_radius.meters();
+        let altitude_m = diagnostics.radius().meters() - self.earth_radius_m;
+        let radius_drift_m = diagnostics.radius().meters() - self.ideal_orbital_radius.meters();
         let orbit_progress = self.t.seconds() / self.orbital_period.seconds();
         let orbit_progress_percent = orbit_progress.fract() * 100.0;
 
@@ -176,14 +176,14 @@ impl OrbitVizScenario {
             ),
             format!(
                 "speed = {:.3} km/s | circular speed = {:.3} km/s",
-                diagnostics.speed.meters_per_second() / 1000.0,
+                diagnostics.speed().meters_per_second() / 1000.0,
                 self.circular_speed.meters_per_second() / 1000.0,
             ),
             format!(
                 "eccentricity = {:.9} | specific energy = {:.3} MJ/kg",
-                diagnostics.eccentricity.scalar(),
+                diagnostics.eccentricity().scalar(),
                 diagnostics
-                    .specific_energy
+                    .specific_energy()
                     .square_meters_per_square_second()
                     / 1.0e6,
             ),
