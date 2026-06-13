@@ -1,6 +1,6 @@
 use nalgebra::Vector3;
 
-pub use super::types::{Acceleration, Position, Velocity};
+pub use super::types::{Position, Velocity};
 use crate::errors::{NumericalError, StateError};
 
 /// Position in meters (SI), Cartesian frame.
@@ -158,73 +158,6 @@ impl CartesianVelocityComponents {
     }
 }
 
-/// Acceleration components in an inertial Cartesian frame, measured in meters per second squared.
-#[derive(Debug, Clone, Copy)]
-pub struct CartesianAccelerationComponents {
-    x_mps2: f64,
-    y_mps2: f64,
-    z_mps2: f64,
-}
-
-impl CartesianAccelerationComponents {
-    /// Creates finite Cartesian acceleration components from meters per second squared.
-    #[inline]
-    pub fn from_meters_per_second_squared(
-        x_mps2: f64,
-        y_mps2: f64,
-        z_mps2: f64,
-    ) -> Result<Self, NumericalError> {
-        if x_mps2.is_finite() && y_mps2.is_finite() && z_mps2.is_finite() {
-            Ok(Self {
-                x_mps2,
-                y_mps2,
-                z_mps2,
-            })
-        } else {
-            Err(NumericalError::NotFinite {
-                field: "acceleration components",
-            })
-        }
-    }
-
-    /// Returns the x component in meters per second squared.
-    #[inline]
-    pub const fn x_meters_per_second_squared(self) -> f64 {
-        self.x_mps2
-    }
-
-    /// Returns the y component in meters per second squared.
-    #[inline]
-    pub const fn y_meters_per_second_squared(self) -> f64 {
-        self.y_mps2
-    }
-
-    /// Returns the z component in meters per second squared.
-    #[inline]
-    pub const fn z_meters_per_second_squared(self) -> f64 {
-        self.z_mps2
-    }
-
-    #[allow(dead_code)]
-    fn from_acceleration(acceleration: Acceleration) -> Self {
-        let v = acceleration.vector();
-        Self {
-            x_mps2: v.x,
-            y_mps2: v.y,
-            z_mps2: v.z,
-        }
-    }
-
-    #[allow(dead_code)]
-    fn to_acceleration(self) -> Result<Acceleration, StateError> {
-        Ok(Acceleration::from_vector(self.vector())?)
-    }
-
-    pub(crate) fn vector(self) -> Vector3<f64> {
-        Vector3::new(self.x_mps2, self.y_mps2, self.z_mps2)
-    }
-}
-
 /// Position and velocity components for one Cartesian state.
 #[derive(Debug, Clone, Copy)]
 pub struct CartesianStateComponents {
@@ -237,37 +170,15 @@ pub struct CartesianStateComponents {
 impl CartesianStateComponents {
     /// Creates Cartesian state components from typed position and velocity.
     #[inline]
-    pub fn from_state(state: &CartesianState) -> Self {
+    fn from_state(state: &CartesianState) -> Self {
         Self {
             position: CartesianPositionComponents::from_position(state.position),
             velocity: CartesianVelocityComponents::from_velocity(state.velocity),
         }
     }
 
-    pub(crate) fn from_values(
-        px_m: f64,
-        py_m: f64,
-        pz_m: f64,
-        vx_mps: f64,
-        vy_mps: f64,
-        vz_mps: f64,
-    ) -> Self {
-        Self {
-            position: CartesianPositionComponents {
-                x_m: px_m,
-                y_m: py_m,
-                z_m: pz_m,
-            },
-            velocity: CartesianVelocityComponents {
-                x_mps: vx_mps,
-                y_mps: vy_mps,
-                z_mps: vz_mps,
-            },
-        }
-    }
-
     /// Converts these component values into a typed Cartesian state.
-    pub fn to_state(self) -> Result<CartesianState, StateError> {
+    fn to_state(self) -> Result<CartesianState, StateError> {
         Ok(CartesianState::new(
             self.position.to_position()?,
             self.velocity.to_velocity()?,
@@ -427,14 +338,18 @@ impl<'a> CartesianStates<'a> {
 
     pub(crate) fn components(&self, index: usize) -> Result<CartesianStateComponents, StateError> {
         self.validate_index(index)?;
-        Ok(CartesianStateComponents::from_values(
-            self.pos_x[index],
-            self.pos_y[index],
-            self.pos_z[index],
-            self.vel_x[index],
-            self.vel_y[index],
-            self.vel_z[index],
-        ))
+        Ok(CartesianStateComponents {
+            position: CartesianPositionComponents {
+                x_m: self.pos_x[index],
+                y_m: self.pos_y[index],
+                z_m: self.pos_z[index],
+            },
+            velocity: CartesianVelocityComponents {
+                x_mps: self.vel_x[index],
+                y_mps: self.vel_y[index],
+                z_mps: self.vel_z[index],
+            },
+        })
     }
 
     fn validate_index(&self, index: usize) -> Result<(), StateError> {
@@ -515,8 +430,6 @@ impl<'a> CartesianStatesMut<'a> {
         Ok(())
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -599,45 +512,6 @@ mod tests {
         ));
         assert!(matches!(
             CartesianState::from_meters(1.0, 2.0, 3.0, f64::INFINITY, 5.0, 6.0),
-            Err(NumericalError::NotFinite { .. }),
-        ));
-    }
-
-    #[test]
-    fn acceleration_components_roundtrip() -> TestResult {
-        let accel = CartesianAccelerationComponents::from_meters_per_second_squared(1.0, 2.0, 3.0)?;
-
-        assert_close(accel.x_meters_per_second_squared(), 1.0);
-        assert_close(accel.y_meters_per_second_squared(), 2.0);
-        assert_close(accel.z_meters_per_second_squared(), 3.0);
-
-        let vec = accel.vector();
-        assert_close(vec.x, 1.0);
-        assert_close(vec.y, 2.0);
-        assert_close(vec.z, 3.0);
-        Ok(())
-    }
-
-    #[test]
-    fn acceleration_components_rejects_non_finite() {
-        assert!(matches!(
-            CartesianAccelerationComponents::from_meters_per_second_squared(f64::NAN, 0.0, 0.0),
-            Err(NumericalError::NotFinite { .. }),
-        ));
-        assert!(matches!(
-            CartesianAccelerationComponents::from_meters_per_second_squared(
-                0.0,
-                f64::INFINITY,
-                0.0
-            ),
-            Err(NumericalError::NotFinite { .. }),
-        ));
-        assert!(matches!(
-            CartesianAccelerationComponents::from_meters_per_second_squared(
-                0.0,
-                0.0,
-                f64::NEG_INFINITY
-            ),
             Err(NumericalError::NotFinite { .. }),
         ));
     }

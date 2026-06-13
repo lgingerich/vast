@@ -220,9 +220,7 @@ mod tests {
     use crate::physics::diagnostics::OrbitalDiagnostics;
     use crate::physics::dynamics::TwoBodyGravity;
     use crate::physics::orbits::{EllipticOrbit, OrbitDirection};
-    use crate::physics::state::{
-        CartesianAccelerationComponents, CartesianState, CartesianStateBuffer,
-    };
+    use crate::physics::state::{CartesianState, CartesianStateBuffer};
     use crate::physics::types::{
         Acceleration, Angle, Distance, Eccentricity, GravitationalParameter, Position, Velocity,
     };
@@ -241,15 +239,8 @@ mod tests {
             &self,
             _state: CartesianStateComponents,
             _t: Epoch,
-        ) -> Result<CartesianAccelerationComponents, DynamicsError> {
-            let acceleration = self.acceleration.vector();
-            Ok(
-                CartesianAccelerationComponents::from_meters_per_second_squared(
-                    acceleration.x,
-                    acceleration.y,
-                    acceleration.z,
-                )?,
-            )
+        ) -> Result<Acceleration, DynamicsError> {
+            Ok(self.acceleration)
         }
     }
 
@@ -262,7 +253,7 @@ mod tests {
             &self,
             _state: CartesianStateComponents,
             _t: Epoch,
-        ) -> Result<CartesianAccelerationComponents, DynamicsError> {
+        ) -> Result<Acceleration, DynamicsError> {
             Err(self.error)
         }
     }
