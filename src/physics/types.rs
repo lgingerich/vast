@@ -1,11 +1,11 @@
-use std::ops::{Add, Div, Mul, Sub};
+use std::ops::{Add, Div, Sub};
 
 use crate::errors::NumericalError;
 use nalgebra::Vector3;
 
 /// Angle, measured in radians.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Angle(f64);
 
 impl Angle {
@@ -53,7 +53,7 @@ impl Sub for Angle {
 
 /// Angular rate, measured in radians per second.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AngularRate(f64);
 
 impl AngularRate {
@@ -85,7 +85,7 @@ impl AngularRate {
 ///
 /// `Epoch` represents an absolute point on the simulation timeline.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Epoch(f64);
 
 impl Epoch {
@@ -109,7 +109,7 @@ impl Epoch {
     /// guarantees this, and debug builds will catch violations.
     #[must_use]
     pub fn duration_since(self, earlier: Epoch) -> Duration {
-        debug_assert!(self.seconds() >= earlier.seconds());
+        debug_assert!(self >= earlier);
         let seconds = self.seconds() - earlier.seconds();
         debug_assert!(seconds.is_finite());
         debug_assert!(seconds >= 0.0);
@@ -127,7 +127,7 @@ impl Epoch {
 ///
 /// Use `TimeStep` when advancing a simulation state forward in time.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct TimeStep(f64);
 
 impl TimeStep {
@@ -213,7 +213,7 @@ impl Sub for Duration {
 
 /// Scalar distance, measured in meters.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Distance(f64);
 
 impl Distance {
@@ -243,34 +243,6 @@ impl Add for Distance {
     }
 }
 
-impl Mul<f64> for Distance {
-    type Output = Result<Distance, NumericalError>;
-
-    fn mul(self, rhs: f64) -> Result<Distance, NumericalError> {
-        let result = self.0 * rhs;
-        if !result.is_finite() {
-            return Err(NumericalError::NotFinite {
-                field: "distance * scalar",
-            });
-        }
-        Ok(Distance(result))
-    }
-}
-
-impl Div<f64> for Distance {
-    type Output = Result<Distance, NumericalError>;
-
-    fn div(self, rhs: f64) -> Result<Distance, NumericalError> {
-        let result = self.0 / rhs;
-        if !result.is_finite() {
-            return Err(NumericalError::NotFinite {
-                field: "distance / scalar",
-            });
-        }
-        Ok(Distance(result))
-    }
-}
-
 impl Div<Distance> for Distance {
     type Output = f64;
 
@@ -281,7 +253,7 @@ impl Div<Distance> for Distance {
 
 /// Mass density, measured in kilograms per cubic meter.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MassDensity(f64);
 
 impl MassDensity {
@@ -309,7 +281,7 @@ impl MassDensity {
 
 /// Area per mass, measured in square meters per kilogram.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AreaPerMass(f64);
 
 impl AreaPerMass {
@@ -337,7 +309,7 @@ impl AreaPerMass {
 
 /// Scalar speed, measured in meters per second.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Speed(f64);
 
 impl Speed {
@@ -364,34 +336,6 @@ impl Add for Speed {
 
     fn add(self, rhs: Speed) -> Result<Speed, NumericalError> {
         Speed::from_meters_per_second(self.0 + rhs.0)
-    }
-}
-
-impl Mul<f64> for Speed {
-    type Output = Result<Speed, NumericalError>;
-
-    fn mul(self, rhs: f64) -> Result<Speed, NumericalError> {
-        let result = self.0 * rhs;
-        if !result.is_finite() {
-            return Err(NumericalError::NotFinite {
-                field: "speed * scalar",
-            });
-        }
-        Ok(Speed(result))
-    }
-}
-
-impl Div<f64> for Speed {
-    type Output = Result<Speed, NumericalError>;
-
-    fn div(self, rhs: f64) -> Result<Speed, NumericalError> {
-        let result = self.0 / rhs;
-        if !result.is_finite() {
-            return Err(NumericalError::NotFinite {
-                field: "speed / scalar",
-            });
-        }
-        Ok(Speed(result))
     }
 }
 
@@ -431,34 +375,6 @@ impl GravitationalParameter {
     }
 }
 
-impl Mul<f64> for GravitationalParameter {
-    type Output = Result<GravitationalParameter, NumericalError>;
-
-    fn mul(self, rhs: f64) -> Result<GravitationalParameter, NumericalError> {
-        let result = self.0 * rhs;
-        if !result.is_finite() {
-            return Err(NumericalError::NotFinite {
-                field: "gravitational parameter * scalar",
-            });
-        }
-        Ok(GravitationalParameter(result))
-    }
-}
-
-impl Div<f64> for GravitationalParameter {
-    type Output = Result<GravitationalParameter, NumericalError>;
-
-    fn div(self, rhs: f64) -> Result<GravitationalParameter, NumericalError> {
-        let result = self.0 / rhs;
-        if !result.is_finite() {
-            return Err(NumericalError::NotFinite {
-                field: "gravitational parameter / scalar",
-            });
-        }
-        Ok(GravitationalParameter(result))
-    }
-}
-
 impl Div<GravitationalParameter> for GravitationalParameter {
     type Output = f64;
 
@@ -469,7 +385,7 @@ impl Div<GravitationalParameter> for GravitationalParameter {
 
 /// Dimensionless second zonal harmonic coefficient, commonly called J2.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct J2Coefficient(f64);
 
 impl J2Coefficient {
@@ -491,7 +407,7 @@ impl J2Coefficient {
 
 /// Orbital eccentricity, dimensionless.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Eccentricity(f64);
 
 impl Eccentricity {
@@ -920,42 +836,6 @@ mod tests {
     }
 
     #[test]
-    fn distance_multiply_and_divide_scalar() -> TestResult {
-        let d = Distance::from_meters(100.0)?;
-        assert_close((d * 2.0).unwrap().meters(), 200.0, EPS);
-        assert_close((d / 4.0).unwrap().meters(), 25.0, EPS);
-        Ok(())
-    }
-
-    #[test]
-    fn distance_multiply_by_zero_succeeds() -> TestResult {
-        let d = Distance::from_meters(10.0)?;
-        assert_close((d * 0.0)?.meters(), 0.0, EPS);
-        Ok(())
-    }
-
-    #[test]
-    fn distance_multiply_by_negative_succeeds() -> TestResult {
-        let d = Distance::from_meters(10.0)?;
-        assert_close((d * -1.0)?.meters(), -10.0, EPS);
-        Ok(())
-    }
-
-    #[test]
-    fn distance_divide_by_zero_fails() -> TestResult {
-        let d = Distance::from_meters(10.0)?;
-        assert!((d / 0.0).is_err());
-        Ok(())
-    }
-
-    #[test]
-    fn distance_divide_by_negative_succeeds() -> TestResult {
-        let d = Distance::from_meters(10.0)?;
-        assert_close((d / -1.0)?.meters(), -10.0, EPS);
-        Ok(())
-    }
-
-    #[test]
     fn speed_add_and_ratio() -> TestResult {
         let a = Speed::from_meters_per_second(100.0)?;
         let b = Speed::from_meters_per_second(50.0)?;
@@ -974,62 +854,10 @@ mod tests {
     }
 
     #[test]
-    fn speed_multiply_and_divide_scalar() -> TestResult {
-        let s = Speed::from_meters_per_second(100.0)?;
-        assert_close((s * 2.0).unwrap().meters_per_second(), 200.0, EPS);
-        assert_close((s / 4.0).unwrap().meters_per_second(), 25.0, EPS);
-        Ok(())
-    }
-
-    #[test]
-    fn speed_multiply_by_zero_is_valid() -> TestResult {
-        let s = Speed::from_meters_per_second(10.0)?;
-        assert_close((s * 0.0).unwrap().meters_per_second(), 0.0, EPS);
-        Ok(())
-    }
-
-    #[test]
-    fn speed_multiply_by_negative_succeeds() -> TestResult {
-        let s = Speed::from_meters_per_second(10.0)?;
-        assert_close((s * -1.0)?.meters_per_second(), -10.0, EPS);
-        Ok(())
-    }
-
-    #[test]
-    fn speed_divide_by_zero_fails() -> TestResult {
-        let s = Speed::from_meters_per_second(10.0)?;
-        assert!((s / 0.0).is_err());
-        Ok(())
-    }
-
-    #[test]
-    fn gravitational_parameter_multiply_and_divide_scalar() -> TestResult {
-        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(1.0e14)?;
-        assert_close(
-            (mu * 2.0).unwrap().meters_cubed_per_second_squared(),
-            2.0e14,
-            EPS,
-        );
-        assert_close(
-            (mu / 4.0).unwrap().meters_cubed_per_second_squared(),
-            2.5e13,
-            EPS,
-        );
-        Ok(())
-    }
-
-    #[test]
     fn gravitational_parameter_ratio() -> TestResult {
         let mu1 = GravitationalParameter::from_meters_cubed_per_second_squared(1.0e14)?;
         let mu2 = GravitationalParameter::from_meters_cubed_per_second_squared(2.0e14)?;
         assert_close(mu1 / mu2, 0.5, EPS);
-        Ok(())
-    }
-
-    #[test]
-    fn gravitational_parameter_multiply_by_zero_succeeds() -> TestResult {
-        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(1.0e14)?;
-        assert_close((mu * 0.0)?.meters_cubed_per_second_squared(), 0.0, EPS);
         Ok(())
     }
 }
