@@ -271,10 +271,7 @@ impl ExponentialAtmosphere {
     ///
     /// Returns an error if the computed density is non-finite.
     pub fn density_at_radius(&self, radius: Distance) -> Result<MassDensity, NumericalError> {
-        self.density_at_radius_m(radius.meters())
-    }
-
-    fn density_at_radius_m(&self, radius_m: f64) -> Result<MassDensity, NumericalError> {
+        let radius_m = radius.meters();
         let altitude_m = radius_m - self.reference_radius.meters();
         let reference_altitude_m = self.reference_altitude.meters();
         let density = self.reference_density.kilograms_per_cubic_meter()
@@ -305,7 +302,7 @@ impl Dynamics for AtmosphericDrag {
 
         let density = self
             .atmosphere
-            .density_at_radius_m(radius_m)?
+            .density_at_radius(Distance::from_meters(radius_m)?)?
             .kilograms_per_cubic_meter();
         let omega = self.atmosphere.angular_rate.radians_per_second();
         let atmosphere_vx = -omega * py;

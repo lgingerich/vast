@@ -35,7 +35,7 @@ impl StateDerivative {
         velocity: Vector3<f64>,
         t: Epoch,
     ) -> Result<Self, PropagationError> {
-        let state = components_from_vectors(position, velocity);
+        let state = CartesianStateComponents::from_vectors(position, velocity);
         let acceleration = dynamics.acceleration_at(state, t)?;
 
         Ok(Self {
@@ -100,7 +100,7 @@ impl Integrator for VelocityVerletIntegrator {
 
         let new_pos = position + velocity * dt_s + acceleration * (0.5 * dt_s * dt_s);
         let next_velocity_estimate = velocity + acceleration * dt_s;
-        let next_state = components_from_vectors(new_pos, next_velocity_estimate);
+        let next_state = CartesianStateComponents::from_vectors(new_pos, next_velocity_estimate);
         let next_acceleration = dynamics.acceleration_at(next_state, next_t)?.vector();
         let new_vel = velocity + (acceleration + next_acceleration) * (0.5 * dt_s);
 
@@ -127,7 +127,7 @@ impl Integrator for LeapfrogIntegrator {
 
         let half_velocity = velocity + acceleration * (0.5 * dt_s);
         let new_pos = position + half_velocity * dt_s;
-        let next_state = components_from_vectors(new_pos, half_velocity);
+        let next_state = CartesianStateComponents::from_vectors(new_pos, half_velocity);
         let next_acceleration = dynamics.acceleration_at(next_state, next_t)?.vector();
         let new_vel = half_velocity + next_acceleration * (0.5 * dt_s);
 
@@ -194,13 +194,6 @@ fn write_integrated_vectors(
     let components = CartesianStateComponents::from((position, velocity));
     states.write_components(index, components)?;
     Ok(())
-}
-
-fn components_from_vectors(
-    position: Vector3<f64>,
-    velocity: Vector3<f64>,
-) -> CartesianStateComponents {
-    CartesianStateComponents::from_vectors(position, velocity)
 }
 
 #[cfg(test)]
