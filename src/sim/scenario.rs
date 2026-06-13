@@ -11,7 +11,7 @@ use crate::physics::integrators::{
 use crate::physics::orbits::{EllipticOrbit, OrbitDirection};
 use crate::physics::state::CartesianState;
 use crate::physics::types::{
-    Angle, Distance, Duration, Eccentricity, GravitationalParameter, TimeStep,
+    Angle, Distance, Duration, Eccentricity, Epoch, GravitationalParameter, TimeStep,
 };
 
 /// Serializable scenario definition loaded from TOML.
@@ -25,10 +25,10 @@ pub struct ScenarioConfig {
     pub dt_s: f64,
     /// Episode duration in seconds.
     pub duration_s: f64,
-    /// Integrator name (`leapfrog`, `verlet`, `euler`, `rk4`).
-    pub integrator: String,
-    /// Force model name (`two_body` only in MVP).
-    pub force_model: String,
+    /// Integrator.
+    pub integrator: IntegratorKind,
+    /// Force model.
+    pub force_model: ForceModelKind,
     /// Sample trajectory every N integrator steps.
     pub sample_every_steps: usize,
 }
@@ -63,15 +63,14 @@ impl ScenarioConfig {
             });
         }
 
-        let sample_every_steps = (self.sample_every_steps >= 1)
-            .then_some(self.sample_every_steps)
-            .ok_or_else(|| MissionError::InvalidField {
-                field: "sample_every_steps",
-                reason: "must be >= 1".to_string(),
-            })?;
-
-        let integrator = parse_integrator(&self.integrator)?;
-        let gravity = parse_force_model(&self.force_model)?;
+        let integrator = self.integrator;
+        let gravity = match self.force_model {
+            ForceModelKind::TwoBody => {
+                let mu =
+                    GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
+                TwoBodyGravity::new(mu)
+            }
+        };
 
         let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
         let radius = Distance::from_meters(R_EARTH + self.altitude_m)?;
@@ -89,11 +88,12 @@ impl ScenarioConfig {
 
         let initial_state = orbit.to_cartesian_state()?;
 
-        let propagator = Propagator::new(initial_state, dt)?.with_sampling(
-            SampleConfig::every_steps(sample_every_steps).ok_or_else(|| {
+        let propagator =
+            Propagator::new(initial_state, Epoch::from_seconds(0.0)?, dt)?.with_sampling(
+            SampleConfig::every_steps(self.sample_every_steps).ok_or_else(|| {
                 MissionError::InvalidField {
                     field: "sample_every_steps",
-                    reason: "invalid sample config".to_string(),
+                    reason: "must be >= 1".to_string(),
                 }
             })?,
         );
@@ -105,28 +105,7 @@ impl ScenarioConfig {
             propagator,
             initial_state,
             termination: TerminationCondition::Duration(duration),
-            earth_radius_m: R_EARTH,
         })
-    }
-}
-
-pub(crate) fn parse_integrator(name: &str) -> Result<IntegratorKind, MissionError> {
-    match name {
-        "leapfrog" => Ok(IntegratorKind::Leapfrog),
-        "verlet" => Ok(IntegratorKind::VelocityVerlet),
-        "euler" => Ok(IntegratorKind::Euler),
-        "rk4" => Ok(IntegratorKind::RungeKutta4),
-        other => Err(MissionError::UnknownIntegrator(other.to_string())),
-    }
-}
-
-pub(crate) fn parse_force_model(name: &str) -> Result<TwoBodyGravity, MissionError> {
-    match name {
-        "two_body" => {
-            let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
-            Ok(TwoBodyGravity::new(mu))
-        }
-        other => Err(MissionError::UnknownForceModel(other.to_string())),
     }
 }
 
@@ -144,12 +123,11 @@ pub struct BuiltScenario {
     pub initial_state: CartesianState,
     /// Episode termination rule.
     pub termination: TerminationCondition,
-    /// Earth equatorial radius in meters.
-    pub earth_radius_m: f64,
 }
 
 /// Supported integrators for scenario dispatch.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum IntegratorKind {
     /// Leapfrog integrator.
     Leapfrog,
@@ -158,7 +136,16 @@ pub enum IntegratorKind {
     /// Semi-implicit Euler integrator.
     Euler,
     /// Fourth-order Runge-Kutta integrator.
+    #[serde(alias = "rk4")]
     RungeKutta4,
+}
+
+/// Supported force models for scenario configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ForceModelKind {
+    /// Two-body point-mass gravity.
+    TwoBody,
 }
 
 impl IntegratorKind {
@@ -167,30 +154,51 @@ impl IntegratorKind {
         self,
         scenario: &mut BuiltScenario,
     ) -> Result<crate::sim::propagator::PropagationResult, crate::errors::PropagationError> {
+        self.dispatch(
+            &mut scenario.propagator,
+            &scenario.gravity,
+            scenario.termination.clone(),
+            None,
+        )
+    }
+
+    /// Shared integrator dispatch for propagators and mission segments.
+    pub(crate) fn dispatch(
+        self,
+        propagator: &mut Propagator,
+        gravity: &TwoBodyGravity,
+        termination: TerminationCondition,
+        segment_index: Option<usize>,
+    ) -> Result<crate::sim::propagator::PropagationResult, crate::errors::PropagationError> {
+        let mu = gravity.mu();
         match self {
-            Self::Leapfrog => scenario.propagator.propagate_until(
+            Self::Leapfrog => propagator.propagate_until_with_segment(
                 &LeapfrogIntegrator,
-                &scenario.gravity,
-                scenario.termination.clone(),
-                scenario.gravity.mu(),
+                gravity,
+                termination,
+                mu,
+                segment_index,
             ),
-            Self::VelocityVerlet => scenario.propagator.propagate_until(
+            Self::VelocityVerlet => propagator.propagate_until_with_segment(
                 &VelocityVerletIntegrator,
-                &scenario.gravity,
-                scenario.termination.clone(),
-                scenario.gravity.mu(),
+                gravity,
+                termination,
+                mu,
+                segment_index,
             ),
-            Self::Euler => scenario.propagator.propagate_until(
+            Self::Euler => propagator.propagate_until_with_segment(
                 &EulerIntegrator,
-                &scenario.gravity,
-                scenario.termination.clone(),
-                scenario.gravity.mu(),
+                gravity,
+                termination,
+                mu,
+                segment_index,
             ),
-            Self::RungeKutta4 => scenario.propagator.propagate_until(
+            Self::RungeKutta4 => propagator.propagate_until_with_segment(
                 &RungeKutta4Integrator,
-                &scenario.gravity,
-                scenario.termination.clone(),
-                scenario.gravity.mu(),
+                gravity,
+                termination,
+                mu,
+                segment_index,
             ),
         }
     }

@@ -2,6 +2,7 @@ use super::propagator::PropagationResult;
 use super::scenario::{BuiltScenario, ScenarioConfig};
 use super::termination::StopReason;
 use crate::errors::EnvironmentError;
+use crate::physics::constants::R_EARTH;
 use crate::physics::state::CartesianState;
 
 /// Inertial thrust acceleration action in meters per second squared.
@@ -9,8 +10,18 @@ use crate::physics::state::CartesianState;
 /// MVP accepts this input but does not yet apply it to propagation.
 pub type Action = [f64; 3];
 
-/// Flat observation vector: position (3), velocity (3), altitude, speed.
-pub type Observation = [f64; 8];
+/// Flat observation of the environment state after a step.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Observation {
+    /// Inertial Cartesian position in meters.
+    pub position: [f64; 3],
+    /// Inertial Cartesian velocity in meters per second.
+    pub velocity: [f64; 3],
+    /// Altitude above the Earth equatorial radius in meters.
+    pub altitude_m: f64,
+    /// Inertial speed in meters per second.
+    pub speed_mps: f64,
+}
 
 /// Result of one environment step.
 #[derive(Debug, Clone, PartialEq)]
@@ -56,12 +67,15 @@ impl LeoCircularEnv {
         let position = state.position.vector();
         let velocity = state.velocity.vector();
         let radius = position.norm();
-        let altitude = radius - self.scenario.earth_radius_m;
+        let altitude = radius - R_EARTH;
         let speed = velocity.norm();
 
-        Ok([
-            position.x, position.y, position.z, velocity.x, velocity.y, velocity.z, altitude, speed,
-        ])
+        Ok(Observation {
+            position: [position.x, position.y, position.z],
+            velocity: [velocity.x, velocity.y, velocity.z],
+            altitude_m: altitude,
+            speed_mps: speed,
+        })
     }
 }
 

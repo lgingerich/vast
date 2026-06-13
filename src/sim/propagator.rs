@@ -1,5 +1,8 @@
-use super::termination::{StopReason, TerminationCondition, TerminationContext};
-use crate::errors::PropagationError;
+use super::termination::{
+    orbital_phase_angle_rad, radial_velocity_mps, StopReason, TerminationCondition,
+    TerminationContext,
+};
+use crate::errors::{NumericalError, PropagationError};
 use crate::physics::dynamics::Dynamics;
 use crate::physics::integrators::Integrator;
 use crate::physics::state::{CartesianState, CartesianStateBuffer};
@@ -15,9 +18,13 @@ pub struct ImpulsiveBurn {
 
 impl ImpulsiveBurn {
     /// Creates an inertial delta-v burn.
-    #[must_use]
-    pub fn inertial(delta_v_mps: [f64; 3]) -> Self {
-        Self { delta_v_mps }
+    pub fn inertial(delta_v_mps: [f64; 3]) -> Result<Self, PropagationError> {
+        if !delta_v_mps.iter().all(|c| c.is_finite()) {
+            return Err(PropagationError::Numerical(NumericalError::NotFinite {
+                field: "delta_v",
+            }));
+        }
+        Ok(Self { delta_v_mps })
     }
 
     /// Creates a prograde burn with the given speed increment.
@@ -93,7 +100,7 @@ impl SampleConfig {
 /// Fixed-step propagator for a single indexed body in a state buffer.
 pub struct Propagator {
     epoch: Epoch,
-    start_epoch: Epoch,
+    initial_epoch: Epoch,
     dt: TimeStep,
     max_steps: Option<usize>,
     sample_config: Option<SampleConfig>,
@@ -101,14 +108,18 @@ pub struct Propagator {
 }
 
 impl Propagator {
-    /// Creates a propagator starting from `initial_state` at epoch zero.
-    pub fn new(initial_state: CartesianState, dt: TimeStep) -> Result<Self, PropagationError> {
+    /// Creates a propagator starting from `initial_state` at the given epoch.
+    pub fn new(
+        initial_state: CartesianState,
+        initial_epoch: Epoch,
+        dt: TimeStep,
+    ) -> Result<Self, PropagationError> {
         let mut states = CartesianStateBuffer::<1>::with_len(1)?;
         states.write_from_state(0, &initial_state)?;
 
         Ok(Self {
-            epoch: Epoch::from_seconds(0.0)?,
-            start_epoch: Epoch::from_seconds(0.0)?,
+            epoch: initial_epoch,
+            initial_epoch,
             dt,
             max_steps: None,
             sample_config: None,
@@ -132,7 +143,7 @@ impl Propagator {
 
     /// Resets epoch and state for a new episode.
     pub fn reset(&mut self, initial_state: CartesianState) -> Result<(), PropagationError> {
-        self.epoch = self.start_epoch;
+        self.epoch = self.initial_epoch;
         self.states.write_from_state(0, &initial_state)?;
         Ok(())
     }
@@ -204,7 +215,7 @@ impl Propagator {
         loop {
             let state = self.states.read_state(0)?;
             let context = TerminationContext {
-                start_epoch: self.start_epoch,
+                start_epoch: self.initial_epoch,
                 current_epoch: self.epoch,
                 steps,
                 state: &state,
@@ -235,7 +246,7 @@ impl Propagator {
                 });
             }
 
-            let step = match termination.remaining(self.start_epoch, self.epoch) {
+            let step = match termination.remaining(self.initial_epoch, self.epoch) {
                 Some(remaining) if remaining.seconds() < self.dt.seconds() => remaining,
                 _ => self.dt,
             };
@@ -259,26 +270,6 @@ impl Propagator {
             }
         }
     }
-}
-
-fn orbital_phase_angle_rad(state: &CartesianState, mu: GravitationalParameter) -> Option<f64> {
-    crate::physics::elements::OrbitalElements::from_state(
-        state,
-        mu,
-        crate::physics::elements::OrbitalElementClassification::default(),
-    )
-    .ok()
-    .map(|elements| elements.orbital_phase_angle().radians())
-}
-
-fn radial_velocity_mps(state: &CartesianState) -> f64 {
-    let position = state.position.vector();
-    let velocity = state.velocity.vector();
-    let radius = position.norm();
-    if radius <= 0.0 {
-        return 0.0;
-    }
-    position.dot(&velocity) / radius
 }
 
 #[cfg(test)]
@@ -326,7 +317,9 @@ mod tests {
         let gravity = TwoBodyGravity::new(mu);
         let integrator = LeapfrogIntegrator;
 
-        let mut propagator = Propagator::new(leo_initial_state(), dt).expect("propagator");
+        let mut propagator =
+            Propagator::new(leo_initial_state(), Epoch::from_seconds(0.0).expect("epoch"), dt)
+                .expect("propagator");
         let result = propagator
             .propagate_until(
                 &integrator,
@@ -349,7 +342,9 @@ mod tests {
         let integrator = LeapfrogIntegrator;
         let dt = TimeStep::from_seconds(10.0).expect("dt");
 
-        let mut propagator = Propagator::new(leo_initial_state(), dt).expect("propagator");
+        let mut propagator =
+            Propagator::new(leo_initial_state(), Epoch::from_seconds(0.0).expect("epoch"), dt)
+                .expect("propagator");
         let result = propagator
             .propagate_until(
                 &integrator,
@@ -372,9 +367,10 @@ mod tests {
         let integrator = LeapfrogIntegrator;
         let dt = TimeStep::from_seconds(10.0).expect("dt");
 
-        let mut propagator = Propagator::new(leo_initial_state(), dt)
-            .expect("propagator")
-            .with_sampling(SampleConfig::every_steps(2).expect("sample config"));
+        let mut propagator =
+            Propagator::new(leo_initial_state(), Epoch::from_seconds(0.0).expect("epoch"), dt)
+                .expect("propagator")
+                .with_sampling(SampleConfig::every_steps(2).expect("sample config"));
 
         let result = propagator
             .propagate_until(
@@ -394,12 +390,10 @@ mod tests {
             GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu");
         let departure_radius_m = R_EARTH + 400_000.0;
         let arrival_radius_m = R_EARTH + 35_786_000.0;
-        let (dv1, _) = crate::sim::mission::hohmann_delta_v_mps(
-            MU_EARTH,
-            departure_radius_m,
-            arrival_radius_m,
-        )
-        .expect("delta-v");
+        let departure = Distance::from_meters(departure_radius_m).expect("distance");
+        let arrival = Distance::from_meters(arrival_radius_m).expect("distance");
+        let (dv1, _) =
+            crate::physics::maneuvers::hohmann_delta_v(mu, departure, arrival).expect("delta-v");
 
         let orbit = EllipticOrbit::new(
             Distance::from_meters(departure_radius_m).expect("radius"),
@@ -414,6 +408,7 @@ mod tests {
         .expect("orbit");
         let mut propagator = Propagator::new(
             orbit.to_cartesian_state().expect("state"),
+            Epoch::from_seconds(0.0).expect("epoch"),
             TimeStep::from_seconds(30.0).expect("dt"),
         )
         .expect("propagator");

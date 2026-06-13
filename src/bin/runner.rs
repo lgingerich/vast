@@ -8,8 +8,8 @@ use axum::{Json, Router};
 use clap::{Parser, Subcommand};
 use tower_http::cors::{Any, CorsLayer};
 use vast::{
-    Environment, EpisodeRecord, LeoCircularEnv, LoadedScenario, MissionRunner,
-    MissionSegmentMetrics, RecordingError, RunManifest, RunRecorder, list_runs, read_trajectory,
+    Environment, EpisodeRecord, LeoCircularEnv, LoadedScenario, MissionSegmentMetrics,
+    RecordingError, RunManifest, RunRecorder, list_runs, read_trajectory, run_mission,
     stop_reason_name,
 };
 
@@ -67,7 +67,7 @@ fn run_command(
     let loaded = LoadedScenario::from_file(scenario_path)?;
     match loaded {
         LoadedScenario::Rollout(config) => run_rollout(&config, episodes, output_dir),
-        LoadedScenario::Mission(config) => run_mission(&config, episodes, output_dir),
+        LoadedScenario::Mission(config) => run_mission_command(&config, episodes, output_dir),
     }
 }
 
@@ -88,7 +88,7 @@ fn run_rollout(
             seed,
             steps: result.propagation.steps,
             stop_reason: result.stop_reason,
-            final_altitude_m: result.observation[6],
+            final_altitude_m: result.observation.altitude_m,
             reward: result.reward,
             samples: result.propagation.samples,
             mission_segments: None,
@@ -99,7 +99,7 @@ fn run_rollout(
     Ok(())
 }
 
-fn run_mission(
+fn run_mission_command(
     config: &vast::MissionScenarioConfig,
     episodes: usize,
     output_dir: &Path,
@@ -110,10 +110,10 @@ fn run_mission(
         let seed = episode_index as u64;
         let mut built = config.build()?;
         let _ = seed;
-        let result = MissionRunner::run(&mut built)?;
+        let result = run_mission(&mut built)?;
 
         let final_radius = result.final_state.position.vector().norm();
-        let final_altitude_m = final_radius - built.earth_radius_m;
+        let final_altitude_m = final_radius - vast::R_EARTH;
         let total_steps: usize = result
             .segments
             .iter()

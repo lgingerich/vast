@@ -65,8 +65,7 @@ impl TerminationCondition {
     }
 
     /// Returns the stop reason if the condition is satisfied.
-    #[must_use]
-    pub fn stop_reason(&self, context: TerminationContext<'_>) -> Option<StopReason> {
+    pub(crate) fn stop_reason(&self, context: TerminationContext<'_>) -> Option<StopReason> {
         match self {
             Self::Duration(duration) => {
                 let elapsed = context.current_epoch.duration_since(context.start_epoch);
@@ -118,7 +117,7 @@ impl TerminationCondition {
 
 /// Inputs for evaluating a termination condition at a step boundary.
 #[derive(Debug, Clone, Copy)]
-pub struct TerminationContext<'a> {
+pub(crate) struct TerminationContext<'a> {
     /// Segment start epoch.
     pub start_epoch: Epoch,
     /// Current epoch after the latest step.
@@ -178,7 +177,7 @@ fn radial_velocity_crossed(context: TerminationContext<'_>, apoapsis: bool) -> b
     }
 }
 
-fn radial_velocity_mps(state: &CartesianState) -> f64 {
+pub(crate) fn radial_velocity_mps(state: &CartesianState) -> f64 {
     let position = state.position.vector();
     let velocity = state.velocity.vector();
     let radius = position.norm();
@@ -210,7 +209,7 @@ fn orbital_crossing(
         || angle_near(current_angle, target_rad)
 }
 
-fn orbital_phase_angle_rad(state: &CartesianState, mu: GravitationalParameter) -> Option<f64> {
+pub(crate) fn orbital_phase_angle_rad(state: &CartesianState, mu: GravitationalParameter) -> Option<f64> {
     let elements =
         OrbitalElements::from_state(state, mu, OrbitalElementClassification::default()).ok()?;
     Some(elements.orbital_phase_angle().radians())

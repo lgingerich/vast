@@ -41,11 +41,11 @@ pub use sim::{
     environment::{Action, Environment, LeoCircularEnv, Observation, StepResult},
     mission::{
         BuiltMissionScenario, BurnConfig, BurnSpec, InitialOrbitConfig, LoadedScenario,
-        MissionResult, MissionRunner, MissionScenarioConfig, MissionSegment, MissionSegmentConfig,
-        MissionSegmentResult, StopConfig, StopTable,
+        MissionResult, MissionScenarioConfig, MissionSegment, MissionSegmentConfig,
+        MissionSegmentResult, StopConfig, StopTable, run_mission,
     },
     propagator::{ImpulsiveBurn, PropagationResult, Propagator, SampleConfig, TrajectorySample},
-    scenario::{BuiltScenario, IntegratorKind, ScenarioConfig},
+    scenario::{BuiltScenario, ForceModelKind, IntegratorKind, ScenarioConfig},
     termination::{StopReason, TerminationCondition},
 };
 

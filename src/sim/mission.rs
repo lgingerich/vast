@@ -3,18 +3,15 @@ use serde::{Deserialize, Serialize};
 use super::propagator::{
     ImpulsiveBurn, PropagationResult, Propagator, SampleConfig, TrajectorySample,
 };
-use super::scenario::{IntegratorKind, parse_force_model, parse_integrator};
+use super::scenario::{ForceModelKind, IntegratorKind};
 use super::termination::{StopReason, TerminationCondition};
 use crate::errors::MissionError;
-use crate::physics::constants::R_EARTH;
+use crate::physics::constants::{MU_EARTH, R_EARTH};
 use crate::physics::dynamics::TwoBodyGravity;
-use crate::physics::integrators::{
-    EulerIntegrator, LeapfrogIntegrator, RungeKutta4Integrator, VelocityVerletIntegrator,
-};
 use crate::physics::orbits::{EllipticOrbit, OrbitDirection};
 use crate::physics::state::CartesianState;
 use crate::physics::types::{
-    Angle, Distance, Duration, Eccentricity, GravitationalParameter, TimeStep,
+    Angle, Distance, Duration, Eccentricity, Epoch, GravitationalParameter, TimeStep,
 };
 
 /// Serializable mission scenario loaded from TOML.
@@ -71,10 +68,10 @@ pub enum InitialOrbitConfig {
 pub struct PropagationConfig {
     /// Fixed integrator step size in seconds.
     pub dt_s: f64,
-    /// Integrator name (`leapfrog`, `verlet`, `euler`, `rk4`).
-    pub integrator: String,
-    /// Force model name (`two_body` only in MVP).
-    pub force_model: String,
+    /// Integrator.
+    pub integrator: IntegratorKind,
+    /// Force model.
+    pub force_model: ForceModelKind,
     /// Sample trajectory every N integrator steps.
     pub sample_every_steps: usize,
 }
@@ -174,23 +171,24 @@ impl MissionScenarioConfig {
         }
 
         let dt = TimeStep::from_seconds(self.propagation.dt_s)?;
-        let sample_every_steps = (self.propagation.sample_every_steps >= 1)
-            .then_some(self.propagation.sample_every_steps)
-            .ok_or_else(|| MissionError::InvalidField {
-                field: "propagation.sample_every_steps",
-                reason: "must be >= 1".to_string(),
-            })?;
 
-        let integrator = parse_integrator(&self.propagation.integrator)?;
-        let gravity = parse_force_model(&self.propagation.force_model)?;
+        let integrator = self.propagation.integrator;
+        let gravity = match self.propagation.force_model {
+            ForceModelKind::TwoBody => {
+                let mu =
+                    GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
+                TwoBodyGravity::new(mu)
+            }
+        };
         let mu = gravity.mu();
 
         let initial_state = build_initial_state(&self.initial_orbit, mu)?;
-        let propagator = Propagator::new(initial_state, dt)?.with_sampling(
-            SampleConfig::every_steps(sample_every_steps).ok_or_else(|| {
+        let propagator =
+            Propagator::new(initial_state, Epoch::from_seconds(0.0)?, dt)?.with_sampling(
+            SampleConfig::every_steps(self.propagation.sample_every_steps).ok_or_else(|| {
                 MissionError::InvalidField {
                     field: "propagation.sample_every_steps",
-                    reason: "invalid sample config".to_string(),
+                    reason: "must be >= 1".to_string(),
                 }
             })?,
         );
@@ -215,7 +213,6 @@ impl MissionScenarioConfig {
             initial_state,
             initial_burns,
             segments,
-            earth_radius_m: R_EARTH,
         })
     }
 }
@@ -236,8 +233,6 @@ pub struct BuiltMissionScenario {
     pub initial_burns: Vec<BurnSpec>,
     /// Ordered mission segments.
     pub segments: Vec<MissionSegment>,
-    /// Earth equatorial radius in meters.
-    pub earth_radius_m: f64,
 }
 
 /// One runtime mission segment.
@@ -286,52 +281,47 @@ pub struct MissionResult {
     pub final_epoch: crate::physics::types::Epoch,
 }
 
-/// Executes multi-segment mission plans using the shared propagator.
-pub struct MissionRunner;
+/// Runs a built mission scenario once from its initial state.
+pub fn run_mission(scenario: &mut BuiltMissionScenario) -> Result<MissionResult, MissionError> {
+    scenario.propagator.reset(scenario.initial_state)?;
 
-impl MissionRunner {
-    /// Runs a built mission scenario once from its initial state.
-    pub fn run(scenario: &mut BuiltMissionScenario) -> Result<MissionResult, MissionError> {
-        scenario.propagator.reset(scenario.initial_state)?;
+    let mut all_samples = Vec::new();
+    let mut segment_results = Vec::new();
 
-        let mut all_samples = Vec::new();
-        let mut segment_results = Vec::new();
-
-        for burn in &scenario.initial_burns {
-            apply_burn(&mut scenario.propagator, *burn, scenario.gravity.mu())?;
-        }
-
-        for (segment_index, segment) in scenario.segments.clone().into_iter().enumerate() {
-            let propagation = propagate_segment(scenario, segment.termination, segment_index)?;
-            all_samples.extend(propagation.samples.iter().cloned());
-
-            let mut burns_applied = 0_usize;
-            for burn in &segment.burns {
-                apply_burn(&mut scenario.propagator, *burn, scenario.gravity.mu())?;
-                burns_applied += 1;
-            }
-
-            segment_results.push(MissionSegmentResult {
-                segment_index,
-                stop_reason: propagation.stop_reason,
-                propagation,
-                burns_applied,
-            });
-        }
-
-        let final_state = scenario.propagator.current_state()?;
-        let final_epoch = segment_results
-            .last()
-            .map(|segment| segment.propagation.final_epoch)
-            .unwrap_or_else(|| crate::physics::types::Epoch::from_seconds(0.0).expect("epoch"));
-
-        Ok(MissionResult {
-            segments: segment_results,
-            samples: all_samples,
-            final_state,
-            final_epoch,
-        })
+    for burn in &scenario.initial_burns {
+        apply_burn(&mut scenario.propagator, *burn, scenario.gravity.mu())?;
     }
+
+    for (segment_index, segment) in scenario.segments.clone().into_iter().enumerate() {
+        let propagation = propagate_segment(scenario, segment.termination, segment_index)?;
+        all_samples.extend(propagation.samples.iter().cloned());
+
+        let mut burns_applied = 0_usize;
+        for burn in &segment.burns {
+            apply_burn(&mut scenario.propagator, *burn, scenario.gravity.mu())?;
+            burns_applied += 1;
+        }
+
+        segment_results.push(MissionSegmentResult {
+            segment_index,
+            stop_reason: propagation.stop_reason,
+            propagation,
+            burns_applied,
+        });
+    }
+
+    let final_state = scenario.propagator.current_state()?;
+    let final_epoch = segment_results
+        .last()
+        .map(|segment| segment.propagation.final_epoch)
+        .unwrap_or_else(|| crate::physics::types::Epoch::from_seconds(0.0).expect("epoch"));
+
+    Ok(MissionResult {
+        segments: segment_results,
+        samples: all_samples,
+        final_state,
+        final_epoch,
+    })
 }
 
 fn propagate_segment(
@@ -339,37 +329,12 @@ fn propagate_segment(
     termination: TerminationCondition,
     segment_index: usize,
 ) -> Result<PropagationResult, MissionError> {
-    let mu = scenario.gravity.mu();
-    match scenario.integrator {
-        IntegratorKind::Leapfrog => Ok(scenario.propagator.propagate_until_with_segment(
-            &LeapfrogIntegrator,
-            &scenario.gravity,
-            termination,
-            mu,
-            Some(segment_index),
-        )?),
-        IntegratorKind::VelocityVerlet => Ok(scenario.propagator.propagate_until_with_segment(
-            &VelocityVerletIntegrator,
-            &scenario.gravity,
-            termination,
-            mu,
-            Some(segment_index),
-        )?),
-        IntegratorKind::Euler => Ok(scenario.propagator.propagate_until_with_segment(
-            &EulerIntegrator,
-            &scenario.gravity,
-            termination,
-            mu,
-            Some(segment_index),
-        )?),
-        IntegratorKind::RungeKutta4 => Ok(scenario.propagator.propagate_until_with_segment(
-            &RungeKutta4Integrator,
-            &scenario.gravity,
-            termination,
-            mu,
-            Some(segment_index),
-        )?),
-    }
+    Ok(scenario.integrator.dispatch(
+        &mut scenario.propagator,
+        &scenario.gravity,
+        termination,
+        Some(segment_index),
+    )?)
 }
 
 fn apply_burn(
@@ -378,7 +343,7 @@ fn apply_burn(
     mu: GravitationalParameter,
 ) -> Result<(), MissionError> {
     let impulsive = match burn {
-        BurnSpec::Inertial(delta_v_mps) => ImpulsiveBurn::inertial(delta_v_mps),
+        BurnSpec::Inertial(delta_v_mps) => ImpulsiveBurn::inertial(delta_v_mps)?,
         BurnSpec::Prograde(delta_v_mps) => {
             let state = propagator.current_state()?;
             ImpulsiveBurn::prograde(delta_v_mps, &state)?
@@ -411,7 +376,7 @@ fn apply_burn(
             let tangential_hat = tangential_velocity / tangential_speed_mps;
             let delta_v = tangential_hat * (target_tangential_speed_mps - tangential_speed_mps)
                 - radial_hat * radial_speed_mps;
-            ImpulsiveBurn::inertial([delta_v.x, delta_v.y, delta_v.z])
+            ImpulsiveBurn::inertial([delta_v.x, delta_v.y, delta_v.z])?
         }
     };
     propagator.apply_impulsive_burn(impulsive)?;
@@ -489,7 +454,13 @@ fn build_burn_spec(burn: &BurnConfig) -> Result<BurnSpec, MissionError> {
                 })
             }
         }
-        _ => unreachable!("burn mode count validated above"),
+        _ => {
+            Err(MissionError::InvalidField {
+                field: "burns",
+                reason: "specify exactly one of delta_v_mps, prograde_delta_v_mps, or circularize"
+                    .to_string(),
+            })
+        }
     }
 }
 
@@ -538,83 +509,6 @@ fn parse_stop_config(
 }
 
 #[cfg(test)]
-/// Analytical two-body bi-elliptic transfer delta-vs between circular orbits.
-///
-/// Returns `(departure_burn, apoapsis_burn, arrival_burn)` in meters per second.
-/// The arrival burn is negative when the transfer reaches the target radius
-/// faster than circular speed; use [`BurnSpec::Circularize`] at that boundary.
-#[must_use]
-pub fn bielliptic_delta_v_mps(
-    mu: f64,
-    departure_radius_m: f64,
-    arrival_radius_m: f64,
-    intermediate_radius_m: f64,
-) -> Option<(f64, f64, f64)> {
-    if !mu.is_finite() || mu <= 0.0 {
-        return None;
-    }
-    for radius in [departure_radius_m, arrival_radius_m, intermediate_radius_m] {
-        if !radius.is_finite() || radius <= 0.0 {
-            return None;
-        }
-    }
-    if intermediate_radius_m <= departure_radius_m.max(arrival_radius_m) {
-        return None;
-    }
-
-    let first_semi_major_axis = 0.5 * (departure_radius_m + intermediate_radius_m);
-    let departure_circular_speed = (mu / departure_radius_m).sqrt();
-    let departure_transfer_speed =
-        (mu * (2.0 / departure_radius_m - 1.0 / first_semi_major_axis)).sqrt();
-    let first_transfer_speed_at_intermediate =
-        (mu * (2.0 / intermediate_radius_m - 1.0 / first_semi_major_axis)).sqrt();
-
-    let second_semi_major_axis = 0.5 * (arrival_radius_m + intermediate_radius_m);
-    let second_transfer_speed_at_intermediate =
-        (mu * (2.0 / intermediate_radius_m - 1.0 / second_semi_major_axis)).sqrt();
-    let arrival_transfer_speed =
-        (mu * (2.0 / arrival_radius_m - 1.0 / second_semi_major_axis)).sqrt();
-    let arrival_circular_speed = (mu / arrival_radius_m).sqrt();
-
-    Some((
-        departure_transfer_speed - departure_circular_speed,
-        second_transfer_speed_at_intermediate - first_transfer_speed_at_intermediate,
-        arrival_circular_speed - arrival_transfer_speed,
-    ))
-}
-
-#[cfg(test)]
-/// Analytical two-body Hohmann transfer delta-vs between circular orbits.
-#[must_use]
-pub fn hohmann_delta_v_mps(
-    mu: f64,
-    departure_radius_m: f64,
-    arrival_radius_m: f64,
-) -> Option<(f64, f64)> {
-    if !mu.is_finite() || mu <= 0.0 {
-        return None;
-    }
-    if !departure_radius_m.is_finite()
-        || departure_radius_m <= 0.0
-        || !arrival_radius_m.is_finite()
-        || arrival_radius_m <= 0.0
-    {
-        return None;
-    }
-
-    let semi_major_axis = 0.5 * (departure_radius_m + arrival_radius_m);
-    let departure_circular_speed = (mu / departure_radius_m).sqrt();
-    let departure_transfer_speed = (mu * (2.0 / departure_radius_m - 1.0 / semi_major_axis)).sqrt();
-    let arrival_transfer_speed = (mu * (2.0 / arrival_radius_m - 1.0 / semi_major_axis)).sqrt();
-    let arrival_circular_speed = (mu / arrival_radius_m).sqrt();
-
-    Some((
-        departure_transfer_speed - departure_circular_speed,
-        arrival_circular_speed - arrival_transfer_speed,
-    ))
-}
-
-#[cfg(test)]
 mod tests {
     use super::*;
     use crate::physics::constants::{MU_EARTH, R_EARTH};
@@ -640,8 +534,8 @@ mod tests {
             },
             propagation: PropagationConfig {
                 dt_s: 10.0,
-                integrator: "leapfrog".to_string(),
-                force_model: "two_body".to_string(),
+                integrator: IntegratorKind::Leapfrog,
+                force_model: ForceModelKind::TwoBody,
                 sample_every_steps: 5,
             },
             initial_burns: vec![BurnConfig {
@@ -664,8 +558,13 @@ mod tests {
         let arrival_altitude_m = 35_786_000.0;
         let departure_radius_m = R_EARTH + departure_altitude_m;
         let arrival_radius_m = R_EARTH + arrival_altitude_m;
-        let (dv1, _dv2) = hohmann_delta_v_mps(MU_EARTH, departure_radius_m, arrival_radius_m)
-            .expect("hohmann delta-v");
+        let mu =
+            GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu");
+        let departure = Distance::from_meters(departure_radius_m).expect("distance");
+        let arrival = Distance::from_meters(arrival_radius_m).expect("distance");
+        let (dv1, _dv2) =
+            crate::physics::maneuvers::hohmann_delta_v(mu, departure, arrival)
+                .expect("hohmann delta-v");
 
         let config = MissionScenarioConfig {
             name: "hohmann".to_string(),
@@ -675,8 +574,8 @@ mod tests {
             },
             propagation: PropagationConfig {
                 dt_s: 30.0,
-                integrator: "leapfrog".to_string(),
-                force_model: "two_body".to_string(),
+                integrator: IntegratorKind::Leapfrog,
+                force_model: ForceModelKind::TwoBody,
                 sample_every_steps: 20,
             },
             initial_burns: vec![BurnConfig {
@@ -704,7 +603,7 @@ mod tests {
         };
 
         let mut built = config.build().expect("built mission");
-        let result = MissionRunner::run(&mut built).expect("mission run");
+        let result = run_mission(&mut built).expect("mission run");
         let final_radius = result.final_state.position.vector().norm();
 
         let seg0_radius = result.segments[0]
@@ -752,14 +651,14 @@ mod tests {
 
     #[test]
     fn bielliptic_delta_v_rejects_invalid_intermediate_radius() {
+        let mu =
+            GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu");
+        let departure = Distance::from_meters(R_EARTH + 400_000.0).expect("distance");
+        let arrival = Distance::from_meters(R_EARTH + 35_786_000.0).expect("distance");
+        let intermediate = Distance::from_meters(R_EARTH + 400_000.0).expect("distance");
         assert!(
-            bielliptic_delta_v_mps(
-                MU_EARTH,
-                R_EARTH + 400_000.0,
-                R_EARTH + 35_786_000.0,
-                R_EARTH + 400_000.0
-            )
-            .is_none()
+            crate::physics::maneuvers::bielliptic_delta_v(mu, departure, arrival, intermediate)
+                .is_none()
         );
     }
 
@@ -770,13 +669,16 @@ mod tests {
         let departure_radius_m = R_EARTH + departure_altitude_m;
         let arrival_radius_m = R_EARTH + arrival_altitude_m;
         let intermediate_radius_m = 10.0 * arrival_radius_m;
-        let (dv1, dv2, _dv3) = bielliptic_delta_v_mps(
-            MU_EARTH,
-            departure_radius_m,
-            arrival_radius_m,
-            intermediate_radius_m,
-        )
-        .expect("bi-elliptic delta-v");
+        let mu =
+            GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu");
+        let departure =
+            Distance::from_meters(departure_radius_m).expect("distance");
+        let arrival = Distance::from_meters(arrival_radius_m).expect("distance");
+        let intermediate =
+            Distance::from_meters(intermediate_radius_m).expect("distance");
+        let (dv1, dv2, _dv3) =
+            crate::physics::maneuvers::bielliptic_delta_v(mu, departure, arrival, intermediate)
+                .expect("bi-elliptic delta-v");
 
         let dt_s = 30.0_f64;
         let first_leg_steps = (493_332.6 / dt_s).round() as usize;
@@ -797,8 +699,8 @@ mod tests {
             },
             propagation: PropagationConfig {
                 dt_s,
-                integrator: "rk4".to_string(),
-                force_model: "two_body".to_string(),
+                integrator: IntegratorKind::RungeKutta4,
+                force_model: ForceModelKind::TwoBody,
                 sample_every_steps: 60,
             },
             initial_burns: vec![BurnConfig {
@@ -847,7 +749,7 @@ mod tests {
         };
 
         let mut built = config.build().expect("built mission");
-        let result = MissionRunner::run(&mut built).expect("mission run");
+        let result = run_mission(&mut built).expect("mission run");
         let final_radius = result.final_state.position.vector().norm();
 
         let seg0_radius = result.segments[0]

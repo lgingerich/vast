@@ -109,12 +109,6 @@ pub enum MissionError {
         /// Why the field is invalid.
         reason: String,
     },
-    /// The requested integrator is unknown.
-    #[error("unknown integrator `{0}`")]
-    UnknownIntegrator(String),
-    /// The requested force model is unknown or unsupported.
-    #[error("unknown force model `{0}`")]
-    UnknownForceModel(String),
     /// Propagation failed.
     #[error(transparent)]
     Propagation(#[from] PropagationError),
