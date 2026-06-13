@@ -1,4 +1,5 @@
 use crate::errors::{MissionError, NumericalError, PropagationError};
+use crate::physics::maneuvers::{circularize_delta_v, prograde_delta_v};
 use crate::physics::state::CartesianState;
 use crate::physics::types::{GravitationalParameter, Velocity};
 use nalgebra::Vector3;
@@ -37,87 +38,117 @@ impl BurnCommand {
         Self::Circularize
     }
 
-    pub(crate) fn resolve(
-        self,
-        state: &CartesianState,
-        mu: GravitationalParameter,
-    ) -> Result<ResolvedBurn, MissionError> {
-        match self {
-            Self::Inertial(delta_v_mps) => Ok(ResolvedBurn { delta_v_mps }),
-            Self::Prograde(delta_v_mps) => ResolvedBurn::prograde(delta_v_mps, state),
-            Self::Circularize => ResolvedBurn::circularize(state, mu),
-        }
-    }
-}
-
-/// Concrete inertial delta-v ready to apply to a state.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) struct ResolvedBurn {
-    delta_v_mps: [f64; 3],
-}
-
-impl ResolvedBurn {
-    fn prograde(delta_v_mps: f64, state: &CartesianState) -> Result<Self, MissionError> {
-        let velocity = state.velocity.vector();
-        let speed = velocity.norm();
-        if speed <= 0.0 || !speed.is_finite() {
-            return Err(MissionError::Propagation(PropagationError::InvalidBurn));
-        }
-        let direction = velocity / speed;
-        Ok(Self {
-            delta_v_mps: [
-                direction.x * delta_v_mps,
-                direction.y * delta_v_mps,
-                direction.z * delta_v_mps,
-            ],
-        })
-    }
-
-    fn circularize(
-        state: &CartesianState,
-        mu: GravitationalParameter,
-    ) -> Result<Self, MissionError> {
-        let position = state.position.vector();
-        let velocity = state.velocity.vector();
-        let radius_m = position.norm();
-        let mu = mu.meters_cubed_per_second_squared();
-        if radius_m <= 0.0 {
-            return Err(MissionError::InvalidField {
-                field: "burns.circularize",
-                reason: "state is invalid for circularization".to_string(),
-            });
-        }
-
-        let radial_hat = position / radius_m;
-        let radial_speed_mps = velocity.dot(&radial_hat);
-        let tangential_velocity = velocity - radial_hat * radial_speed_mps;
-        let tangential_speed_mps = tangential_velocity.norm();
-        if tangential_speed_mps <= 0.0 {
-            return Err(MissionError::InvalidField {
-                field: "burns.circularize",
-                reason: "tangential velocity is undefined".to_string(),
-            });
-        }
-
-        let target_tangential_speed_mps = (mu / radius_m).sqrt();
-        let tangential_hat = tangential_velocity / tangential_speed_mps;
-        let delta_v = tangential_hat * (target_tangential_speed_mps - tangential_speed_mps)
-            - radial_hat * radial_speed_mps;
-        Ok(Self {
-            delta_v_mps: [delta_v.x, delta_v.y, delta_v.z],
-        })
-    }
-
     pub(crate) fn apply_to(
         self,
         state: CartesianState,
-    ) -> Result<CartesianState, PropagationError> {
-        let velocity = state.velocity.vector();
-        let updated = Velocity::from_vector(Vector3::new(
-            velocity.x + self.delta_v_mps[0],
-            velocity.y + self.delta_v_mps[1],
-            velocity.z + self.delta_v_mps[2],
-        ))?;
-        Ok(CartesianState::new(state.position, updated))
+        mu: GravitationalParameter,
+    ) -> Result<CartesianState, MissionError> {
+        let delta_v = match self {
+            Self::Inertial(delta_v_mps) => {
+                Velocity::from_vector(Vector3::new(delta_v_mps[0], delta_v_mps[1], delta_v_mps[2]))?
+            }
+            Self::Prograde(delta_v_mps) => prograde_delta_v(delta_v_mps, &state)?,
+            Self::Circularize => circularize_delta_v(&state, mu)?,
+        };
+        apply_delta_v(state, delta_v).map_err(MissionError::from)
+    }
+}
+
+fn apply_delta_v(
+    state: CartesianState,
+    delta_v: Velocity,
+) -> Result<CartesianState, PropagationError> {
+    let velocity = state.velocity.vector();
+    let delta_v = delta_v.vector();
+    let updated = Velocity::from_vector(Vector3::new(
+        velocity.x + delta_v.x,
+        velocity.y + delta_v.y,
+        velocity.z + delta_v.z,
+    ))?;
+    Ok(CartesianState::new(state.position, updated))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::physics::constants::{MU_EARTH, R_EARTH};
+    use crate::physics::types::{Position, Velocity};
+
+    fn mu() -> GravitationalParameter {
+        GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu")
+    }
+
+    fn state(position: Vector3<f64>, velocity: Vector3<f64>) -> CartesianState {
+        CartesianState::new(
+            Position::from_vector(position).expect("position"),
+            Velocity::from_vector(velocity).expect("velocity"),
+        )
+    }
+
+    #[test]
+    fn inertial_burn_rejects_non_finite_delta_v() {
+        let error = BurnCommand::inertial([f64::NAN, 0.0, 0.0])
+            .expect_err("non-finite delta-v should fail");
+
+        assert!(matches!(
+            error,
+            MissionError::Numerical(NumericalError::NotFinite { field: "delta_v" })
+        ));
+    }
+
+    #[test]
+    fn prograde_burn_adds_along_velocity_direction() {
+        let initial = state(
+            Vector3::new(R_EARTH + 400_000.0, 0.0, 0.0),
+            Vector3::new(0.0, 7_700.0, 0.0),
+        );
+
+        let updated = BurnCommand::prograde(10.0)
+            .expect("burn")
+            .apply_to(initial, mu())
+            .expect("applied");
+
+        let velocity = updated.velocity.vector();
+        assert!((velocity.x - 0.0).abs() < 1.0e-12);
+        assert!((velocity.y - 7_710.0).abs() < 1.0e-12);
+        assert!((velocity.z - 0.0).abs() < 1.0e-12);
+    }
+
+    #[test]
+    fn circularize_removes_radial_velocity_and_matches_circular_speed() {
+        let radius_m = R_EARTH + 400_000.0;
+        let initial = state(
+            Vector3::new(radius_m, 0.0, 0.0),
+            Vector3::new(25.0, 7_500.0, 0.0),
+        );
+
+        let updated = BurnCommand::circularize()
+            .apply_to(initial, mu())
+            .expect("applied");
+
+        let velocity = updated.velocity.vector();
+        let circular_speed = (MU_EARTH / radius_m).sqrt();
+        assert!(velocity.x.abs() < 1.0e-9);
+        assert!((velocity.y - circular_speed).abs() < 1.0e-9);
+        assert!(velocity.z.abs() < 1.0e-9);
+    }
+
+    #[test]
+    fn circularize_rejects_undefined_tangential_velocity() {
+        let initial = state(
+            Vector3::new(R_EARTH + 400_000.0, 0.0, 0.0),
+            Vector3::new(25.0, 0.0, 0.0),
+        );
+
+        let error = BurnCommand::circularize()
+            .apply_to(initial, mu())
+            .expect_err("purely radial velocity cannot circularize");
+
+        assert!(matches!(
+            error,
+            MissionError::Numerical(NumericalError::ZeroNorm {
+                field: "tangential velocity"
+            })
+        ));
     }
 }

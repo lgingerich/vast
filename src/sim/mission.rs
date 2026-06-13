@@ -1,6 +1,5 @@
 use super::config::MissionScenarioConfig;
-use super::engine::{PropagationResult, Propagator, VecSampleSink};
-use super::termination::StopReason;
+use super::engine::{PropagationResult, Propagator};
 use crate::errors::MissionError;
 use crate::physics::state::CartesianState;
 
@@ -13,8 +12,6 @@ pub struct MissionSegmentResult {
     pub propagation: PropagationResult,
     /// Burns applied after the segment completed.
     pub burns_applied: usize,
-    /// Stop reason for the segment.
-    pub stop_reason: StopReason,
 }
 
 /// Result of executing a full mission plan.
@@ -22,8 +19,6 @@ pub struct MissionSegmentResult {
 pub struct MissionResult {
     /// Per-segment propagation results.
     pub segments: Vec<MissionSegmentResult>,
-    /// Combined trajectory samples across all segments.
-    pub samples: Vec<super::engine::TrajectorySample>,
     /// Final Cartesian state after all segments and burns.
     pub final_state: CartesianState,
     /// Final simulation epoch.
@@ -36,39 +31,28 @@ pub fn run_mission(config: &MissionScenarioConfig) -> Result<MissionResult, Miss
     let mut propagator = Propagator::new(
         plan.initial_state,
         crate::physics::types::Epoch::from_seconds(0.0)?,
-        plan.propagation.dt,
+        plan.propagation,
     )?;
-    propagator.reset(plan.initial_state)?;
 
     for burn in &plan.initial_burns {
-        propagator.apply_burn(*burn, plan.propagation.force_model)?;
+        propagator.apply_burn(*burn)?;
     }
 
-    let mut all_samples = Vec::new();
     let mut segment_results = Vec::with_capacity(plan.segments.len());
     let mut final_epoch = crate::physics::types::Epoch::from_seconds(0.0)?;
 
     for (segment_index, segment) in plan.segments.iter().enumerate() {
-        let mut segment_samples = VecSampleSink::new();
-        let mut propagation = propagator.run_segment(
-            plan.propagation,
-            &segment.termination,
-            Some(segment_index),
-            &mut segment_samples,
-        )?;
-        propagation.samples = segment_samples.into_samples();
-        all_samples.extend(propagation.samples.iter().cloned());
+        let propagation = propagator.run_segment(&segment.termination, Some(segment_index))?;
         final_epoch = propagation.final_epoch;
 
         let mut burns_applied = 0_usize;
         for burn in &segment.burns {
-            propagator.apply_burn(*burn, plan.propagation.force_model)?;
+            propagator.apply_burn(*burn)?;
             burns_applied += 1;
         }
 
         segment_results.push(MissionSegmentResult {
             segment_index,
-            stop_reason: propagation.stop_reason,
             propagation,
             burns_applied,
         });
@@ -78,7 +62,6 @@ pub fn run_mission(config: &MissionScenarioConfig) -> Result<MissionResult, Miss
 
     Ok(MissionResult {
         segments: segment_results,
-        samples: all_samples,
         final_state,
         final_epoch,
     })
@@ -197,7 +180,10 @@ mod tests {
             "expected GEO semi-major axis, got {semi_major_axis}"
         );
         assert_eq!(result.segments.len(), 2);
-        assert_eq!(result.segments[0].stop_reason, StopReason::ApoapsisMet);
+        assert_eq!(
+            result.segments[0].propagation.stop_reason,
+            crate::StopReason::ApoapsisMet
+        );
     }
 
     #[test]
@@ -243,19 +229,6 @@ mod tests {
 
         assert!((result.segments[0].propagation.final_epoch.seconds() - 25.0).abs() < 1.0e-9);
         assert!((result.final_epoch.seconds() - 40.0).abs() < 1.0e-9);
-    }
-
-    #[test]
-    fn bielliptic_delta_v_rejects_invalid_intermediate_radius() {
-        let mu =
-            GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu");
-        let departure = Distance::from_meters(R_EARTH + 400_000.0).expect("distance");
-        let arrival = Distance::from_meters(R_EARTH + 35_786_000.0).expect("distance");
-        let intermediate = Distance::from_meters(R_EARTH + 400_000.0).expect("distance");
-        assert!(
-            crate::physics::maneuvers::bielliptic_delta_v(mu, departure, arrival, intermediate)
-                .is_none()
-        );
     }
 
     #[test]

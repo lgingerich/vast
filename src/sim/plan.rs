@@ -6,7 +6,6 @@ use super::config::{
 use super::termination::TerminationCondition;
 use crate::errors::MissionError;
 use crate::physics::constants::{MU_EARTH, R_EARTH};
-use crate::physics::dynamics::TwoBodyGravity;
 use crate::physics::elements::ClassicalOrbitalElements;
 use crate::physics::orbits::{EllipticOrbit, OrbitDirection};
 use crate::physics::state::CartesianState;
@@ -37,31 +36,8 @@ pub(crate) struct MissionPlan {
 pub(crate) struct PropagationPlan {
     pub(crate) dt: TimeStep,
     pub(crate) integrator: IntegratorKind,
-    pub(crate) force_model: RuntimeForceModel,
+    pub(crate) mu: GravitationalParameter,
     pub(crate) sample_every_steps: usize,
-}
-
-/// Runtime force model stack.
-#[derive(Debug, Clone, Copy)]
-pub(crate) enum RuntimeForceModel {
-    TwoBody(GravitationalParameter),
-}
-
-impl RuntimeForceModel {
-    pub(crate) const fn mu(self) -> GravitationalParameter {
-        match self {
-            Self::TwoBody(mu) => mu,
-        }
-    }
-
-    pub(crate) fn dispatch<T>(
-        self,
-        mut run: impl FnMut(&TwoBodyGravity) -> Result<T, crate::errors::PropagationError>,
-    ) -> Result<T, crate::errors::PropagationError> {
-        match self {
-            Self::TwoBody(mu) => run(&TwoBodyGravity::new(mu)),
-        }
-    }
 }
 
 /// Runtime mission segment.
@@ -94,7 +70,7 @@ impl ScenarioConfig {
             self.force_model,
             self.sample_every_steps,
         )?;
-        let mu = propagation.force_model.mu();
+        let mu = propagation.mu;
         let initial_state = circular_initial_state(self.altitude_m, mu)?;
         let duration = Duration::from_seconds(self.duration_s)?;
 
@@ -130,7 +106,7 @@ impl MissionScenarioConfig {
             self.propagation.force_model,
             self.propagation.sample_every_steps,
         )?;
-        let mu = propagation.force_model.mu();
+        let mu = propagation.mu;
         let initial_state = initial_state(&self.initial_orbit, mu)?;
         let initial_burns = self
             .initial_burns
@@ -187,16 +163,15 @@ fn propagation_plan(
     Ok(PropagationPlan {
         dt: TimeStep::from_seconds(dt_s)?,
         integrator,
-        force_model: runtime_force_model(force_model)?,
+        mu: runtime_mu(force_model)?,
         sample_every_steps,
     })
 }
 
-fn runtime_force_model(force_model: ForceModelKind) -> Result<RuntimeForceModel, MissionError> {
+fn runtime_mu(force_model: ForceModelKind) -> Result<GravitationalParameter, MissionError> {
     match force_model {
         ForceModelKind::TwoBody => {
-            let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
-            Ok(RuntimeForceModel::TwoBody(mu))
+            Ok(GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?)
         }
     }
 }

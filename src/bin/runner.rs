@@ -119,7 +119,7 @@ fn run_mission_command(
         let final_stop_reason = result
             .segments
             .last()
-            .map(|segment| segment.stop_reason)
+            .map(|segment| segment.propagation.stop_reason)
             .unwrap_or(vast::StopReason::DurationMet);
 
         let mission_segments = result
@@ -128,9 +128,14 @@ fn run_mission_command(
             .map(|segment| MissionSegmentMetrics {
                 segment_index: segment.segment_index,
                 steps: segment.propagation.steps,
-                stop_reason: stop_reason_name(segment.stop_reason).to_string(),
+                stop_reason: stop_reason_name(segment.propagation.stop_reason).to_string(),
                 burns_applied: segment.burns_applied,
             })
+            .collect();
+        let samples = result
+            .segments
+            .into_iter()
+            .flat_map(|segment| segment.propagation.samples)
             .collect();
 
         recorder.write_episode(EpisodeRecord {
@@ -140,7 +145,7 @@ fn run_mission_command(
             stop_reason: final_stop_reason,
             final_altitude_m,
             reward: 0.0,
-            samples: result.samples,
+            samples,
             mission_segments: Some(mission_segments),
         })?;
     }

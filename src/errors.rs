@@ -65,6 +65,9 @@ pub enum PropagationError {
     /// An impulsive burn could not be applied to the current state.
     #[error("impulsive burn is invalid for the current state")]
     InvalidBurn,
+    /// A propagation segment ended without satisfying its termination condition.
+    #[error("propagation segment ended without a stop reason")]
+    SegmentWithoutStop,
 }
 
 /// Errors produced while writing run artifacts.

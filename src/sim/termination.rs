@@ -46,7 +46,7 @@ pub(crate) enum TerminationCondition {
 impl TerminationCondition {
     /// Creates an apoapsis stop with the default minimum step guard.
     #[must_use]
-    pub fn apoapsis(mu: GravitationalParameter) -> Self {
+    pub(crate) fn apoapsis(mu: GravitationalParameter) -> Self {
         Self::Apoapsis {
             mu,
             min_steps: DEFAULT_ORBITAL_MIN_STEPS,
@@ -55,7 +55,7 @@ impl TerminationCondition {
 
     /// Creates a periapsis stop with the default minimum step guard.
     #[must_use]
-    pub fn periapsis(mu: GravitationalParameter) -> Self {
+    pub(crate) fn periapsis(mu: GravitationalParameter) -> Self {
         Self::Periapsis {
             mu,
             min_steps: DEFAULT_ORBITAL_MIN_STEPS,
@@ -77,7 +77,7 @@ impl TerminationCondition {
 
     /// Remaining time step until a duration-based stop, if applicable.
     #[must_use]
-    pub fn remaining(&self, start_epoch: Epoch, current_epoch: Epoch) -> Option<TimeStep> {
+    pub(crate) fn remaining(&self, start_epoch: Epoch, current_epoch: Epoch) -> Option<TimeStep> {
         match self {
             Self::Duration(duration) => {
                 let elapsed = current_epoch.duration_since(start_epoch);
@@ -90,14 +90,53 @@ impl TerminationCondition {
             Self::StepCount(_) | Self::Apoapsis { .. } | Self::Periapsis { .. } => None,
         }
     }
+}
 
-    /// Whether this condition requires orbital phase angle computation.
-    #[must_use]
-    pub fn needs_orbital_phase(&self) -> bool {
-        match self {
-            Self::Duration(_) | Self::StepCount(_) => false,
-            Self::Apoapsis { .. } | Self::Periapsis { .. } => true,
+/// Tracks previous/current orbital quantities needed by step-boundary stops.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct TerminationTracker {
+    previous_orbital_angle_rad: Option<f64>,
+    previous_radial_velocity_mps: Option<f64>,
+    current_orbital_phase_angle_rad: Option<f64>,
+    current_radial_velocity_mps: f64,
+}
+
+impl TerminationTracker {
+    /// Initializes termination bookkeeping at the segment start state.
+    pub(crate) fn new(condition: &TerminationCondition, state: &CartesianState) -> Self {
+        Self {
+            previous_orbital_angle_rad: None,
+            previous_radial_velocity_mps: None,
+            current_orbital_phase_angle_rad: orbital_phase_for(condition, state),
+            current_radial_velocity_mps: radial_velocity_mps(state),
         }
+    }
+
+    /// Builds a context for evaluating the condition at the current step boundary.
+    pub(crate) fn context<'a>(
+        self,
+        start_epoch: Epoch,
+        current_epoch: Epoch,
+        steps: usize,
+        state: &'a CartesianState,
+    ) -> TerminationContext<'a> {
+        TerminationContext {
+            start_epoch,
+            current_epoch,
+            steps,
+            state,
+            previous_orbital_angle_rad: self.previous_orbital_angle_rad,
+            previous_radial_velocity_mps: self.previous_radial_velocity_mps,
+            current_orbital_phase_angle_rad: self.current_orbital_phase_angle_rad,
+        }
+    }
+
+    /// Advances bookkeeping after the propagator reaches a new step boundary.
+    pub(crate) fn advance(&mut self, condition: &TerminationCondition, state: &CartesianState) {
+        self.previous_orbital_angle_rad = self.current_orbital_phase_angle_rad;
+        self.previous_radial_velocity_mps = Some(self.current_radial_velocity_mps);
+        self.current_orbital_phase_angle_rad = orbital_phase_for(condition, state);
+        self.current_radial_velocity_mps = radial_velocity_mps(state);
     }
 }
 
@@ -163,7 +202,7 @@ fn radial_velocity_crossed(context: TerminationContext<'_>, apoapsis: bool) -> b
     }
 }
 
-pub(crate) fn radial_velocity_mps(state: &CartesianState) -> f64 {
+fn radial_velocity_mps(state: &CartesianState) -> f64 {
     let position = state.position.vector();
     let velocity = state.velocity.vector();
     let radius = position.norm();
@@ -195,10 +234,16 @@ fn orbital_crossing(
         || angle_near(current_angle, target_rad)
 }
 
-pub(crate) fn orbital_phase_angle_rad(
-    state: &CartesianState,
-    mu: GravitationalParameter,
-) -> Option<f64> {
+fn orbital_phase_for(condition: &TerminationCondition, state: &CartesianState) -> Option<f64> {
+    match condition {
+        TerminationCondition::Duration(_) | TerminationCondition::StepCount(_) => None,
+        TerminationCondition::Apoapsis { mu, .. } | TerminationCondition::Periapsis { mu, .. } => {
+            orbital_phase_angle_rad(state, *mu)
+        }
+    }
+}
+
+fn orbital_phase_angle_rad(state: &CartesianState, mu: GravitationalParameter) -> Option<f64> {
     let elements =
         OrbitalElements::from_state(state, mu, OrbitalElementClassification::default()).ok()?;
     Some(elements.orbital_phase_angle().radians())

@@ -1,4 +1,54 @@
-use crate::physics::types::{Distance, GravitationalParameter};
+use crate::errors::NumericalError;
+use crate::physics::state::CartesianState;
+use crate::physics::types::{Distance, GravitationalParameter, Velocity};
+use nalgebra::Vector3;
+
+/// Inertial delta-v vector for a burn aligned with the current velocity.
+pub fn prograde_delta_v(
+    delta_v_mps: f64,
+    state: &CartesianState,
+) -> Result<Velocity, NumericalError> {
+    if !delta_v_mps.is_finite() {
+        return Err(NumericalError::NotFinite { field: "delta_v" });
+    }
+
+    let velocity = state.velocity.vector();
+    let speed = velocity.norm();
+    if speed <= 0.0 {
+        return Err(NumericalError::ZeroNorm { field: "velocity" });
+    }
+
+    Velocity::from_vector(velocity / speed * delta_v_mps)
+}
+
+/// Inertial delta-v vector that removes radial velocity and matches circular speed.
+pub fn circularize_delta_v(
+    state: &CartesianState,
+    mu: GravitationalParameter,
+) -> Result<Velocity, NumericalError> {
+    let position = state.position.vector();
+    let velocity = state.velocity.vector();
+    let radius_m = position.norm();
+    if radius_m <= 0.0 {
+        return Err(NumericalError::ZeroNorm { field: "position" });
+    }
+
+    let radial_hat = position / radius_m;
+    let radial_speed_mps = velocity.dot(&radial_hat);
+    let tangential_velocity = velocity - radial_hat * radial_speed_mps;
+    let tangential_speed_mps = tangential_velocity.norm();
+    if tangential_speed_mps <= 0.0 {
+        return Err(NumericalError::ZeroNorm {
+            field: "tangential velocity",
+        });
+    }
+
+    let target_tangential_speed_mps = (mu.meters_cubed_per_second_squared() / radius_m).sqrt();
+    let tangential_hat = tangential_velocity / tangential_speed_mps;
+    let delta_v = tangential_hat * (target_tangential_speed_mps - tangential_speed_mps)
+        - radial_hat * radial_speed_mps;
+    Velocity::from_vector(Vector3::new(delta_v.x, delta_v.y, delta_v.z))
+}
 
 /// Analytical two-body bi-elliptic transfer delta-vs between circular orbits.
 ///
@@ -88,6 +138,15 @@ pub fn hohmann_delta_v(
 mod tests {
     use super::*;
     use crate::physics::constants::R_EARTH;
+    use crate::physics::types::{Position, Velocity};
+    use nalgebra::Vector3;
+
+    fn state(position: Vector3<f64>, velocity: Vector3<f64>) -> CartesianState {
+        CartesianState::new(
+            Position::from_vector(position).expect("position"),
+            Velocity::from_vector(velocity).expect("velocity"),
+        )
+    }
 
     #[test]
     fn bielliptic_rejects_invalid_intermediate_radius() {
@@ -97,5 +156,37 @@ mod tests {
         let arrival = Distance::from_meters(R_EARTH + 35_786_000.0).expect("distance");
         let intermediate = Distance::from_meters(R_EARTH + 400_000.0).expect("distance");
         assert!(bielliptic_delta_v(mu, departure, arrival, intermediate).is_none());
+    }
+
+    #[test]
+    fn prograde_delta_v_rejects_zero_velocity() {
+        let state = state(
+            Vector3::new(R_EARTH + 400_000.0, 0.0, 0.0),
+            Vector3::zeros(),
+        );
+
+        assert!(matches!(
+            prograde_delta_v(10.0, &state),
+            Err(NumericalError::ZeroNorm { field: "velocity" })
+        ));
+    }
+
+    #[test]
+    fn circularize_delta_v_removes_radial_velocity() {
+        let mu =
+            GravitationalParameter::from_meters_cubed_per_second_squared(3.986e14).expect("mu");
+        let radius_m = R_EARTH + 400_000.0;
+        let state = state(
+            Vector3::new(radius_m, 0.0, 0.0),
+            Vector3::new(20.0, 7_500.0, 0.0),
+        );
+
+        let delta_v = circularize_delta_v(&state, mu).expect("delta-v").vector();
+        let updated_velocity = state.velocity.vector() + delta_v;
+        let circular_speed = (mu.meters_cubed_per_second_squared() / radius_m).sqrt();
+
+        assert!(updated_velocity.x.abs() < 1.0e-9);
+        assert!((updated_velocity.y - circular_speed).abs() < 1.0e-9);
+        assert!(updated_velocity.z.abs() < 1.0e-9);
     }
 }

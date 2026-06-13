@@ -1,5 +1,22 @@
 # Project Memory
 
+## 2026-06-13 — Simulation cleanup ownership boundaries
+
+**Decision:** `Propagator` owns its validated `PropagationPlan`, and
+`PropagationResult` is the canonical owner of segment stop reason plus sampled
+trajectory data. Mission results no longer duplicate segment stop reasons or a
+second flattened sample list; recording flattens per-segment samples at the
+artifact boundary.
+
+Simulation burn commands now orchestrate when burns apply, while
+`physics::maneuvers` owns prograde and circularization delta-v vector math.
+Single-use wrappers (`ResolvedBurn`, `RuntimeForceModel`, `SampleSink`) were
+removed until multiple concrete implementations require them.
+
+**Rejected:** Returning empty `PropagationResult.samples` and patching them in
+callers; keeping sim-local circularization math; closure-dispatching a
+single-variant runtime force model.
+
 ## 2026-06-13 — `Angle` is always normalized to `[0, 2π)`
 
 **Decision:** `Angle` normalizes to the half-open turn `[0, 2π)` at construction

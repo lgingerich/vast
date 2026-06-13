@@ -90,14 +90,15 @@ fixed `TimeStep`. Caller owns epoch advancement.
 |--------|----------------|
 | `config` | TOML-facing rollout and mission DTOs, loaded via `LoadedScenario` |
 | `plan` | crate-private validated runtime plans built from config |
-| `engine` | fixed-step single-body propagator, segment runner, bounded env advance |
+| `engine` | fixed-step single-body propagator owning propagation settings, segment runner, bounded env advance |
 | `termination` | duration, step-count, apoapsis, and periapsis stop conditions |
-| `burns` | runtime impulsive burn commands resolved at step boundaries |
+| `burns` | runtime impulsive burn commands applied at step boundaries using physics maneuver helpers |
 | `environment` | `reset(seed)` / bounded `step(action)` RL contract |
 | `mission` | GMAT-style sequence runner over validated mission plans |
 
 Raw strings, optional TOML conveniences, and file-format shapes stay at the
-`config` boundary. Runtime execution uses typed plans and private engine state.
+`config` boundary. Runtime execution uses typed plans, private engine state, and
+canonical propagation results that own their sampled trajectory data.
 
 ---
 
@@ -193,7 +194,8 @@ finding for exact event times is deferred; see ROADMAP.
 
 **Not part of `Dynamics`.**
 
-- **Impulsive burns** — Δv applied at step boundaries from an explicit schedule
+- **Impulsive burns** — Δv applied at step boundaries from an explicit schedule;
+  `physics::maneuvers` owns the vector math while simulation owns timing
 - **Low thrust** — piecewise-constant commanded inertial acceleration added to
   gravity at step boundaries
 
@@ -331,7 +333,8 @@ Some MVP decisions are recorded in [MEMORY.md](../MEMORY.md). Remaining question
 Resolved for MVP: TOML config is separated from crate-private runtime plans;
 termination is a closed runtime enum; `Environment::step(action)` is bounded;
 inertial acceleration actions are applied above `Dynamics`; mission execution
-shares the same engine but remains secondary to RL rollouts.
+shares the same engine but remains secondary to RL rollouts; propagation results
+are the canonical owner of segment stop reasons and sampled trajectories.
 
 ---
 

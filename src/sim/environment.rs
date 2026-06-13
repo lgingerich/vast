@@ -1,15 +1,37 @@
 use super::config::ScenarioConfig;
-use super::engine::{AccelerationCommand, PropagationResult, Propagator, VecSampleSink};
+use super::engine::{AccelerationCommand, PropagationResult, Propagator};
 use super::plan::RolloutPlan;
 use super::termination::StopReason;
-use crate::errors::{EnvironmentError, PropagationError};
+use crate::errors::{EnvironmentError, NumericalError, PropagationError};
 use crate::physics::constants::R_EARTH;
 use crate::physics::state::CartesianState;
 
 /// Inertial thrust acceleration action in meters per second squared.
-///
-/// MVP accepts this input but does not yet apply it to propagation.
-pub type Action = [f64; 3];
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Action {
+    acceleration_mps2: [f64; 3],
+}
+
+impl Action {
+    /// Creates an inertial acceleration action in meters per second squared.
+    pub fn inertial(acceleration_mps2: [f64; 3]) -> Result<Self, NumericalError> {
+        if !acceleration_mps2
+            .iter()
+            .all(|component| component.is_finite())
+        {
+            return Err(NumericalError::NotFinite {
+                field: "action acceleration",
+            });
+        }
+        Ok(Self { acceleration_mps2 })
+    }
+
+    /// Returns the inertial acceleration components in meters per second squared.
+    #[must_use]
+    pub const fn acceleration_mps2(self) -> [f64; 3] {
+        self.acceleration_mps2
+    }
+}
 
 /// Flat observation of the environment state after a step.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -61,7 +83,7 @@ impl LeoCircularEnv {
         let plan = config.build()?;
         let initial_epoch =
             crate::physics::types::Epoch::from_seconds(0.0).map_err(PropagationError::from)?;
-        let propagator = Propagator::new(plan.initial_state, initial_epoch, plan.propagation.dt)?;
+        let propagator = Propagator::new(plan.initial_state, initial_epoch, plan.propagation)?;
         Ok(Self {
             plan,
             propagator,
@@ -72,17 +94,7 @@ impl LeoCircularEnv {
     /// Runs a full rollout episode for artifact recording.
     pub fn run_episode(&mut self, seed: u64) -> Result<RolloutEpisodeResult, EnvironmentError> {
         let _ = self.reset(seed)?;
-        let mut samples = VecSampleSink::new();
-        let propagation = self.propagator.run_segment(
-            self.plan.propagation,
-            &self.plan.termination,
-            None,
-            &mut samples,
-        )?;
-        let mut propagation = PropagationResult {
-            samples: samples.into_samples(),
-            ..propagation
-        };
+        let mut propagation = self.propagator.run_segment(&self.plan.termination, None)?;
         if propagation.samples.is_empty() {
             propagation
                 .samples
@@ -149,9 +161,8 @@ impl Environment for LeoCircularEnv {
             });
         }
 
-        let command = AccelerationCommand::inertial(action)?;
+        let command = AccelerationCommand::inertial(action.acceleration_mps2())?;
         let result = self.propagator.advance_steps(
-            self.plan.propagation,
             &self.plan.termination,
             self.plan.steps_per_env_step,
             command,
@@ -192,7 +203,8 @@ mod tests {
 
         let mut env = LeoCircularEnv::from_config(&config).expect("env");
         let _obs = env.reset(42).expect("reset");
-        let result = env.step([0.0, 0.0, 0.0]).expect("step");
+        let action = Action::inertial([0.0, 0.0, 0.0]).expect("action");
+        let result = env.step(action).expect("step");
 
         assert!(!result.done);
         assert_eq!(result.stop_reason, None);
