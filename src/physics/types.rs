@@ -77,6 +77,7 @@ impl Add for Angle {
     ///
     /// Total: both operands lie in `[0, 2π)`, so the sum is finite and `wrapped`
     /// always yields a valid angle.
+    #[inline]
     fn add(self, rhs: Angle) -> Angle {
         Angle::wrapped(self.0 + rhs.0)
     }
@@ -89,6 +90,7 @@ impl Sub for Angle {
     ///
     /// Total: both operands lie in `[0, 2π)`, so the difference is finite and
     /// `wrapped` always yields a valid angle.
+    #[inline]
     fn sub(self, rhs: Angle) -> Angle {
         Angle::wrapped(self.0 - rhs.0)
     }
@@ -145,6 +147,7 @@ impl Epoch {
     /// non-finite is `f64` overflow (~1e300 s past the epoch), which is a
     /// programming error rather than a recoverable runtime condition. A debug
     /// assertion guards that boundary without burdening the step loop.
+    #[inline]
     #[must_use]
     pub fn advance_by(self, dt: TimeStep) -> Self {
         let seconds = self.seconds() + dt.seconds();
@@ -156,6 +159,7 @@ impl Epoch {
     ///
     /// Callers must ensure `earlier <= self` — forward-only propagation
     /// guarantees this, and debug builds will catch violations.
+    #[inline]
     #[must_use]
     pub fn duration_since(self, earlier: Epoch) -> Duration {
         debug_assert!(self >= earlier);
@@ -211,6 +215,7 @@ impl Add for TimeStep {
     /// Infallible: the sum of two positive values is positive, so the only
     /// possible failure is `f64` overflow to `+inf`, which a debug assertion
     /// guards as a programming error.
+    #[inline]
     fn add(self, rhs: TimeStep) -> TimeStep {
         let seconds = self.0 + rhs.0;
         debug_assert!(seconds.is_finite());
@@ -247,6 +252,7 @@ impl Duration {
     /// input-dependent outcome the caller may need to handle; it returns
     /// `NumericalError::Negative`. The difference of two finite non-negative
     /// values cannot overflow, so finiteness is a debug-only backstop.
+    #[inline]
     pub fn checked_sub(self, rhs: Duration) -> Result<Duration, NumericalError> {
         let seconds = self.0 - rhs.0;
         debug_assert!(seconds.is_finite());
@@ -258,6 +264,7 @@ impl Duration {
 }
 
 impl From<TimeStep> for Duration {
+    #[inline]
     fn from(value: TimeStep) -> Self {
         Self(value.seconds())
     }
@@ -271,6 +278,7 @@ impl Add for Duration {
     /// Infallible: the sum of two non-negative values is non-negative, so the
     /// only possible failure is `f64` overflow to `+inf`, which a debug
     /// assertion guards as a programming error.
+    #[inline]
     fn add(self, rhs: Duration) -> Duration {
         let seconds = self.0 + rhs.0;
         debug_assert!(seconds.is_finite());
@@ -313,6 +321,7 @@ impl Add for Distance {
     /// Infallible: the sum of two positive values is positive, so the only
     /// possible failure is `f64` overflow to `+inf`, which a debug assertion
     /// guards as a programming error.
+    #[inline]
     fn add(self, rhs: Distance) -> Distance {
         let meters = self.0 + rhs.0;
         debug_assert!(meters.is_finite());
@@ -411,6 +420,7 @@ impl Add for Speed {
     /// Infallible: the sum of two non-negative values is non-negative, so the
     /// only possible failure is `f64` overflow to `+inf`, which a debug
     /// assertion guards as a programming error.
+    #[inline]
     fn add(self, rhs: Speed) -> Speed {
         let meters_per_second = self.0 + rhs.0;
         debug_assert!(meters_per_second.is_finite());
@@ -455,7 +465,9 @@ impl J2Coefficient {
     /// Creates a J2 coefficient from a dimensionless scalar.
     pub fn from_scalar(value: f64) -> Result<Self, NumericalError> {
         if !value.is_finite() {
-            return Err(NumericalError::NotFinite { field: "j2" });
+            return Err(NumericalError::NotFinite {
+                field: "j2 coefficient",
+            });
         }
         Ok(Self(value))
     }
@@ -798,6 +810,16 @@ mod tests {
         for value in [-1.0, 0.0, 1.0] {
             assert!(AngularRate::from_radians_per_second(value).is_ok());
         }
+    }
+
+    #[test]
+    fn position_velocity_and_acceleration_round_trip_finite_vectors() -> TestResult {
+        let vector = Vector3::new(1.0, -2.0, 3.0);
+
+        assert_eq!(Position::from_vector(vector)?.vector(), vector);
+        assert_eq!(Velocity::from_vector(vector)?.vector(), vector);
+        assert_eq!(Acceleration::from_vector(vector)?.vector(), vector);
+        Ok(())
     }
 
     #[test]
