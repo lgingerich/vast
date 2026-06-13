@@ -32,22 +32,24 @@ force_model = "two_body"
 sample_every_steps = 60
 
 [[initial_burns]]
-prograde_delta_v_mps = 3090.3
+kind = "prograde"
+delta_v_mps = 3090.3
 
 [[segments]]
-stop = { steps = 16444 }
+stop = { kind = "step_count", steps = 16444 }
 
 [[segments.burns]]
-prograde_delta_v_mps = 241.6
+kind = "prograde"
+delta_v_mps = 241.6
 
 [[segments]]
-stop = { steps = 18523 }
+stop = { kind = "step_count", steps = 18523 }
 
 [[segments.burns]]
-circularize = true
+kind = "circularize"
 
 [[segments]]
-stop = { steps = 1436 }
+stop = { kind = "step_count", steps = 1436 }
 
 [[segments]]
-stop = { steps = 2880 }
+stop = { kind = "step_count", steps = 2880 }

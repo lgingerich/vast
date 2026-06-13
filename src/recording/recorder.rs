@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::errors::RecordingError;
-use crate::sim::propagator::TrajectorySample;
-use crate::sim::scenario::ScenarioConfig;
+use crate::sim::config::ScenarioConfig;
+use crate::sim::engine::TrajectorySample;
 use crate::sim::termination::StopReason;
 
 const ARTIFACT_VERSION: u32 = 1;
@@ -27,7 +27,7 @@ pub struct RunManifest {
     pub scenario: Option<ScenarioConfig>,
     /// Full mission scenario configuration snapshot.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub mission: Option<crate::sim::mission::MissionScenarioConfig>,
+    pub mission: Option<crate::sim::config::MissionScenarioConfig>,
     /// Number of episodes recorded.
     pub episode_count: usize,
 }
@@ -134,7 +134,7 @@ impl RunRecorder {
     /// Creates a new run directory and manifest for a mission scenario.
     pub fn new_mission(
         base_dir: &Path,
-        scenario: &crate::sim::mission::MissionScenarioConfig,
+        scenario: &crate::sim::config::MissionScenarioConfig,
     ) -> Result<Self, RecordingError> {
         Self::new_with_manifest(
             base_dir,
@@ -148,7 +148,7 @@ impl RunRecorder {
         base_dir: &Path,
         scenario_name: String,
         scenario: Option<ScenarioConfig>,
-        mission: Option<crate::sim::mission::MissionScenarioConfig>,
+        mission: Option<crate::sim::config::MissionScenarioConfig>,
     ) -> Result<Self, RecordingError> {
         let run_id = generate_run_id();
         let run_dir = base_dir.join(&run_id);

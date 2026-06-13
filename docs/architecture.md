@@ -84,15 +84,20 @@ effects, no allocation in the hot path.
 **`Integrator`** — advances one indexed body in `CartesianStatesMut` by one
 fixed `TimeStep`. Caller owns epoch advancement.
 
-### What examples do today
+### Simulation layer (implemented slice)
 
-Examples wire physics primitives manually: build an `EllipticOrbit`, create a
-`CartesianStateBuffer`, choose integrator and dynamics, then run a hand-written
-`while epoch < duration` loop with optional final partial steps. Scenario structs
-(e.g. `OrbitVizScenario`) exist only inside example files.
+| Module | Responsibility |
+|--------|----------------|
+| `config` | TOML-facing rollout and mission DTOs, loaded via `LoadedScenario` |
+| `plan` | crate-private validated runtime plans built from config |
+| `engine` | fixed-step single-body propagator, segment runner, bounded env advance |
+| `termination` | duration, step-count, apoapsis, and periapsis stop conditions |
+| `burns` | runtime impulsive burn commands resolved at step boundaries |
+| `environment` | `reset(seed)` / bounded `step(action)` RL contract |
+| `mission` | GMAT-style sequence runner over validated mission plans |
 
-There is **no library-level** scenario, propagator, termination, event, control,
-or environment API yet.
+Raw strings, optional TOML conveniences, and file-format shapes stay at the
+`config` boundary. Runtime execution uses typed plans and private engine state.
 
 ---
 
@@ -227,7 +232,7 @@ Environments compose a scenario + propagator (or segment runner), map actions to
 thrust commands, and expose typed observations and rewards. They belong above
 the propagator, not inside dynamics.
 
-### Mission segments (later)
+### Mission segments
 
 A thin sequence over propagator operations:
 
@@ -237,8 +242,9 @@ apply_burn(delta_v)
 propagate_until(Periapsis)
 ```
 
-Full mission-script or DSL support is not required for early versions. Explicit
-Rust sequences over a propagator API are enough.
+Full mission-script or DSL support is not required. Mission TOML builds a
+validated runtime plan, then `run_mission` executes ordered segments over the
+same fixed-step engine used by rollout recording and environments.
 
 ---
 
@@ -279,8 +285,9 @@ hide frame changes inside unrelated algorithms.
 ## Data Flow (Target)
 
 ```text
-Scenario::build()
-    → Propagator::new(scenario)
+ScenarioConfig / MissionScenarioConfig
+    → plan::build()
+    → engine::Propagator
     → loop:
         apply pending burns/thrust at step boundary
         integrator.step(dynamics, states, index, epoch, dt)
@@ -291,9 +298,11 @@ Scenario::build()
     → PropagationResult { final state, epoch, stop reason, samples }
 ```
 
-For environments, `step(action)` maps the action to thrust for the next
-interval, calls one propagator step (or a fixed substep count), computes
-observation and reward, and returns `done` from termination/boundary checks.
+For environments, `step(action)` maps the action to a piecewise-constant
+inertial acceleration command, advances a fixed configured number of integrator
+steps, computes observation and reward, and returns `done` from termination
+checks. Full-episode artifact recording is an explicit rollout path, not the
+`Environment::step` contract.
 
 ---
 
@@ -319,8 +328,10 @@ Some MVP decisions are recorded in [MEMORY.md](../MEMORY.md). Remaining question
    examples/tools?
 4. **2D mode** — First-class 2D types vs 3D with `z = 0` constraint?
 
-Resolved for MVP: TOML `ScenarioConfig`, closed `TerminationCondition` enum,
-`Environment` trait with flat observation, thrust stubbed above `Dynamics`.
+Resolved for MVP: TOML config is separated from crate-private runtime plans;
+termination is a closed runtime enum; `Environment::step(action)` is bounded;
+inertial acceleration actions are applied above `Dynamics`; mission execution
+shares the same engine but remains secondary to RL rollouts.
 
 ---
 
@@ -346,9 +357,9 @@ ui/ (React + R3F)  →  runs dashboard + per-run metrics + 3D replay + compare
 | Piece | Shape |
 |-------|-------|
 | Scenario | TOML → `ScenarioConfig` |
-| Termination | `Duration` or `StepCount` (closed enum) |
-| Environment | `reset(seed)` / `step(action)`; one full rollout per step |
-| Action | `[f64; 3]` thrust accel (stubbed) |
+| Termination | Duration, step count, apoapsis, periapsis |
+| Environment | `reset(seed)` / bounded `step(action)` |
+| Action | `[f64; 3]` inertial acceleration applied above dynamics |
 | Observation | 8 floats: position, velocity, altitude, speed |
 | Artifacts | JSON manifest + JSONL metrics and trajectories |
 

@@ -8,9 +8,8 @@ use axum::{Json, Router};
 use clap::{Parser, Subcommand};
 use tower_http::cors::{Any, CorsLayer};
 use vast::{
-    Environment, EpisodeRecord, LeoCircularEnv, LoadedScenario, MissionSegmentMetrics,
-    RecordingError, RunManifest, RunRecorder, list_runs, read_trajectory, run_mission,
-    stop_reason_name,
+    EpisodeRecord, LeoCircularEnv, LoadedScenario, MissionSegmentMetrics, RecordingError,
+    RunManifest, RunRecorder, list_runs, read_trajectory, run_mission, stop_reason_name,
 };
 
 #[derive(Parser)]
@@ -81,13 +80,12 @@ fn run_rollout(
 
     for episode_index in 0..episodes {
         let seed = episode_index as u64;
-        env.reset(seed)?;
-        let result = env.step([0.0, 0.0, 0.0])?;
+        let result = env.run_episode(seed)?;
         recorder.write_episode(EpisodeRecord {
             episode_index,
             seed,
             steps: result.propagation.steps,
-            stop_reason: result.stop_reason,
+            stop_reason: result.propagation.stop_reason,
             final_altitude_m: result.observation.altitude_m,
             reward: result.reward,
             samples: result.propagation.samples,

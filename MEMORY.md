@@ -75,14 +75,14 @@ parallel loose-fidelity rollouts, with GMAT-class tools for downstream validatio
 | Scenario | TOML → `ScenarioConfig` (LEO circular, two-body, duration stop) |
 | Termination | Closed enum: `Duration`, `StepCount` |
 | Environment | `Environment` trait: `reset(seed)`, `step(action)` |
-| Action | `[f64; 3]` inertial thrust accel — accepted, ignored until low thrust |
+| Action | `[f64; 3]` inertial acceleration applied above `Dynamics` |
 | Observation | `[f64; 8]`: pos(3), vel(3), altitude, speed |
-| Reward / done | Reward `0.0`; one rollout per `step`; `done=true` when duration met |
+| Reward / done | Reward `0.0`; bounded `step`; full rollout handled by recorder path |
 | Artifacts | `runs/<run_id>/manifest.json`, `metrics.jsonl`, `episodes/NNNN/trajectory.jsonl` |
 | UI | React + Vite + R3F; Rust `runner` CLI + axum read API |
 
 **Rejected for MVP:** policy training loop, scenario editor UI, metrics charts,
-GMAT export, multi-step RL horizon per env step.
+GMAT export, variable env horizons.
 
 ## 2025-05-21 — Mission runner vs RL env
 
@@ -99,5 +99,21 @@ types. Mission scenarios use TOML `[[segments]]` with orbital stops and burns;
 with angle fallback for circular orbits), inertial/prograde/circularize burns,
 classical element initial orbits, Hohmann LEO→GEO demo scenario.
 
-**Deferred:** `TerminationCondition::AnyOf`, low-thrust action application,
-multi-step env horizons.
+**Deferred:** `TerminationCondition::AnyOf`, actuator/attitude coupling,
+variable env horizons.
+
+## 2026-06-13 — Simulation config/runtime split
+
+**Decision:** `src/sim` separates TOML-facing config from validated runtime
+plans. Config structs own serde compatibility and raw file fields; plan/engine
+types are crate-private and use domain values, closed termination, runtime burn
+commands, and a single fixed-step segment engine.
+
+`Environment::step(action)` now advances a configured bounded horizon and applies
+the inertial acceleration action above `Dynamics`. Full-episode trajectory
+recording is explicit via the rollout recorder path rather than being the
+environment step contract.
+
+**Rejected:** preserving old public sim internals, untagged/stringly stop and
+burn config, public `Propagator`/`TerminationCondition` as extension points, and
+the deferred `AnyOf` termination variant.

@@ -19,7 +19,8 @@ elements), J2 secular-rate checks, SoA Cartesian state stepping, **circular
 and elliptic orbit initial-condition construction (`EllipticOrbit`,
 including circular via `e=0` convention)**, **propagator
 with duration/step/orbital termination and trajectory sampling**, **impulsive
-burns**, **TOML scenario config**, **`LeoCircularEnv` (`reset` / `step`)**,
+burns**, **TOML scenario config**, **`LeoCircularEnv` (`reset` / bounded
+`step(action)` with inertial acceleration command)**,
 **mission scenarios (`MissionRunner`, segment stops/burns)**, **run artifact
 recording with segment metadata**, **`runner` CLI (`run`, `serve`)**, and
 **React + R3F replay UI (`ui/`)**, **RL ops dashboard with per-run metrics
@@ -33,44 +34,6 @@ multi-episode comparison view**.
 The physics core can integrate forces; the simulation layer orchestrates time
 evolution, stopping rules, maneuvers, events, and outputs. MVP rollout +
 replay is implemented; items below extend it toward full RL training.
-
-### P1 — Controlled Low Thrust
-
-**What:** A fixed-step control layer that applies piecewise-constant commanded
-acceleration at step boundaries, e.g. `a_total = gravity + commanded_acceleration`.
-
-**Why:** Low thrust is the primary force model for RL actions and spacecraft
-behavior. It is local, deterministic when actions are fixed per step, and
-batch-friendly across independent environments.
-
-**How it helps:** Exposes a useful control surface for policies, station-keeping
-experiments, and transfer-curve curricula without waiting for full propulsion or
-attitude modeling.
-
-**First version scope:**
-
-- Commands applied only at step boundaries.
-- Inertial Cartesian commanded acceleration.
-- Thrust-to-mass or direct acceleration input; no propellant depletion yet.
-- Composed in propagator or a thin `ControlledDynamics` wrapper — not inside
-  individual force models.
-
-**Defer:** actuator lag, attitude coupling, body-frame or LVLH thrust until frame APIs exist.
-
-### P2 — Multi-Step RL Horizon
-
-**What:** One environment `step(action)` advances K integrator steps (or a fixed
-simulation sub-interval) instead of a full episode rollout.
-
-**Why:** MVP runs one full scenario duration per `step`, which is a rollout
-recorder—not yet an RL control loop.
-
-**First version scope:**
-
-- Configurable steps-per-env-step in scenario or env config.
-- `done` when termination or boundaries hit mid-horizon.
-
-**Defer:** variable horizon policies, frame stacking in obs.
 
 ### P2 — Environment Rewards And Seeded Perturbations
 

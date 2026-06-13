@@ -38,15 +38,16 @@ pub use errors::{
 };
 
 pub use sim::{
-    environment::{Action, Environment, LeoCircularEnv, Observation, StepResult},
-    mission::{
-        BurnConfig, InitialOrbitConfig, LoadedScenario, MissionResult, MissionScenarioConfig,
-        MissionSegmentConfig, MissionSegmentResult, PropagationConfig, StopConfig, StopTable,
-        run_mission,
+    config::{
+        BurnConfig, ForceModelKind, InitialOrbitConfig, IntegratorKind, LoadedScenario,
+        MissionScenarioConfig, MissionSegmentConfig, PropagationConfig, ScenarioConfig, StopConfig,
     },
-    propagator::{ImpulsiveBurn, PropagationResult, Propagator, SampleConfig, TrajectorySample},
-    scenario::{ForceModelKind, IntegratorKind, ScenarioConfig},
-    termination::{StopReason, TerminationCondition},
+    engine::{PropagationResult, TrajectorySample},
+    environment::{
+        Action, Environment, LeoCircularEnv, Observation, RolloutEpisodeResult, StepResult,
+    },
+    mission::{MissionResult, MissionSegmentResult, run_mission},
+    termination::StopReason,
 };
 
 pub use recording::{

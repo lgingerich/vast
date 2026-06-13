@@ -21,8 +21,8 @@ pub enum StopReason {
 }
 
 /// End-state rule for a propagation segment.
-#[derive(Debug, Clone, PartialEq)]
-pub enum TerminationCondition {
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum TerminationCondition {
     /// Stop once elapsed time from the start epoch reaches this duration.
     Duration(Duration),
     /// Stop after this many integrator steps.
@@ -41,8 +41,6 @@ pub enum TerminationCondition {
         /// Minimum integrator steps before a periapsis can trigger.
         min_steps: usize,
     },
-    /// Stop when any child condition is satisfied (first match wins).
-    AnyOf(Vec<TerminationCondition>),
 }
 
 impl TerminationCondition {
@@ -74,9 +72,6 @@ impl TerminationCondition {
             Self::StepCount(limit) => (context.steps >= *limit).then_some(StopReason::StepCountMet),
             Self::Apoapsis { mu, min_steps } => apoapsis_met(*mu, *min_steps, context),
             Self::Periapsis { mu, min_steps } => periapsis_met(*mu, *min_steps, context),
-            Self::AnyOf(conditions) => conditions
-                .iter()
-                .find_map(|condition| condition.stop_reason(context)),
         }
     }
 
@@ -92,14 +87,6 @@ impl TerminationCondition {
                 let remaining = duration.checked_sub(elapsed).ok()?;
                 TimeStep::from_seconds(remaining.seconds()).ok()
             }
-            Self::AnyOf(conditions) => conditions
-                .iter()
-                .filter_map(|condition| condition.remaining(start_epoch, current_epoch))
-                .min_by(|left, right| {
-                    left.seconds()
-                        .partial_cmp(&right.seconds())
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                }),
             Self::StepCount(_) | Self::Apoapsis { .. } | Self::Periapsis { .. } => None,
         }
     }
@@ -110,7 +97,6 @@ impl TerminationCondition {
         match self {
             Self::Duration(_) | Self::StepCount(_) => false,
             Self::Apoapsis { .. } | Self::Periapsis { .. } => true,
-            Self::AnyOf(conditions) => conditions.iter().any(|c| c.needs_orbital_phase()),
         }
     }
 }
@@ -304,6 +290,50 @@ mod tests {
                 current_orbital_phase_angle_rad: None,
             }),
             Some(StopReason::StepCountMet)
+        );
+    }
+
+    #[test]
+    fn apoapsis_met_on_radial_velocity_sign_crossing() {
+        let mu =
+            GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu");
+        let state = sample_state();
+        let condition = TerminationCondition::apoapsis(mu);
+        let epoch = Epoch::from_seconds(10.0).expect("epoch");
+
+        assert_eq!(
+            condition.stop_reason(TerminationContext {
+                start_epoch: Epoch::from_seconds(0.0).expect("epoch"),
+                current_epoch: epoch,
+                steps: 1,
+                state: &state,
+                previous_orbital_angle_rad: None,
+                previous_radial_velocity_mps: Some(1.0),
+                current_orbital_phase_angle_rad: None,
+            }),
+            Some(StopReason::ApoapsisMet)
+        );
+    }
+
+    #[test]
+    fn periapsis_met_on_radial_velocity_sign_crossing() {
+        let mu =
+            GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu");
+        let state = sample_state();
+        let condition = TerminationCondition::periapsis(mu);
+        let epoch = Epoch::from_seconds(10.0).expect("epoch");
+
+        assert_eq!(
+            condition.stop_reason(TerminationContext {
+                start_epoch: Epoch::from_seconds(0.0).expect("epoch"),
+                current_epoch: epoch,
+                steps: 1,
+                state: &state,
+                previous_orbital_angle_rad: None,
+                previous_radial_velocity_mps: Some(-1.0),
+                current_orbital_phase_angle_rad: None,
+            }),
+            Some(StopReason::PeriapsisMet)
         );
     }
 

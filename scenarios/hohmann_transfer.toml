@@ -12,13 +12,14 @@ force_model = "two_body"
 sample_every_steps = 20
 
 [[initial_burns]]
-prograde_delta_v_mps = 2586.2
+kind = "prograde"
+delta_v_mps = 2586.2
 
 [[segments]]
-stop = "apoapsis"
+stop = { kind = "apoapsis" }
 
 [[segments.burns]]
-circularize = true
+kind = "circularize"
 
 [[segments]]
-stop = { duration_s = 86400.0 }
+stop = { kind = "duration", duration_s = 86400.0 }
