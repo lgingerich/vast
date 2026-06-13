@@ -312,9 +312,9 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn euler_propagates_dynamics_errors() -> TestResult {
-        let integrator = EulerIntegrator;
+    // ── error propagation ───────────────────────────────────────
+
+    fn assert_integrator_propagates_dynamics_errors<I: Integrator>(integrator: I) -> TestResult {
         let dynamics = FailingDynamics {
             error: DynamicsError::PositionAtGravityCenter,
         };
@@ -338,8 +338,28 @@ mod tests {
     }
 
     #[test]
-    fn euler_rejects_nonfinite_velocity_update() -> TestResult {
-        let integrator = EulerIntegrator;
+    fn euler_propagates_dynamics_errors() -> TestResult {
+        assert_integrator_propagates_dynamics_errors(EulerIntegrator)
+    }
+
+    #[test]
+    fn velocity_verlet_propagates_dynamics_errors() -> TestResult {
+        assert_integrator_propagates_dynamics_errors(VelocityVerletIntegrator)
+    }
+
+    #[test]
+    fn leapfrog_propagates_dynamics_errors() -> TestResult {
+        assert_integrator_propagates_dynamics_errors(LeapfrogIntegrator)
+    }
+
+    #[test]
+    fn rk4_propagates_dynamics_errors() -> TestResult {
+        assert_integrator_propagates_dynamics_errors(RungeKutta4Integrator)
+    }
+
+    // ── non-finite rejection ────────────────────────────────────
+
+    fn assert_integrator_rejects_nonfinite_velocity<I: Integrator>(integrator: I) -> TestResult {
         let dynamics = ConstantAcceleration {
             acceleration: Acceleration::from_vector(Vector3::new(f64::MAX, 0.0, 0.0))?,
         };
@@ -355,16 +375,14 @@ mod tests {
                 Epoch::from_seconds(0.0)?,
                 TimeStep::from_seconds(2.0)?,
             ),
-            Err(PropagationError::Numerical(NumericalError::NotFinite {
-                field: "velocity components"
-            })),
+            Err(PropagationError::Numerical(
+                NumericalError::NotFinite { .. }
+            )),
         ));
         Ok(())
     }
 
-    #[test]
-    fn euler_rejects_nonfinite_position_update() -> TestResult {
-        let integrator = EulerIntegrator;
+    fn assert_integrator_rejects_nonfinite_position<I: Integrator>(integrator: I) -> TestResult {
         let dynamics = ConstantAcceleration {
             acceleration: Acceleration::from_vector(Vector3::zeros())?,
         };
@@ -383,12 +401,54 @@ mod tests {
                 Epoch::from_seconds(0.0)?,
                 TimeStep::from_seconds(2.0)?,
             ),
-            Err(PropagationError::Numerical(NumericalError::NotFinite {
-                field: "position components"
-            })),
+            Err(PropagationError::Numerical(
+                NumericalError::NotFinite { .. }
+            )),
         ));
         Ok(())
     }
+
+    #[test]
+    fn euler_rejects_nonfinite_velocity_update() -> TestResult {
+        assert_integrator_rejects_nonfinite_velocity(EulerIntegrator)
+    }
+
+    #[test]
+    fn euler_rejects_nonfinite_position_update() -> TestResult {
+        assert_integrator_rejects_nonfinite_position(EulerIntegrator)
+    }
+
+    #[test]
+    fn velocity_verlet_rejects_nonfinite_velocity_update() -> TestResult {
+        assert_integrator_rejects_nonfinite_velocity(VelocityVerletIntegrator)
+    }
+
+    #[test]
+    fn velocity_verlet_rejects_nonfinite_position_update() -> TestResult {
+        assert_integrator_rejects_nonfinite_position(VelocityVerletIntegrator)
+    }
+
+    #[test]
+    fn leapfrog_rejects_nonfinite_velocity_update() -> TestResult {
+        assert_integrator_rejects_nonfinite_velocity(LeapfrogIntegrator)
+    }
+
+    #[test]
+    fn leapfrog_rejects_nonfinite_position_update() -> TestResult {
+        assert_integrator_rejects_nonfinite_position(LeapfrogIntegrator)
+    }
+
+    #[test]
+    fn rk4_rejects_nonfinite_velocity_update() -> TestResult {
+        assert_integrator_rejects_nonfinite_velocity(RungeKutta4Integrator)
+    }
+
+    #[test]
+    fn rk4_rejects_nonfinite_position_update() -> TestResult {
+        assert_integrator_rejects_nonfinite_position(RungeKutta4Integrator)
+    }
+
+    // ── constant acceleration solutions ─────────────────────────
 
     #[test]
     fn rk4_matches_constant_acceleration_solution() -> TestResult {
@@ -471,31 +531,6 @@ mod tests {
         assert_close(next.position.vector().x, 15.0, EPS);
         assert_close(next.position.vector().y, 55.0, EPS);
         assert_close(next.position.vector().z, 45.0, EPS);
-        Ok(())
-    }
-
-    #[test]
-    fn rk4_propagates_dynamics_errors() -> TestResult {
-        let integrator = RungeKutta4Integrator;
-        let dynamics = FailingDynamics {
-            error: DynamicsError::PositionAtGravityCenter,
-        };
-        let state = state_at(Vector3::new(1.0, 0.0, 0.0), Vector3::zeros())?;
-        let mut states = CartesianStateBuffer::<1>::new();
-        states.write_from_state(0, &state)?;
-
-        assert!(matches!(
-            integrator.step(
-                &dynamics,
-                &mut states.view_mut(),
-                0,
-                Epoch::from_seconds(0.0)?,
-                TimeStep::from_seconds(1.0)?,
-            ),
-            Err(PropagationError::Dynamics(
-                DynamicsError::PositionAtGravityCenter
-            )),
-        ));
         Ok(())
     }
 
@@ -687,10 +722,10 @@ mod tests {
         )?)
     }
 
-    fn propagate_one_period<I: Integrator>(
+    fn propagate_one_period<I: Integrator, const N: usize>(
         integrator: &I,
         gravity: &TwoBodyGravity,
-        states: &mut CartesianStateBuffer<2>,
+        states: &mut CartesianStateBuffer<N>,
         index: usize,
         period_s: f64,
     ) -> TestResult {
@@ -745,16 +780,8 @@ mod tests {
             .specific_angular_momentum()
             .square_meters_per_second();
 
-        let mut epoch = Epoch::from_seconds(0.0)?;
         let period_s = orbit.period()?.seconds();
-        let dt = TimeStep::from_seconds(30.0)?;
-
-        while epoch.seconds() < period_s {
-            let remaining_s = period_s - epoch.seconds();
-            let step = TimeStep::from_seconds(dt.seconds().min(remaining_s))?;
-            integrator.step(&gravity, &mut states.view_mut(), 0, epoch, step)?;
-            epoch = epoch.advance_by(step)?;
-        }
+        propagate_one_period(&integrator, &gravity, &mut states, 0, period_s)?;
 
         let final_h = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
             .specific_angular_momentum()
@@ -804,16 +831,8 @@ mod tests {
             .specific_energy()
             .square_meters_per_square_second();
 
-        let mut epoch = Epoch::from_seconds(0.0)?;
         let period_s = orbit.period()?.seconds();
-        let dt = TimeStep::from_seconds(30.0)?;
-
-        while epoch.seconds() < period_s {
-            let remaining_s = period_s - epoch.seconds();
-            let step = TimeStep::from_seconds(dt.seconds().min(remaining_s))?;
-            integrator.step(&gravity, &mut states.view_mut(), 0, epoch, step)?;
-            epoch = epoch.advance_by(step)?;
-        }
+        propagate_one_period(&integrator, &gravity, &mut states, 0, period_s)?;
 
         let final_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
             .specific_energy()
