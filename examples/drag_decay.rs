@@ -31,13 +31,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Distance::from_meters(50_000.0)?,
         AngularRate::from_radians_per_second(7.292_115_9e-5)?,
     );
-    let dynamics = CompositeDynamics {
-        first: TwoBodyGravity::new(mu),
-        second: AtmosphericDrag::new(
+    let dynamics = CompositeDynamics::new(
+        TwoBodyGravity::new(mu),
+        AtmosphericDrag::new(
             atmosphere,
             AreaPerMass::from_square_meters_per_kilogram(0.02)?,
         ),
-    };
+    );
     let integrator = RungeKutta4Integrator;
     let dt = TimeStep::from_seconds(STEP_SECONDS)?;
     let duration = Duration::from_seconds(PROPAGATION_HOURS * 3_600.0)?;

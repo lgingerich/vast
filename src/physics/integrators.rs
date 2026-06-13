@@ -151,8 +151,8 @@ impl Integrator for RungeKutta4Integrator {
         let state = states.as_view().components(index)?;
         let dt_s = dt.seconds();
         let half_dt_s = 0.5 * dt_s;
-        let half_t = advance_epoch(t, half_dt_s)?;
-        let full_t = advance_epoch(t, dt_s)?;
+        let half_t = t.advance_by(TimeStep::from_seconds(half_dt_s)?)?;
+        let full_t = t.advance_by(dt)?;
         let position = state.position.vector();
         let velocity = state.velocity.vector();
 
@@ -186,9 +186,6 @@ impl Integrator for RungeKutta4Integrator {
     }
 }
 
-fn advance_epoch(t: Epoch, seconds: f64) -> Result<Epoch, PropagationError> {
-    Ok(Epoch::from_seconds(t.seconds() + seconds)?)
-}
 
 fn write_integrated_vectors(
     states: &mut CartesianStatesMut<'_>,
@@ -289,7 +286,7 @@ mod tests {
     }
 
     #[test]
-    fn semi_implicit_euler_updates_velocity_before_position() -> TestResult {
+    fn euler_matches_constant_acceleration_solution() -> TestResult {
         let integrator = EulerIntegrator;
         let dynamics = ConstantAcceleration {
             acceleration: Acceleration::from_vector(Vector3::new(0.0, 2.0, 0.0))?,
@@ -317,7 +314,7 @@ mod tests {
     }
 
     #[test]
-    fn semi_implicit_euler_propagates_dynamics_errors() -> TestResult {
+    fn euler_propagates_dynamics_errors() -> TestResult {
         let integrator = EulerIntegrator;
         let dynamics = FailingDynamics {
             error: DynamicsError::PositionAtGravityCenter,
@@ -342,7 +339,7 @@ mod tests {
     }
 
     #[test]
-    fn semi_implicit_euler_rejects_nonfinite_velocity_update() -> TestResult {
+    fn euler_rejects_nonfinite_velocity_update() -> TestResult {
         let integrator = EulerIntegrator;
         let dynamics = ConstantAcceleration {
             acceleration: Acceleration::from_vector(Vector3::new(f64::MAX, 0.0, 0.0))?,
@@ -367,7 +364,7 @@ mod tests {
     }
 
     #[test]
-    fn semi_implicit_euler_rejects_nonfinite_position_update() -> TestResult {
+    fn euler_rejects_nonfinite_position_update() -> TestResult {
         let integrator = EulerIntegrator;
         let dynamics = ConstantAcceleration {
             acceleration: Acceleration::from_vector(Vector3::zeros())?,
@@ -395,7 +392,7 @@ mod tests {
     }
 
     #[test]
-    fn runge_kutta4_matches_constant_acceleration_solution() -> TestResult {
+    fn rk4_matches_constant_acceleration_solution() -> TestResult {
         let integrator = RungeKutta4Integrator;
         let dynamics = ConstantAcceleration {
             acceleration: Acceleration::from_vector(Vector3::new(0.0, 2.0, 0.0))?,
@@ -479,7 +476,7 @@ mod tests {
     }
 
     #[test]
-    fn runge_kutta4_propagates_dynamics_errors() -> TestResult {
+    fn rk4_propagates_dynamics_errors() -> TestResult {
         let integrator = RungeKutta4Integrator;
         let dynamics = FailingDynamics {
             error: DynamicsError::PositionAtGravityCenter,

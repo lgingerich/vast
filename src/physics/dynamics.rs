@@ -35,7 +35,7 @@ pub struct OblateBodyGravity {
 }
 
 impl OblateBodyGravity {
-    /// Creates a validated oblate-body gravity model.
+    /// Creates an oblate-body gravity model.
     #[inline]
     pub const fn new(
         mu: GravitationalParameter,
@@ -83,7 +83,7 @@ pub struct ExponentialAtmosphere {
 }
 
 impl ExponentialAtmosphere {
-    /// Creates an exponential atmosphere from validated domain quantities.
+    /// Creates an exponential atmosphere.
     #[inline]
     pub const fn new(
         reference_radius: Distance,
@@ -163,14 +163,22 @@ impl AtmosphericDrag {
     }
 }
 
-/// Allocation-free composition of two local dynamics models.
+/// Allocation-free binary composition of two dynamics models.
+///
+/// Binary composition keeps the stepping path allocation-free. For three or
+/// more models, nest: `CompositeDynamics<A, CompositeDynamics<B, C>>`.
 pub struct CompositeDynamics<A, B> {
-    // NOTE: What if we have more than two dynamics models?
     first: A,
     second: B,
 }
 
 impl<A, B> CompositeDynamics<A, B> {
+    /// Creates a composite from two dynamics models.
+    #[inline]
+    pub const fn new(first: A, second: B) -> Self {
+        Self { first, second }
+    }
+
     /// Returns a reference to the first dynamics model.
     #[inline]
     pub const fn first(&self) -> &A {
@@ -185,6 +193,9 @@ impl<A, B> CompositeDynamics<A, B> {
 }
 
 /// Computes acceleration for a state at a given simulation time.
+///
+/// The `t` parameter supports time-dependent models (e.g. low-thrust
+/// profiles). Time-independent implementations ignore it.
 pub trait Dynamics {
     /// Returns the acceleration for `state` at epoch `t`.
     fn acceleration_at(
@@ -198,7 +209,7 @@ impl Dynamics for TwoBodyGravity {
     fn acceleration_at(
         &self,
         state: CartesianStateComponents,
-        _t: Epoch, // NOTE: Why do we have _t here?
+        _t: Epoch,
     ) -> Result<CartesianAccelerationComponents, DynamicsError> {
         let position = state.position;
         let px = position.x_meters();
@@ -209,7 +220,6 @@ impl Dynamics for TwoBodyGravity {
         let mu = self.mu.meters_cubed_per_second_squared();
 
         if radius_m == 0.0 {
-            // NOTE: Is this check necessary?
             return Err(DynamicsError::PositionAtGravityCenter);
         }
 
@@ -228,7 +238,7 @@ impl Dynamics for OblateBodyGravity {
     fn acceleration_at(
         &self,
         state: CartesianStateComponents,
-        _t: Epoch, // NOTE: Why do we have _t here?
+        _t: Epoch,
     ) -> Result<CartesianAccelerationComponents, DynamicsError> {
         let position = state.position;
         let px = position.x_meters();
@@ -240,7 +250,6 @@ impl Dynamics for OblateBodyGravity {
         let equatorial_radius = self.equatorial_radius.meters();
 
         if radius_m == 0.0 {
-            // NOTE: Is this check necessary?
             return Err(DynamicsError::PositionAtGravityCenter);
         }
 
@@ -348,7 +357,6 @@ impl<A: Dynamics, B: Dynamics> Dynamics for CompositeDynamics<A, B> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::errors::NumericalError;
     use crate::physics::constants::{J2_EARTH, MU_EARTH, R_EARTH};
     use crate::physics::diagnostics::OrbitalDiagnostics;
     use crate::physics::integrators::{Integrator, RungeKutta4Integrator};
@@ -770,10 +778,7 @@ mod tests {
     fn composite_dynamics_sums_component_accelerations() -> TestResult {
         let gravity = earth_gravity()?;
         let drag = drag_model(0.02)?;
-        let composite = CompositeDynamics {
-            first: gravity,
-            second: drag,
-        };
+        let composite = CompositeDynamics::new(gravity, drag);
         let state = state_from_vectors(
             Vector3::new(R_EARTH + 250_000.0, 0.0, 0.0),
             Vector3::new(0.0, 7_700.0, 0.0),
@@ -820,10 +825,7 @@ mod tests {
         )?;
         let mut states = CartesianStateBuffer::<1>::new();
         states.write_from_state(0, &orbit.to_cartesian_state()?)?;
-        let dynamics = CompositeDynamics {
-            first: TwoBodyGravity::new(mu),
-            second: drag_model(0.05)?,
-        };
+        let dynamics = CompositeDynamics::new(TwoBodyGravity::new(mu), drag_model(0.05)?);
         let initial_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
             .specific_energy()
             .square_meters_per_square_second();
@@ -867,10 +869,7 @@ mod tests {
             .radius()
             .meters()
             - R_EARTH;
-        let dynamics = CompositeDynamics {
-            first: TwoBodyGravity::new(mu),
-            second: drag_model(0.1)?,
-        };
+        let dynamics = CompositeDynamics::new(TwoBodyGravity::new(mu), drag_model(0.1)?);
         let integrator = RungeKutta4Integrator;
         let dt = TimeStep::from_seconds(10.0)?;
         let mut epoch = Epoch::from_seconds(0.0)?;

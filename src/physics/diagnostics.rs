@@ -132,11 +132,17 @@ impl OrbitalDiagnostics {
 
         let semi_major_axis = bound_semi_major_axis(mu, specific_energy)?;
         let periapsis_radius = match semi_major_axis {
-            Some(axis) => Some((axis * (1.0 - eccentricity))?),
+            Some(axis) => {
+                let axis_m = axis.meters();
+                Some(Distance::from_meters(axis_m * (1.0 - eccentricity))?)
+            }
             None => None,
         };
         let apoapsis_radius = match semi_major_axis {
-            Some(axis) => Some((axis * (1.0 + eccentricity))?),
+            Some(axis) => {
+                let axis_m = axis.meters();
+                Some(Distance::from_meters(axis_m * (1.0 + eccentricity))?)
+            }
             None => None,
         };
 

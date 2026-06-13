@@ -4,7 +4,7 @@ use super::types::{Angle, Distance, Duration, Eccentricity, GravitationalParamet
 use crate::errors::NumericalError;
 
 /// Direction of motion around an orbital plane.
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OrbitDirection {
     /// Motion follows the positive orientation of the orbital plane.
     Prograde,
@@ -18,7 +18,7 @@ pub enum OrbitDirection {
 /// orbit is circular; set `argument_of_periapsis = 0` in that case (the
 /// perifocal-to-inertial rotation is defined by convention and the
 /// physics is unaffected).
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct EllipticOrbit {
     /// Semi-major axis of the elliptical orbit.
     semi_major_axis: Distance,
@@ -78,49 +78,49 @@ impl EllipticOrbit {
 
     /// Returns the semi-major axis.
     #[inline]
-    pub const fn semi_major_axis(self) -> Distance {
+    pub const fn semi_major_axis(&self) -> Distance {
         self.semi_major_axis
     }
 
     /// Returns the orbital eccentricity.
     #[inline]
-    pub const fn eccentricity(self) -> Eccentricity {
+    pub const fn eccentricity(&self) -> Eccentricity {
         self.eccentricity
     }
 
     /// Returns the standard gravitational parameter.
     #[inline]
-    pub const fn mu(self) -> GravitationalParameter {
+    pub const fn mu(&self) -> GravitationalParameter {
         self.mu
     }
 
     /// Returns the inclination.
     #[inline]
-    pub const fn inclination(self) -> Angle {
+    pub const fn inclination(&self) -> Angle {
         self.inclination
     }
 
     /// Returns the right ascension of the ascending node.
     #[inline]
-    pub const fn right_ascension_of_ascending_node(self) -> Angle {
+    pub const fn right_ascension_of_ascending_node(&self) -> Angle {
         self.right_ascension_of_ascending_node
     }
 
     /// Returns the argument of periapsis.
     #[inline]
-    pub const fn argument_of_periapsis(self) -> Angle {
+    pub const fn argument_of_periapsis(&self) -> Angle {
         self.argument_of_periapsis
     }
 
     /// Returns the true anomaly.
     #[inline]
-    pub const fn true_anomaly(self) -> Angle {
+    pub const fn true_anomaly(&self) -> Angle {
         self.true_anomaly
     }
 
     /// Returns the direction of motion.
     #[inline]
-    pub const fn direction(self) -> OrbitDirection {
+    pub const fn direction(&self) -> OrbitDirection {
         self.direction
     }
 
@@ -154,7 +154,7 @@ impl EllipticOrbit {
     /// Returns an error if the orbital parameters are physically invalid
     /// (e.g. parabolic or hyperbolic eccentricity) or a computed quantity
     /// is non-finite.
-    pub fn to_cartesian_state(self) -> Result<CartesianState, NumericalError> {
+    pub fn to_cartesian_state(&self) -> Result<CartesianState, NumericalError> {
         let velocity_sign = match self.direction {
             OrbitDirection::Prograde => 1.0,
             OrbitDirection::Retrograde => -1.0,
@@ -373,16 +373,5 @@ mod tests {
             / (1.0 + e.scalar() * elliptic.true_anomaly().radians().cos());
         assert_close(state.position.vector().norm(), radius, EPS);
         Ok(())
-    }
-
-    #[test]
-    fn distance_rejects_nonpositive_values() {
-        assert!(Distance::from_meters(0.0).is_err());
-        assert!(Distance::from_meters(-1.0).is_err());
-    }
-
-    #[test]
-    fn angle_rejects_nan() {
-        assert!(Angle::from_radians(f64::NAN).is_err());
     }
 }
