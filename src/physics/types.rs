@@ -32,8 +32,15 @@ impl Angle {
     }
 
     /// Creates an angle from degrees, wrapped into `[0, 2π)`.
+    ///
+    /// Wrapping happens in the degree domain before conversion, so round inputs
+    /// like `360`, `450`, or `-90` fold exactly (to `0°`, `90°`, `270°`) and
+    /// avoid the double-rounding that wrapping after `to_radians` would cause.
     pub fn from_degrees(degrees: f64) -> Result<Self, NumericalError> {
-        Self::from_radians(degrees.to_radians())
+        if !degrees.is_finite() {
+            return Err(NumericalError::NotFinite { field: "degrees" });
+        }
+        Self::from_radians(degrees.rem_euclid(360.0).to_radians())
     }
 
     /// Returns this angle in radians, in `[0, 2π)`.
@@ -666,6 +673,24 @@ mod tests {
         for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
             assert!(Angle::from_radians(value).is_err());
         }
+    }
+
+    #[test]
+    fn angle_from_degrees_rejects_nonfinite_values() {
+        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(Angle::from_degrees(value).is_err());
+        }
+    }
+
+    #[test]
+    fn angle_from_degrees_folds_round_inputs_exactly() -> TestResult {
+        // Wrapping in the degree domain avoids double rounding, so full turns
+        // land on exactly 0 rather than a TAU-epsilon residue.
+        assert_eq!(Angle::from_degrees(360.0)?.radians(), 0.0);
+        assert_eq!(Angle::from_degrees(720.0)?.radians(), 0.0);
+        assert_eq!(Angle::from_degrees(450.0)?.degrees(), 90.0);
+        assert_eq!(Angle::from_degrees(-90.0)?.degrees(), 270.0);
+        Ok(())
     }
 
     #[test]
