@@ -1,18 +1,12 @@
 use serde::{Deserialize, Serialize};
 
-use super::propagator::{
-    ImpulsiveBurn, PropagationResult, Propagator, SampleConfig, TrajectorySample,
-};
-use super::scenario::{ForceModelKind, IntegratorKind};
+use super::propagator::{ImpulsiveBurn, PropagationResult, Propagator, TrajectorySample};
+use super::scenario::{self, ForceModelKind, IntegratorKind, PropagationSetup};
 use super::termination::{StopReason, TerminationCondition};
 use crate::errors::MissionError;
-use crate::physics::constants::{MU_EARTH, R_EARTH};
-use crate::physics::dynamics::TwoBodyGravity;
-use crate::physics::orbits::{EllipticOrbit, OrbitDirection};
+use crate::physics::constants::R_EARTH;
 use crate::physics::state::CartesianState;
-use crate::physics::types::{
-    Angle, Distance, Duration, Eccentricity, Epoch, GravitationalParameter, TimeStep,
-};
+use crate::physics::types::{Angle, Distance, Duration, Eccentricity, GravitationalParameter};
 
 /// Serializable mission scenario loaded from TOML.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -147,16 +141,15 @@ impl LoadedScenario {
             let mission: MissionScenarioConfig = value.try_into()?;
             Ok(Self::Mission(mission))
         } else {
-            Ok(Self::Rollout(
-                crate::sim::scenario::ScenarioConfig::from_toml(contents)?,
-            ))
+            let rollout: crate::sim::scenario::ScenarioConfig = value.try_into()?;
+            Ok(Self::Rollout(rollout))
         }
     }
 }
 
 impl MissionScenarioConfig {
     /// Builds runtime objects for mission execution.
-    pub fn build(&self) -> Result<BuiltMissionScenario, MissionError> {
+    pub(crate) fn build(&self) -> Result<BuiltMissionScenario, MissionError> {
         if self.name.is_empty() {
             return Err(MissionError::InvalidField {
                 field: "name",
@@ -170,28 +163,15 @@ impl MissionScenarioConfig {
             });
         }
 
-        let dt = TimeStep::from_seconds(self.propagation.dt_s)?;
+        let dt = crate::physics::types::TimeStep::from_seconds(self.propagation.dt_s)?;
 
         let integrator = self.propagation.integrator;
-        let gravity = match self.propagation.force_model {
-            ForceModelKind::TwoBody => {
-                let mu =
-                    GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
-                TwoBodyGravity::new(mu)
-            }
-        };
+        let gravity = scenario::create_gravity(self.propagation.force_model)?;
         let mu = gravity.mu();
 
         let initial_state = build_initial_state(&self.initial_orbit, mu)?;
         let propagator =
-            Propagator::new(initial_state, Epoch::from_seconds(0.0)?, dt)?.with_sampling(
-            SampleConfig::every_steps(self.propagation.sample_every_steps).ok_or_else(|| {
-                MissionError::InvalidField {
-                    field: "propagation.sample_every_steps",
-                    reason: "must be >= 1".to_string(),
-                }
-            })?,
-        );
+            scenario::create_propagator(initial_state, dt, self.propagation.sample_every_steps)?;
 
         let initial_burns = self
             .initial_burns
@@ -206,11 +186,12 @@ impl MissionScenarioConfig {
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(BuiltMissionScenario {
-            config: self.clone(),
-            integrator,
-            gravity,
-            propagator,
-            initial_state,
+            propagation: PropagationSetup {
+                integrator,
+                gravity,
+                propagator,
+                initial_state,
+            },
             initial_burns,
             segments,
         })
@@ -219,16 +200,8 @@ impl MissionScenarioConfig {
 
 /// Runtime mission scenario ready for execution.
 pub struct BuiltMissionScenario {
-    /// Source configuration.
-    pub config: MissionScenarioConfig,
-    /// Selected integrator.
-    pub integrator: IntegratorKind,
-    /// Central gravity model.
-    pub gravity: TwoBodyGravity,
-    /// Propagator with initial state and sampling configured.
-    pub propagator: Propagator,
-    /// Initial Cartesian state for resets.
-    pub initial_state: CartesianState,
+    /// Shared propagation machine.
+    pub propagation: PropagationSetup,
     /// Burns applied before the first segment.
     pub initial_burns: Vec<BurnSpec>,
     /// Ordered mission segments.
@@ -282,23 +255,38 @@ pub struct MissionResult {
 }
 
 /// Runs a built mission scenario once from its initial state.
-pub fn run_mission(scenario: &mut BuiltMissionScenario) -> Result<MissionResult, MissionError> {
-    scenario.propagator.reset(scenario.initial_state)?;
+pub fn run_mission(config: &MissionScenarioConfig) -> Result<MissionResult, MissionError> {
+    let mut scenario = config.build()?;
+    scenario
+        .propagation
+        .propagator
+        .reset(scenario.propagation.initial_state)?;
 
     let mut all_samples = Vec::new();
     let mut segment_results = Vec::new();
 
     for burn in &scenario.initial_burns {
-        apply_burn(&mut scenario.propagator, *burn, scenario.gravity.mu())?;
+        apply_burn(
+            &mut scenario.propagation.propagator,
+            *burn,
+            scenario.propagation.gravity.mu(),
+        )?;
     }
 
-    for (segment_index, segment) in scenario.segments.clone().into_iter().enumerate() {
-        let propagation = propagate_segment(scenario, segment.termination, segment_index)?;
+    let segment_count = scenario.segments.len();
+    for segment_index in 0..segment_count {
+        let termination = scenario.segments[segment_index].termination.clone();
+        let propagation = propagate_segment(&mut scenario, &termination, segment_index)?;
         all_samples.extend(propagation.samples.iter().cloned());
 
+        let burns: Vec<BurnSpec> = scenario.segments[segment_index].burns.clone();
         let mut burns_applied = 0_usize;
-        for burn in &segment.burns {
-            apply_burn(&mut scenario.propagator, *burn, scenario.gravity.mu())?;
+        for burn in &burns {
+            apply_burn(
+                &mut scenario.propagation.propagator,
+                *burn,
+                scenario.propagation.gravity.mu(),
+            )?;
             burns_applied += 1;
         }
 
@@ -310,11 +298,12 @@ pub fn run_mission(scenario: &mut BuiltMissionScenario) -> Result<MissionResult,
         });
     }
 
-    let final_state = scenario.propagator.current_state()?;
+    let final_state = scenario.propagation.propagator.current_state()?;
+    // Segments are validated as non-empty at build time.
     let final_epoch = segment_results
         .last()
         .map(|segment| segment.propagation.final_epoch)
-        .unwrap_or_else(|| crate::physics::types::Epoch::from_seconds(0.0).expect("epoch"));
+        .expect("at least one segment is guaranteed by build()");
 
     Ok(MissionResult {
         segments: segment_results,
@@ -326,13 +315,13 @@ pub fn run_mission(scenario: &mut BuiltMissionScenario) -> Result<MissionResult,
 
 fn propagate_segment(
     scenario: &mut BuiltMissionScenario,
-    termination: TerminationCondition,
+    termination: &TerminationCondition,
     segment_index: usize,
 ) -> Result<PropagationResult, MissionError> {
-    Ok(scenario.integrator.dispatch(
-        &mut scenario.propagator,
-        &scenario.gravity,
-        termination,
+    Ok(scenario.propagation.integrator.dispatch(
+        &mut scenario.propagation.propagator,
+        &scenario.propagation.gravity,
+        termination.clone(),
         Some(segment_index),
     )?)
 }
@@ -390,7 +379,7 @@ fn build_initial_state(
     match initial_orbit {
         InitialOrbitConfig::Circular { altitude_m } => {
             let radius = Distance::from_meters(R_EARTH + altitude_m)?;
-            let orbit = EllipticOrbit::new(
+            let orbit = crate::physics::orbits::EllipticOrbit::new(
                 radius,
                 Eccentricity::from_scalar(0.0)?,
                 mu,
@@ -398,7 +387,7 @@ fn build_initial_state(
                 Angle::ZERO,
                 Angle::ZERO,
                 Angle::from_radians(0.0)?,
-                OrbitDirection::Prograde,
+                crate::physics::orbits::OrbitDirection::Prograde,
             )?;
             Ok(orbit.to_cartesian_state()?)
         }
@@ -454,13 +443,11 @@ fn build_burn_spec(burn: &BurnConfig) -> Result<BurnSpec, MissionError> {
                 })
             }
         }
-        _ => {
-            Err(MissionError::InvalidField {
-                field: "burns",
-                reason: "specify exactly one of delta_v_mps, prograde_delta_v_mps, or circularize"
-                    .to_string(),
-            })
-        }
+        _ => Err(MissionError::InvalidField {
+            field: "burns",
+            reason: "specify exactly one of delta_v_mps, prograde_delta_v_mps, or circularize"
+                .to_string(),
+        }),
     }
 }
 
@@ -562,9 +549,8 @@ mod tests {
             GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu");
         let departure = Distance::from_meters(departure_radius_m).expect("distance");
         let arrival = Distance::from_meters(arrival_radius_m).expect("distance");
-        let (dv1, _dv2) =
-            crate::physics::maneuvers::hohmann_delta_v(mu, departure, arrival)
-                .expect("hohmann delta-v");
+        let (dv1, _dv2) = crate::physics::maneuvers::hohmann_delta_v(mu, departure, arrival)
+            .expect("hohmann delta-v");
 
         let config = MissionScenarioConfig {
             name: "hohmann".to_string(),
@@ -602,8 +588,7 @@ mod tests {
             ],
         };
 
-        let mut built = config.build().expect("built mission");
-        let result = run_mission(&mut built).expect("mission run");
+        let result = run_mission(&config).expect("mission run");
         let final_radius = result.final_state.position.vector().norm();
 
         let seg0_radius = result.segments[0]
@@ -671,11 +656,9 @@ mod tests {
         let intermediate_radius_m = 10.0 * arrival_radius_m;
         let mu =
             GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu");
-        let departure =
-            Distance::from_meters(departure_radius_m).expect("distance");
+        let departure = Distance::from_meters(departure_radius_m).expect("distance");
         let arrival = Distance::from_meters(arrival_radius_m).expect("distance");
-        let intermediate =
-            Distance::from_meters(intermediate_radius_m).expect("distance");
+        let intermediate = Distance::from_meters(intermediate_radius_m).expect("distance");
         let (dv1, dv2, _dv3) =
             crate::physics::maneuvers::bielliptic_delta_v(mu, departure, arrival, intermediate)
                 .expect("bi-elliptic delta-v");
@@ -748,8 +731,7 @@ mod tests {
             ],
         };
 
-        let mut built = config.build().expect("built mission");
-        let result = run_mission(&mut built).expect("mission run");
+        let result = run_mission(&config).expect("mission run");
         let final_radius = result.final_state.position.vector().norm();
 
         let seg0_radius = result.segments[0]

@@ -91,8 +91,8 @@ mod tests {
 
     #[test]
     fn bielliptic_rejects_invalid_intermediate_radius() {
-        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(3.986e14)
-            .expect("mu");
+        let mu =
+            GravitationalParameter::from_meters_cubed_per_second_squared(3.986e14).expect("mu");
         let departure = Distance::from_meters(R_EARTH + 400_000.0).expect("distance");
         let arrival = Distance::from_meters(R_EARTH + 35_786_000.0).expect("distance");
         let intermediate = Distance::from_meters(R_EARTH + 400_000.0).expect("distance");

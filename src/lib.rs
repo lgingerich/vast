@@ -40,12 +40,12 @@ pub use errors::{
 pub use sim::{
     environment::{Action, Environment, LeoCircularEnv, Observation, StepResult},
     mission::{
-        BuiltMissionScenario, BurnConfig, BurnSpec, InitialOrbitConfig, LoadedScenario,
-        MissionResult, MissionScenarioConfig, MissionSegment, MissionSegmentConfig,
-        MissionSegmentResult, StopConfig, StopTable, run_mission,
+        BurnConfig, InitialOrbitConfig, LoadedScenario, MissionResult, MissionScenarioConfig,
+        MissionSegmentConfig, MissionSegmentResult, PropagationConfig, StopConfig, StopTable,
+        run_mission,
     },
     propagator::{ImpulsiveBurn, PropagationResult, Propagator, SampleConfig, TrajectorySample},
-    scenario::{BuiltScenario, ForceModelKind, IntegratorKind, ScenarioConfig},
+    scenario::{ForceModelKind, IntegratorKind, ScenarioConfig},
     termination::{StopReason, TerminationCondition},
 };
 

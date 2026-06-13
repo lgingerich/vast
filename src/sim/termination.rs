@@ -209,7 +209,10 @@ fn orbital_crossing(
         || angle_near(current_angle, target_rad)
 }
 
-pub(crate) fn orbital_phase_angle_rad(state: &CartesianState, mu: GravitationalParameter) -> Option<f64> {
+pub(crate) fn orbital_phase_angle_rad(
+    state: &CartesianState,
+    mu: GravitationalParameter,
+) -> Option<f64> {
     let elements =
         OrbitalElements::from_state(state, mu, OrbitalElementClassification::default()).ok()?;
     Some(elements.orbital_phase_angle().radians())

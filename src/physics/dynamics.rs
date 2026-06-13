@@ -7,6 +7,7 @@ use crate::errors::{DynamicsError, NumericalError};
 use nalgebra::Vector3;
 
 /// Point-mass gravity model for a single central body.
+#[derive(Debug)]
 pub struct TwoBodyGravity {
     /// Standard gravitational parameter in cubic meters per second squared.
     mu: GravitationalParameter,
@@ -585,7 +586,9 @@ mod tests {
     fn oblate_body_gravity_rejects_nonfinite_j2_at_construction() -> TestResult {
         assert!(matches!(
             J2Coefficient::from_scalar(f64::NAN),
-            Err(NumericalError::NotFinite { field: "j2" }),
+            Err(NumericalError::NotFinite {
+                field: "j2 coefficient"
+            }),
         ));
         Ok(())
     }

@@ -1,6 +1,6 @@
 use super::termination::{
-    orbital_phase_angle_rad, radial_velocity_mps, StopReason, TerminationCondition,
-    TerminationContext,
+    StopReason, TerminationCondition, TerminationContext, orbital_phase_angle_rad,
+    radial_velocity_mps,
 };
 use crate::errors::{NumericalError, PropagationError};
 use crate::physics::dynamics::Dynamics;
@@ -98,6 +98,7 @@ impl SampleConfig {
 }
 
 /// Fixed-step propagator for a single indexed body in a state buffer.
+#[derive(Debug)]
 pub struct Propagator {
     epoch: Epoch,
     initial_epoch: Epoch,
@@ -196,6 +197,7 @@ impl Propagator {
         I: Integrator,
         D: Dynamics,
     {
+        let segment_start_epoch = self.epoch;
         let mut steps = 0_usize;
         let mut samples = Vec::new();
         let needs_orbital_phase = termination.needs_orbital_phase();
@@ -215,7 +217,7 @@ impl Propagator {
         loop {
             let state = self.states.read_state(0)?;
             let context = TerminationContext {
-                start_epoch: self.initial_epoch,
+                start_epoch: segment_start_epoch,
                 current_epoch: self.epoch,
                 steps,
                 state: &state,
@@ -317,9 +319,12 @@ mod tests {
         let gravity = TwoBodyGravity::new(mu);
         let integrator = LeapfrogIntegrator;
 
-        let mut propagator =
-            Propagator::new(leo_initial_state(), Epoch::from_seconds(0.0).expect("epoch"), dt)
-                .expect("propagator");
+        let mut propagator = Propagator::new(
+            leo_initial_state(),
+            Epoch::from_seconds(0.0).expect("epoch"),
+            dt,
+        )
+        .expect("propagator");
         let result = propagator
             .propagate_until(
                 &integrator,
@@ -342,9 +347,12 @@ mod tests {
         let integrator = LeapfrogIntegrator;
         let dt = TimeStep::from_seconds(10.0).expect("dt");
 
-        let mut propagator =
-            Propagator::new(leo_initial_state(), Epoch::from_seconds(0.0).expect("epoch"), dt)
-                .expect("propagator");
+        let mut propagator = Propagator::new(
+            leo_initial_state(),
+            Epoch::from_seconds(0.0).expect("epoch"),
+            dt,
+        )
+        .expect("propagator");
         let result = propagator
             .propagate_until(
                 &integrator,
@@ -367,10 +375,13 @@ mod tests {
         let integrator = LeapfrogIntegrator;
         let dt = TimeStep::from_seconds(10.0).expect("dt");
 
-        let mut propagator =
-            Propagator::new(leo_initial_state(), Epoch::from_seconds(0.0).expect("epoch"), dt)
-                .expect("propagator")
-                .with_sampling(SampleConfig::every_steps(2).expect("sample config"));
+        let mut propagator = Propagator::new(
+            leo_initial_state(),
+            Epoch::from_seconds(0.0).expect("epoch"),
+            dt,
+        )
+        .expect("propagator")
+        .with_sampling(SampleConfig::every_steps(2).expect("sample config"));
 
         let result = propagator
             .propagate_until(

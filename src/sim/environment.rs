@@ -1,5 +1,5 @@
 use super::propagator::PropagationResult;
-use super::scenario::{BuiltScenario, ScenarioConfig};
+use super::scenario::{PropagationSetup, ScenarioConfig};
 use super::termination::StopReason;
 use crate::errors::EnvironmentError;
 use crate::physics::constants::R_EARTH;
@@ -49,52 +49,60 @@ pub trait Environment {
 
 /// LEO circular-orbit rollout environment (MVP).
 pub struct LeoCircularEnv {
-    scenario: BuiltScenario,
-    seed: u64,
+    propagation: PropagationSetup,
+    termination: super::termination::TerminationCondition,
 }
 
 impl LeoCircularEnv {
     /// Builds an environment from a scenario configuration.
     pub fn from_config(config: &ScenarioConfig) -> Result<Self, EnvironmentError> {
-        let scenario = config.build()?;
-        Ok(Self { scenario, seed: 0 })
+        let built = config.build()?;
+        Ok(Self {
+            propagation: built.propagation,
+            termination: built.termination,
+        })
     }
 
-    fn observation_from_state(
-        &self,
-        state: &CartesianState,
-    ) -> Result<Observation, EnvironmentError> {
+    fn observation_from_state(&self, state: &CartesianState) -> Observation {
         let position = state.position.vector();
         let velocity = state.velocity.vector();
         let radius = position.norm();
         let altitude = radius - R_EARTH;
         let speed = velocity.norm();
 
-        Ok(Observation {
+        Observation {
             position: [position.x, position.y, position.z],
             velocity: [velocity.x, velocity.y, velocity.z],
             altitude_m: altitude,
             speed_mps: speed,
-        })
+        }
     }
 }
 
 impl Environment for LeoCircularEnv {
-    fn reset(&mut self, seed: u64) -> Result<Observation, EnvironmentError> {
-        self.seed = seed;
-        let initial_state = self.scenario.initial_state;
-        self.scenario.propagator.reset(initial_state)?;
-        self.observation_from_state(&initial_state)
+    fn reset(&mut self, _seed: u64) -> Result<Observation, EnvironmentError> {
+        self.propagation
+            .propagator
+            .reset(self.propagation.initial_state)?;
+        Ok(self.observation_from_state(&self.propagation.initial_state))
     }
 
     fn step(&mut self, _action: Action) -> Result<StepResult, EnvironmentError> {
-        let integrator = self.scenario.integrator;
-        let propagation = integrator.propagate(&mut self.scenario)?;
-        let observation = self.observation_from_state(&propagation.final_state)?;
-        let done = matches!(
-            propagation.stop_reason,
-            StopReason::DurationMet | StopReason::StepCountMet
-        );
+        let propagation = self.propagation.integrator.dispatch(
+            &mut self.propagation.propagator,
+            &self.propagation.gravity,
+            self.termination.clone(),
+            None,
+        )?;
+
+        let observation = self.observation_from_state(&propagation.final_state);
+
+        let done = match propagation.stop_reason {
+            StopReason::DurationMet | StopReason::StepCountMet => true,
+            StopReason::StepBudgetExceeded | StopReason::ApoapsisMet | StopReason::PeriapsisMet => {
+                false
+            }
+        };
 
         Ok(StepResult {
             observation,

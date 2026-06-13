@@ -108,9 +108,8 @@ fn run_mission_command(
 
     for episode_index in 0..episodes {
         let seed = episode_index as u64;
-        let mut built = config.build()?;
         let _ = seed;
-        let result = run_mission(&mut built)?;
+        let result = run_mission(config)?;
 
         let final_radius = result.final_state.position.vector().norm();
         let final_altitude_m = final_radius - vast::R_EARTH;

@@ -123,6 +123,7 @@ impl TryFrom<CartesianStateComponents> for CartesianState {
 ///
 /// Internally this uses a structure-of-arrays layout for cache-friendly batched
 /// stepping while keeping typed state conversions at API boundaries.
+#[derive(Debug)]
 pub struct CartesianStateBuffer<const N: usize> {
     pos_x: [f64; N],
     pos_y: [f64; N],

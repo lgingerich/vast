@@ -3,12 +3,13 @@ use serde::{Deserialize, Serialize};
 use super::propagator::{Propagator, SampleConfig};
 use super::termination::TerminationCondition;
 use crate::errors::MissionError;
-use crate::physics::constants::{MU_EARTH, R_EARTH};
+use crate::physics::constants::MU_EARTH;
 use crate::physics::dynamics::TwoBodyGravity;
 use crate::physics::integrators::{
     EulerIntegrator, LeapfrogIntegrator, RungeKutta4Integrator, VelocityVerletIntegrator,
 };
-use crate::physics::orbits::{EllipticOrbit, OrbitDirection};
+use crate::physics::orbits::EllipticOrbit;
+use crate::physics::orbits::OrbitDirection;
 use crate::physics::state::CartesianState;
 use crate::physics::types::{
     Angle, Distance, Duration, Eccentricity, Epoch, GravitationalParameter, TimeStep,
@@ -46,7 +47,7 @@ impl ScenarioConfig {
     }
 
     /// Builds runtime objects for propagation.
-    pub fn build(&self) -> Result<BuiltScenario, MissionError> {
+    pub(crate) fn build(&self) -> Result<BuiltScenario, MissionError> {
         if self.name.is_empty() {
             return Err(MissionError::InvalidField {
                 field: "name",
@@ -63,17 +64,9 @@ impl ScenarioConfig {
             });
         }
 
-        let integrator = self.integrator;
-        let gravity = match self.force_model {
-            ForceModelKind::TwoBody => {
-                let mu =
-                    GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
-                TwoBodyGravity::new(mu)
-            }
-        };
-
-        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
-        let radius = Distance::from_meters(R_EARTH + self.altitude_m)?;
+        let gravity = create_gravity(self.force_model)?;
+        let mu = gravity.mu();
+        let radius = Distance::from_meters(crate::physics::constants::R_EARTH + self.altitude_m)?;
 
         let orbit = EllipticOrbit::new(
             radius,
@@ -87,32 +80,23 @@ impl ScenarioConfig {
         )?;
 
         let initial_state = orbit.to_cartesian_state()?;
-
-        let propagator =
-            Propagator::new(initial_state, Epoch::from_seconds(0.0)?, dt)?.with_sampling(
-            SampleConfig::every_steps(self.sample_every_steps).ok_or_else(|| {
-                MissionError::InvalidField {
-                    field: "sample_every_steps",
-                    reason: "must be >= 1".to_string(),
-                }
-            })?,
-        );
+        let propagator = create_propagator(initial_state, dt, self.sample_every_steps)?;
 
         Ok(BuiltScenario {
-            config: self.clone(),
-            integrator,
-            gravity,
-            propagator,
-            initial_state,
+            propagation: PropagationSetup {
+                integrator: self.integrator,
+                gravity,
+                propagator,
+                initial_state,
+            },
             termination: TerminationCondition::Duration(duration),
         })
     }
 }
 
-/// Runtime scenario ready for propagation.
-pub struct BuiltScenario {
-    /// Source configuration.
-    pub config: ScenarioConfig,
+/// Runtime propagation state shared by scenarios and missions.
+#[derive(Debug)]
+pub struct PropagationSetup {
     /// Selected integrator.
     pub integrator: IntegratorKind,
     /// Central gravity model.
@@ -121,6 +105,12 @@ pub struct BuiltScenario {
     pub propagator: Propagator,
     /// Initial Cartesian state for episode resets.
     pub initial_state: CartesianState,
+}
+
+/// Runtime scenario ready for propagation.
+pub struct BuiltScenario {
+    /// Shared propagation machine.
+    pub propagation: PropagationSetup,
     /// Episode termination rule.
     pub termination: TerminationCondition,
 }
@@ -149,19 +139,6 @@ pub enum ForceModelKind {
 }
 
 impl IntegratorKind {
-    /// Propagates using the selected integrator implementation.
-    pub fn propagate(
-        self,
-        scenario: &mut BuiltScenario,
-    ) -> Result<crate::sim::propagator::PropagationResult, crate::errors::PropagationError> {
-        self.dispatch(
-            &mut scenario.propagator,
-            &scenario.gravity,
-            scenario.termination.clone(),
-            None,
-        )
-    }
-
     /// Shared integrator dispatch for propagators and mission segments.
     pub(crate) fn dispatch(
         self,
@@ -204,6 +181,34 @@ impl IntegratorKind {
     }
 }
 
+/// Builds a gravity model from a force model kind.
+pub(super) fn create_gravity(force_model: ForceModelKind) -> Result<TwoBodyGravity, MissionError> {
+    match force_model {
+        ForceModelKind::TwoBody => {
+            let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
+            Ok(TwoBodyGravity::new(mu))
+        }
+    }
+}
+
+/// Builds a propagator with sampling from a Cartesian initial state.
+pub(super) fn create_propagator(
+    initial_state: CartesianState,
+    dt: TimeStep,
+    sample_every_steps: usize,
+) -> Result<Propagator, MissionError> {
+    Ok(
+        Propagator::new(initial_state, Epoch::from_seconds(0.0)?, dt)?.with_sampling(
+            SampleConfig::every_steps(sample_every_steps).ok_or_else(|| {
+                MissionError::InvalidField {
+                    field: "sample_every_steps",
+                    reason: "must be >= 1".to_string(),
+                }
+            })?,
+        ),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -225,6 +230,6 @@ mod tests {
 
         assert_eq!(config.name, "leo_circular");
         let built = config.build().expect("built scenario");
-        assert_eq!(built.integrator, IntegratorKind::Leapfrog);
+        assert_eq!(built.propagation.integrator, IntegratorKind::Leapfrog);
     }
 }
