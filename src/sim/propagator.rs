@@ -50,13 +50,13 @@ pub struct TrajectorySample {
 }
 
 impl TrajectorySample {
-    /// Creates a sample without segment metadata.
+    /// Creates a trajectory sample with an optional segment index.
     #[must_use]
-    pub fn new(epoch: Epoch, state: CartesianState) -> Self {
+    pub fn new(epoch: Epoch, state: CartesianState, segment_index: Option<usize>) -> Self {
         Self {
             epoch,
             state,
-            segment_index: None,
+            segment_index,
         }
     }
 }
@@ -151,10 +151,7 @@ impl Propagator {
             velocity.y + burn.delta_v_mps[1],
             velocity.z + burn.delta_v_mps[2],
         ))?;
-        let updated_state = CartesianState {
-            position: state.position,
-            velocity: updated,
-        };
+        let updated_state = CartesianState::new(state.position, updated);
         self.states.write_from_state(0, &updated_state)?;
         Ok(())
     }
@@ -201,11 +198,7 @@ impl Propagator {
 
         if self.sample_config.is_some() {
             let state = self.states.read_state(0)?;
-            samples.push(TrajectorySample {
-                epoch: self.epoch,
-                state,
-                segment_index,
-            });
+            samples.push(TrajectorySample::new(self.epoch, state, segment_index));
         }
 
         loop {
@@ -262,11 +255,7 @@ impl Propagator {
             if let Some(config) = self.sample_config
                 && steps.is_multiple_of(config.every_steps)
             {
-                samples.push(TrajectorySample {
-                    epoch: self.epoch,
-                    state,
-                    segment_index,
-                });
+                samples.push(TrajectorySample::new(self.epoch, state, segment_index));
             }
         }
     }

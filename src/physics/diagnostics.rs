@@ -1,7 +1,7 @@
 use nalgebra::Vector3;
 
 use super::state::{CartesianState, CartesianStates};
-use super::types::{Distance, Eccentricity, GravitationalParameter, Speed};
+use super::types::{Distance, Eccentricity, GravitationalParameter, Position, Speed, Velocity};
 use crate::errors::NumericalError;
 
 /// Specific orbital energy, measured in square meters per square second.
@@ -93,7 +93,7 @@ impl OrbitalDiagnostics {
         state: &CartesianState,
         mu: GravitationalParameter,
     ) -> Result<Self, NumericalError> {
-        Self::from_components(state.position.vector(), state.velocity.vector(), mu)
+        Self::from_components(state.position, state.velocity, mu)
     }
 
     /// Computes two-body diagnostics from an indexed inertial Cartesian state view.
@@ -104,17 +104,19 @@ impl OrbitalDiagnostics {
     ) -> Result<Self, crate::errors::StateError> {
         let components = states.components(index)?;
         Ok(Self::from_components(
-            components.position_vector(),
-            components.velocity_vector(),
+            Position::from_vector(components.position_vector())?,
+            Velocity::from_vector(components.velocity_vector())?,
             mu,
         )?)
     }
 
     pub(crate) fn from_components(
-        position: Vector3<f64>,
-        velocity: Vector3<f64>,
+        position: Position,
+        velocity: Velocity,
         mu: GravitationalParameter,
     ) -> Result<Self, NumericalError> {
+        let position = position.vector();
+        let velocity = velocity.vector();
         let mu_f64 = mu.meters_cubed_per_second_squared();
         let radius = position.norm();
         let speed = velocity.norm();
@@ -123,7 +125,9 @@ impl OrbitalDiagnostics {
             return Err(NumericalError::ZeroNorm { field: "position" });
         }
 
-        let specific_energy = 0.5 * speed * speed - mu_f64 / radius;
+        let specific_energy_f64 = 0.5 * speed * speed - mu_f64 / radius;
+        let specific_energy =
+            SpecificEnergy::from_square_meters_per_second_squared(specific_energy_f64)?;
         let specific_angular_momentum_vector = position.cross(&velocity);
         let specific_angular_momentum = specific_angular_momentum_vector.norm();
         let eccentricity_vector =
@@ -149,9 +153,7 @@ impl OrbitalDiagnostics {
         Ok(Self {
             radius: Distance::from_meters(radius)?,
             speed: Speed::from_meters_per_second(speed)?,
-            specific_energy: SpecificEnergy::from_square_meters_per_second_squared(
-                specific_energy,
-            )?,
+            specific_energy,
             specific_angular_momentum_vector,
             specific_angular_momentum: SpecificAngularMomentum::from_square_meters_per_second(
                 specific_angular_momentum,
@@ -227,8 +229,9 @@ impl OrbitalDiagnostics {
 
 fn bound_semi_major_axis(
     mu: GravitationalParameter,
-    specific_energy: f64,
+    specific_energy: SpecificEnergy,
 ) -> Result<Option<Distance>, NumericalError> {
+    let specific_energy = specific_energy.square_meters_per_square_second();
     if specific_energy >= 0.0 {
         return Ok(None);
     }

@@ -1,4 +1,4 @@
-use super::elements::{EllipticElementSet, elliptic_elements_to_cartesian_state};
+use super::elements::EllipticElementSet;
 use super::state::CartesianState;
 use super::types::{Angle, Distance, Duration, Eccentricity, GravitationalParameter, Speed};
 use crate::errors::NumericalError;
@@ -160,16 +160,17 @@ impl EllipticOrbit {
             OrbitDirection::Retrograde => -1.0,
         };
 
-        elliptic_elements_to_cartesian_state(EllipticElementSet {
-            semi_major_axis: self.semi_major_axis,
-            eccentricity: self.eccentricity,
-            mu: self.mu,
-            inclination: self.inclination,
-            right_ascension_of_ascending_node: self.right_ascension_of_ascending_node,
-            argument_of_periapsis: self.argument_of_periapsis,
-            true_anomaly: self.true_anomaly,
+        EllipticElementSet::new(
+            self.semi_major_axis,
+            self.eccentricity,
+            self.mu,
+            self.inclination,
+            self.right_ascension_of_ascending_node,
+            self.argument_of_periapsis,
+            self.true_anomaly,
             velocity_sign,
-        })
+        )?
+        .to_cartesian_state()
     }
 }
 

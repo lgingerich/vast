@@ -28,18 +28,6 @@ impl OrbitalElementClassification {
             equatorial_inclination_tolerance,
         }
     }
-
-    /// Returns the eccentricity tolerance for circular classification.
-    #[inline]
-    pub const fn circular_eccentricity_tolerance(&self) -> Eccentricity {
-        self.circular_eccentricity_tolerance
-    }
-
-    /// Returns the inclination tolerance for equatorial classification.
-    #[inline]
-    pub const fn equatorial_inclination_tolerance(&self) -> Angle {
-        self.equatorial_inclination_tolerance
-    }
 }
 
 impl Default for OrbitalElementClassification {
@@ -142,22 +130,18 @@ impl OrbitalElements {
         mu: GravitationalParameter,
         classification: OrbitalElementClassification,
     ) -> Result<Self, NumericalError> {
-        Self::from_components(
-            state.position.vector(),
-            state.velocity.vector(),
-            mu,
-            classification,
-        )
+        Self::from_components(state.position, state.velocity, mu, classification)
     }
 
     fn from_components(
-        position: Vector3<f64>,
-        velocity: Vector3<f64>,
+        position: Position,
+        velocity: Velocity,
         mu: GravitationalParameter,
         classification: OrbitalElementClassification,
     ) -> Result<Self, NumericalError> {
         let diagnostics =
             super::diagnostics::OrbitalDiagnostics::from_components(position, velocity, mu)?;
+        let position = position.vector();
 
         if diagnostics
             .specific_energy()
@@ -264,7 +248,7 @@ impl OrbitalElements {
 impl ClassicalOrbitalElements {
     /// Creates a classical orbital-element set from domain quantities.
     #[inline]
-    pub const fn new(
+    pub(crate) const fn new(
         semi_major_axis: Distance,
         eccentricity: Eccentricity,
         inclination: Angle,
@@ -290,16 +274,17 @@ impl ClassicalOrbitalElements {
         self,
         mu: GravitationalParameter,
     ) -> Result<CartesianState, NumericalError> {
-        elliptic_elements_to_cartesian_state(EllipticElementSet {
-            semi_major_axis: self.semi_major_axis,
-            eccentricity: self.eccentricity,
+        EllipticElementSet::new(
+            self.semi_major_axis,
+            self.eccentricity,
             mu,
-            inclination: self.inclination,
-            right_ascension_of_ascending_node: self.right_ascension_of_ascending_node,
-            argument_of_periapsis: self.argument_of_periapsis,
-            true_anomaly: self.true_anomaly,
-            velocity_sign: 1.0,
-        })
+            self.inclination,
+            self.right_ascension_of_ascending_node,
+            self.argument_of_periapsis,
+            self.true_anomaly,
+            1.0,
+        )?
+        .to_cartesian_state()
     }
 
     /// Returns the semi-major axis.
@@ -342,7 +327,7 @@ impl ClassicalOrbitalElements {
 impl CircularInclinedElements {
     /// Creates a circular inclined orbital-element set from domain quantities.
     #[inline]
-    pub const fn new(
+    pub(crate) const fn new(
         semi_major_axis: Distance,
         eccentricity: Eccentricity,
         inclination: Angle,
@@ -369,16 +354,17 @@ impl CircularInclinedElements {
         self,
         mu: GravitationalParameter,
     ) -> Result<CartesianState, NumericalError> {
-        elliptic_elements_to_cartesian_state(EllipticElementSet {
-            semi_major_axis: self.semi_major_axis,
-            eccentricity: self.eccentricity,
+        EllipticElementSet::new(
+            self.semi_major_axis,
+            self.eccentricity,
             mu,
-            inclination: self.inclination,
-            right_ascension_of_ascending_node: self.right_ascension_of_ascending_node,
-            argument_of_periapsis: Angle::ZERO,
-            true_anomaly: self.argument_of_latitude,
-            velocity_sign: 1.0,
-        })
+            self.inclination,
+            self.right_ascension_of_ascending_node,
+            Angle::ZERO,
+            self.argument_of_latitude,
+            1.0,
+        )?
+        .to_cartesian_state()
     }
 
     /// Returns the semi-major axis.
@@ -415,7 +401,7 @@ impl CircularInclinedElements {
 impl CircularEquatorialElements {
     /// Creates a circular equatorial orbital-element set from domain quantities.
     #[inline]
-    pub const fn new(
+    pub(crate) const fn new(
         semi_major_axis: Distance,
         eccentricity: Eccentricity,
         inclination: Angle,
@@ -440,16 +426,17 @@ impl CircularEquatorialElements {
         self,
         mu: GravitationalParameter,
     ) -> Result<CartesianState, NumericalError> {
-        elliptic_elements_to_cartesian_state(EllipticElementSet {
-            semi_major_axis: self.semi_major_axis,
-            eccentricity: self.eccentricity,
+        EllipticElementSet::new(
+            self.semi_major_axis,
+            self.eccentricity,
             mu,
-            inclination: self.inclination,
-            right_ascension_of_ascending_node: Angle::ZERO,
-            argument_of_periapsis: Angle::ZERO,
-            true_anomaly: self.true_longitude,
-            velocity_sign: 1.0,
-        })
+            self.inclination,
+            Angle::ZERO,
+            Angle::ZERO,
+            self.true_longitude,
+            1.0,
+        )?
+        .to_cartesian_state()
     }
 
     /// Returns the semi-major axis.
@@ -480,7 +467,7 @@ impl CircularEquatorialElements {
 impl EquatorialEllipticElements {
     /// Creates an eccentric equatorial orbital-element set from domain quantities.
     #[inline]
-    pub const fn new(
+    pub(crate) const fn new(
         semi_major_axis: Distance,
         eccentricity: Eccentricity,
         inclination: Angle,
@@ -507,16 +494,17 @@ impl EquatorialEllipticElements {
         self,
         mu: GravitationalParameter,
     ) -> Result<CartesianState, NumericalError> {
-        elliptic_elements_to_cartesian_state(EllipticElementSet {
-            semi_major_axis: self.semi_major_axis,
-            eccentricity: self.eccentricity,
+        EllipticElementSet::new(
+            self.semi_major_axis,
+            self.eccentricity,
             mu,
-            inclination: self.inclination,
-            right_ascension_of_ascending_node: Angle::ZERO,
-            argument_of_periapsis: self.longitude_of_periapsis,
-            true_anomaly: self.true_anomaly,
-            velocity_sign: 1.0,
-        })
+            self.inclination,
+            Angle::ZERO,
+            self.longitude_of_periapsis,
+            self.true_anomaly,
+            1.0,
+        )?
+        .to_cartesian_state()
     }
 
     /// Returns the semi-major axis.
@@ -550,73 +538,103 @@ impl EquatorialEllipticElements {
     }
 }
 
-pub(crate) struct EllipticElementSet {
-    pub(crate) semi_major_axis: Distance,
-    pub(crate) eccentricity: Eccentricity,
-    pub(crate) mu: GravitationalParameter,
-    pub(crate) inclination: Angle,
-    pub(crate) right_ascension_of_ascending_node: Angle,
-    pub(crate) argument_of_periapsis: Angle,
-    pub(crate) true_anomaly: Angle,
-    pub(crate) velocity_sign: f64,
+pub(super) struct EllipticElementSet {
+    semi_major_axis: Distance,
+    eccentricity: Eccentricity,
+    mu: GravitationalParameter,
+    inclination: Angle,
+    right_ascension_of_ascending_node: Angle,
+    argument_of_periapsis: Angle,
+    true_anomaly: Angle,
+    velocity_sign: f64,
 }
 
-pub(crate) fn elliptic_elements_to_cartesian_state(
-    elements: EllipticElementSet,
-) -> Result<CartesianState, NumericalError> {
-    let mu = elements.mu.meters_cubed_per_second_squared();
-    let semi_major_axis = elements.semi_major_axis.meters();
-    let eccentricity = elements.eccentricity.scalar();
-    let inclination = elements.inclination.radians();
-    let raan = elements.right_ascension_of_ascending_node.radians();
-    let argument_of_periapsis = elements.argument_of_periapsis.radians();
-    let true_anomaly = elements.true_anomaly.radians();
-
-    if !(0.0..1.0).contains(&eccentricity) {
-        return Err(NumericalError::ConstraintViolation {
-            field: "eccentricity",
-            reason: "must be finite and in [0, 1)",
-        });
+impl EllipticElementSet {
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn new(
+        semi_major_axis: Distance,
+        eccentricity: Eccentricity,
+        mu: GravitationalParameter,
+        inclination: Angle,
+        right_ascension_of_ascending_node: Angle,
+        argument_of_periapsis: Angle,
+        true_anomaly: Angle,
+        velocity_sign: f64,
+    ) -> Result<Self, NumericalError> {
+        if eccentricity.scalar() >= 1.0 {
+            return Err(NumericalError::ConstraintViolation {
+                field: "eccentricity",
+                reason: "must be less than 1 for elliptic orbits",
+            });
+        }
+        if semi_major_axis.meters() <= 0.0 {
+            return Err(NumericalError::NonPositive {
+                field: "semi-major axis",
+            });
+        }
+        if !velocity_sign.is_finite() {
+            return Err(NumericalError::NotFinite {
+                field: "velocity sign",
+            });
+        }
+        Ok(Self {
+            semi_major_axis,
+            eccentricity,
+            mu,
+            inclination,
+            right_ascension_of_ascending_node,
+            argument_of_periapsis,
+            true_anomaly,
+            velocity_sign,
+        })
     }
-    if !elements.velocity_sign.is_finite() {
-        return Err(NumericalError::NotFinite {
-            field: "velocity sign",
-        });
+
+    pub(crate) fn to_cartesian_state(&self) -> Result<CartesianState, NumericalError> {
+        let mu = self.mu.meters_cubed_per_second_squared();
+        let semi_major_axis = self.semi_major_axis.meters();
+        let eccentricity = self.eccentricity.scalar();
+        let true_anomaly = self.true_anomaly.radians();
+
+        // Invariants guaranteed by EllipticElementSet::new:
+        // eccentricity ∈ [0, 1), semi_major_axis > 0, velocity_sign is finite.
+        // Together these imply semi_latus_rectum > 0 and radius > 0.
+
+        let semi_latus_rectum = semi_major_axis * (1.0 - eccentricity * eccentricity);
+
+        let cos_nu = true_anomaly.cos();
+        let sin_nu = true_anomaly.sin();
+        let radius = semi_latus_rectum / (1.0 + eccentricity * cos_nu);
+        let position_pqw = Vector3::new(radius * cos_nu, radius * sin_nu, 0.0);
+        let speed_factor = (mu / semi_latus_rectum).sqrt();
+        let velocity_pqw = Vector3::new(
+            -speed_factor * sin_nu * self.velocity_sign,
+            speed_factor * (eccentricity + cos_nu) * self.velocity_sign,
+            0.0,
+        );
+
+        let rotation = perifocal_to_inertial_rotation(
+            self.inclination,
+            self.right_ascension_of_ascending_node,
+            self.argument_of_periapsis,
+        );
+        let position = rotation * position_pqw;
+        let velocity = rotation * velocity_pqw;
+
+        Ok(CartesianState::new(
+            Position::from_vector(position)?,
+            Velocity::from_vector(velocity)?,
+        ))
     }
-
-    let semi_latus_rectum = semi_major_axis * (1.0 - eccentricity * eccentricity);
-    if semi_latus_rectum <= 0.0 {
-        return Err(NumericalError::NonPositive {
-            field: "semi-latus rectum",
-        });
-    }
-
-    let cos_nu = true_anomaly.cos();
-    let sin_nu = true_anomaly.sin();
-    let radius = semi_latus_rectum / (1.0 + eccentricity * cos_nu);
-    let position_pqw = Vector3::new(radius * cos_nu, radius * sin_nu, 0.0);
-    let speed_factor = (mu / semi_latus_rectum).sqrt();
-    let velocity_pqw = Vector3::new(
-        -speed_factor * sin_nu * elements.velocity_sign,
-        speed_factor * (eccentricity + cos_nu) * elements.velocity_sign,
-        0.0,
-    );
-
-    let rotation = perifocal_to_inertial_rotation(inclination, raan, argument_of_periapsis);
-    let position = rotation * position_pqw;
-    let velocity = rotation * velocity_pqw;
-
-    Ok(CartesianState {
-        position: Position::from_vector(position)?,
-        velocity: Velocity::from_vector(velocity)?,
-    })
 }
 
-pub(crate) fn perifocal_to_inertial_rotation(
-    inclination: f64,
-    raan: f64,
-    argument_of_periapsis: f64,
+fn perifocal_to_inertial_rotation(
+    inclination: Angle,
+    raan: Angle,
+    argument_of_periapsis: Angle,
 ) -> nalgebra::Matrix3<f64> {
+    let inclination = inclination.radians();
+    let raan = raan.radians();
+    let argument_of_periapsis = argument_of_periapsis.radians();
     let (sin_i, cos_i) = inclination.sin_cos();
     let (sin_raan, cos_raan) = raan.sin_cos();
     let (sin_w, cos_w) = argument_of_periapsis.sin_cos();

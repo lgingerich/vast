@@ -374,11 +374,11 @@ mod tests {
         .expect("scenario");
 
         let mut recorder = RunRecorder::new(&temp, &scenario).expect("recorder");
-        let samples = vec![TrajectorySample {
-            epoch: Epoch::from_seconds(0.0).expect("epoch"),
-            state: sample_state(),
-            segment_index: None,
-        }];
+        let samples = vec![TrajectorySample::new(
+            Epoch::from_seconds(0.0).expect("epoch"),
+            sample_state(),
+            None,
+        )];
         recorder
             .write_episode(EpisodeRecord {
                 episode_index: 0,
