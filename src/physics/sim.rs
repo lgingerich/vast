@@ -208,6 +208,27 @@ impl<D: Dynamics, I: Integrator> Sim<D, I> {
         Ok(self)
     }
 
+    /// Advances the simulation by a single step of the configured time step `dt`.
+    ///
+    /// Returns the new state after the step.
+    pub fn step(&mut self) -> Result<CartesianState, PropagationError> {
+        self.integrator.step(
+            &self.dynamics,
+            &mut self.states.view_mut(),
+            0,
+            self.epoch,
+            self.dt,
+        )?;
+        self.epoch = self.epoch.advance_by(self.dt);
+        self.steps += 1;
+        self.state()
+    }
+
+    /// Computes and returns the orbital diagnostics for the current state.
+    pub fn diagnostics(&self) -> Result<OrbitalDiagnostics, PropagationError> {
+        Ok(OrbitalDiagnostics::from_state(&self.state()?, self.mu)?)
+    }
+
     /// Reads the current body state at index 0.
     pub fn state(&self) -> Result<CartesianState, PropagationError> {
         Ok(self.states.view().read_state(0)?)

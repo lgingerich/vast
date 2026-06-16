@@ -6,16 +6,16 @@ use vast::{
     VelocityVerletIntegrator, R_EARTH,
 };
 
-const ALTITUDE_KM: f64 = (R_EARTH + 600_000.0) / 1000.0;
+const ALTITUDE_KM: f64 = 600.0;
 const INCLINATION_DEG: f64 = 51.6;
 const RAAN_DEG: f64 = 32.0;
 const STEP_SECONDS: f64 = 30.0;
-const PROPAGATION_DAYS: f64 = 300.0;
+const PROPAGATION_DAYS: f64 = 3.0;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- configure simulation ---
     let orbit_spec = Orbit::CircularInclined {
-        altitude: Distance::new((ALTITUDE_KM) * 1000.0)?,
+        altitude: Distance::new(ALTITUDE_KM * 1000.0)?,
         inclination: Angle::from_degrees(INCLINATION_DEG)?,
         raan: Angle::from_degrees(RAAN_DEG)?,
     };

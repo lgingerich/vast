@@ -6,7 +6,7 @@ use vast::{
     VelocityVerletIntegrator,
 };
 
-const ALTITUDE_KM: f64 = (vast::R_EARTH + 400_000.0) / 1000.0;
+const ALTITUDE_KM: f64 = 400.0;
 const STEP_SECONDS: [f64; 6] = [60.0, 30.0, 10.0, 1.0, 0.1, 0.01];
 
 struct Summary {
@@ -25,7 +25,7 @@ struct Summary {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- configure simulation ---
     let orbit_spec = Orbit::CircularEquatorial {
-        altitude: Distance::new((ALTITUDE_KM) * 1000.0)?,
+        altitude: Distance::new(ALTITUDE_KM * 1000.0)?,
     };
     let elliptic: EllipticOrbit = orbit_spec.try_into()?;
     let speed = elliptic.speed()?;

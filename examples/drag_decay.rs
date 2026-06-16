@@ -6,17 +6,17 @@ use vast::{
     TimeStep, TwoBodyGravity,
 };
 
-const ALTITUDE_KM: f64 = (R_EARTH + 250_000.0) / 1000.0;
+const ALTITUDE_KM: f64 = 250.0;
 const STEP_SECONDS: f64 = 10.0;
 const PROPAGATION_HOURS: f64 = 6.0;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- configure simulation ---
     let atmosphere = ExponentialAtmosphere::new(
-        Distance::new((R_EARTH / 1000.0) * 1000.0)?,
-        Distance::new((250.0) * 1000.0)?,
+        Distance::new(R_EARTH)?,
+        Distance::new(250.0 * 1000.0)?,
         MassDensity::new(1.0e-10)?,
-        Distance::new((50.0) * 1000.0)?,
+        Distance::new(50.0 * 1000.0)?,
         AngularRate::new(7.292_115_9e-5)?,
     );
     let dynamics = CompositeDynamics::new(
@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- run simulation ---
     let result = SimBuilder::new()
         .orbit(Orbit::CircularEquatorial {
-            altitude: Distance::new((ALTITUDE_KM) * 1000.0)?,
+            altitude: Distance::new(ALTITUDE_KM * 1000.0)?,
         })?
         .dynamics(dynamics)
         .integrator(RungeKutta4Integrator)

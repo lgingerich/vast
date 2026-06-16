@@ -2,8 +2,8 @@
 
 use macroquad::prelude::*;
 use vast::{
-    CartesianStateBuffer, Distance, Duration, EllipticOrbit, Epoch, Integrator,
-    LeapfrogIntegrator, Orbit, OrbitalDiagnostics, R_EARTH, Speed, TimeStep, TwoBodyGravity,
+    Distance, Duration, EllipticOrbit, LeapfrogIntegrator, Orbit, R_EARTH, Sim,
+    SimBuilder, Speed, TimeStep, TwoBodyGravity,
 };
 
 const TRAIL_POINTS_MAX: usize = 2_000;
@@ -27,11 +27,7 @@ async fn async_main() {
 }
 
 struct OrbitVizScenario {
-    earth: TwoBodyGravity,
-    integrator: LeapfrogIntegrator,
-    states: CartesianStateBuffer<1>,
-    t: Epoch,
-    dt: TimeStep,
+    sim: Sim<TwoBodyGravity, LeapfrogIntegrator>,
     earth_radius_km: f64,
     ideal_orbital_radius: Distance,
     circular_speed: Speed,
@@ -44,21 +40,19 @@ struct OrbitVizScenario {
 
 impl OrbitVizScenario {
     fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        let earth = TwoBodyGravity::earth();
-        let integrator = LeapfrogIntegrator;
-        let altitude = Distance::new((400.0) * 1000.0)?;
+        let altitude = Distance::new(400.0 * 1000.0)?;
         let orbit: EllipticOrbit = Orbit::CircularEquatorial { altitude }.try_into()?;
         let earth_radius_km = R_EARTH / 1000.0;
 
-        let mut states = CartesianStateBuffer::<1>::with_len(1)?;
-        states.write_from_state(0, &orbit.to_cartesian_state()?)?;
+        let sim = SimBuilder::new()
+            .orbit(Orbit::CircularEquatorial { altitude })?
+            .dynamics(TwoBodyGravity::earth())
+            .integrator(LeapfrogIntegrator)
+            .timestep(TimeStep::new(1.0)?)
+            .build()?;
 
         Ok(Self {
-            earth,
-            integrator,
-            states,
-            t: Epoch::ZERO,
-            dt: TimeStep::new(1.0)?,
+            sim,
             earth_radius_km,
             ideal_orbital_radius: orbit.semi_major_axis(),
             circular_speed: orbit.speed()?,
@@ -73,19 +67,7 @@ impl OrbitVizScenario {
     async fn run(&mut self) {
         loop {
             for _ in 0..20 {
-                let Ok(()) = self.integrator.step(
-                    &self.earth,
-                    &mut self.states.view_mut(),
-                    0,
-                    self.t,
-                    self.dt,
-                ) else {
-                    eprintln!("simulation state became invalid");
-                    return;
-                };
-                self.t = self.t.advance_by(self.dt);
-
-                let Ok(state) = self.states.view().read_state(0) else {
+                let Ok(state) = self.sim.step() else {
                     eprintln!("simulation state became invalid");
                     return;
                 };
@@ -114,7 +96,7 @@ impl OrbitVizScenario {
                 draw_line(start.x, start.y, end.x, end.y, 1.0, GREEN);
             }
 
-            let Ok(state) = self.states.view().read_state(0) else {
+            let Ok(state) = self.sim.state() else {
                 eprintln!("simulation state became invalid");
                 return;
             };
@@ -129,22 +111,20 @@ impl OrbitVizScenario {
     }
 
     fn draw_hud(&self) {
-        let Some(diagnostics) =
-            OrbitalDiagnostics::from_states(&self.states.view(), 0, self.earth.mu()).ok()
-        else {
+        let Some(diagnostics) = self.sim.diagnostics().ok() else {
             draw_text("orbital diagnostics unavailable", 20.0, 30.0, 24.0, RED);
             return;
         };
 
         let altitude_km = diagnostics.radius().meters() / 1000.0 - self.earth_radius_km;
         let radius_drift_km = diagnostics.radius().meters() / 1000.0 - self.ideal_orbital_radius.meters() / 1000.0;
-        let orbit_progress = self.t.seconds() / self.orbital_period.seconds();
+        let orbit_progress = self.sim.epoch().seconds() / self.orbital_period.seconds();
         let orbit_progress_percent = orbit_progress.fract() * 100.0;
 
         let lines = [
             format!(
                 "t = {:.0}s | orbit progress = {:.1}% ({:.2} rev)",
-                self.t.seconds(),
+                self.sim.epoch().seconds(),
                 orbit_progress_percent,
                 orbit_progress,
             ),
