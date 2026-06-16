@@ -12,6 +12,7 @@ const STEP_SECONDS: f64 = 10.0;
 const PERIODS: f64 = 3.0;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // --- configure simulation ---
     let spec = Orbit::CircularInclined {
         altitude: Distance::from_kilometers(ALTITUDE_KM)?,
         inclination: Angle::from_degrees(INCLINATION_DEG)?,
@@ -20,6 +21,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let period = EllipticOrbit::try_from(spec)?.period()?;
     let num_periods = Duration::from_seconds(period.seconds() * PERIODS).unwrap();
 
+    // --- run simulation ---
     let result = SimBuilder::new()
         .orbit(spec)?
         .dynamics(TwoBodyGravity::earth())
@@ -27,6 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .timestep(TimeStep::from_seconds(STEP_SECONDS)?)
         .duration(num_periods)?;
 
+    // --- inspect results ---
     let s = &result.series;
     let radius_drift = (s.column(Column::RadiusKm)[1] - s.column(Column::RadiusKm)[0]).abs();
     let energy_error =
@@ -39,6 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .cross(&result.final_state.velocity.vector());
     let h_hat = h.normalize();
 
+    // --- print report ---
     println!(
         "Inclined circular orbit: altitude {:.0} km | inclination {:.1}° | RAAN {:.1}°",
         ALTITUDE_KM, INCLINATION_DEG, RAAN_DEG,

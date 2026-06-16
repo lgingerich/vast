@@ -23,6 +23,7 @@ struct Summary {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // --- configure simulation ---
     let orbit_spec = Orbit::CircularEquatorial {
         altitude: Distance::from_kilometers(ALTITUDE_KM)?,
     };
@@ -31,6 +32,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let period = elliptic.period()?;
     let initial_position = elliptic.to_cartesian_state()?.position;
 
+    // --- print header ---
     println!(
         "Circular Earth orbit at {:.0} km altitude",
         elliptic.semi_major_axis().km(),
@@ -49,6 +51,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "eccentricity",
     );
 
+    // --- sweep timesteps ---
     for step_s in STEP_SECONDS {
         let dt = TimeStep::from_seconds(step_s)?;
 
@@ -83,6 +86,7 @@ fn run<I: vast::Integrator>(
     initial_position: &Position,
     circular_speed: Speed,
 ) -> Result<Summary, Box<dyn std::error::Error>> {
+    // --- run simulation ---
     let result = SimBuilder::new()
         .orbit(*orbit_spec)?
         .dynamics(TwoBodyGravity::earth())
@@ -90,6 +94,7 @@ fn run<I: vast::Integrator>(
         .timestep(dt)
         .duration(period)?;
 
+    // --- inspect results ---
     let pos_drift = (result.final_state.position.vector()
         - initial_position.vector())
     .norm()

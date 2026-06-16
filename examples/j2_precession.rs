@@ -13,6 +13,7 @@ const STEP_SECONDS: f64 = 30.0;
 const PROPAGATION_DAYS: f64 = 300.0;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // --- configure simulation ---
     let orbit_spec = Orbit::CircularInclined {
         altitude: Distance::from_kilometers(ALTITUDE_KM)?,
         inclination: Angle::from_degrees(INCLINATION_DEG)?,
@@ -23,17 +24,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let duration = Duration::from_seconds(PROPAGATION_DAYS * 86_400.0)?;
     let dt = TimeStep::from_seconds(STEP_SECONDS)?;
 
+    // --- analytical prediction ---
     let mean_motion =
         (MU_EARTH / elliptic.semi_major_axis().meters().powi(3)).sqrt();
     let radius_ratio = R_EARTH / elliptic.semi_major_axis().meters();
-    let analytical_raan_rad_per_sec = -1.5
+    let analytical_drift_rad_per_sec = -1.5
         * J2_EARTH
         * mean_motion
         * radius_ratio
         * radius_ratio
         * INCLINATION_DEG.to_radians().cos();
-    let analytical_drift_per_day = analytical_raan_rad_per_sec.to_degrees() * 86_400.0;
+    let analytical_drift_deg_per_day = analytical_drift_rad_per_sec.to_degrees() * 86_400.0;
 
+    // --- run two-body simulation ---
     let two_body = SimBuilder::new()
         .orbit(orbit_spec)?
         .dynamics(TwoBodyGravity::earth())
@@ -41,6 +44,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .timestep(dt)
         .duration(duration)?;
 
+    // --- run J2 simulation ---
     let j2_dynamics = OblateBodyGravity::new(
         GravitationalParameter::earth(),
         Distance::from_meters(R_EARTH)?,
@@ -53,6 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .timestep(dt)
         .duration(duration)?;
 
+    // --- inspect results ---
     let final_two_body_raan = two_body
         .elements
         .right_ascension_of_ascending_node()
@@ -66,8 +71,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let two_body_drift = angle_delta_degrees(final_two_body_raan, initial_raan_deg);
     let j2_drift = angle_delta_degrees(final_j2_raan, initial_raan_deg);
-    let simulated_drift_per_day = j2_drift / PROPAGATION_DAYS;
+    let simulated_drift_deg_per_day = j2_drift / PROPAGATION_DAYS;
 
+    // --- print report ---
     println!(
         "J2 precession demo: altitude {:.0} km | inclination {:.1}°",
         elliptic.semi_major_axis().km() - R_EARTH / 1000.0,
@@ -86,12 +92,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!(
         "J2 RAAN: {:.6}° | drift: {:+.6}°/day",
-        final_j2_raan, simulated_drift_per_day,
+        final_j2_raan, simulated_drift_deg_per_day,
     );
     println!(
         "analytical J2 drift: {:+.6}°/day | error: {:+.6}°/day",
-        analytical_drift_per_day,
-        simulated_drift_per_day - analytical_drift_per_day,
+        analytical_drift_deg_per_day,
+        simulated_drift_deg_per_day - analytical_drift_deg_per_day,
     );
 
     Ok(())
@@ -99,9 +105,5 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn angle_delta_degrees(final_degrees: f64, initial_degrees: f64) -> f64 {
     let delta = (final_degrees - initial_degrees).rem_euclid(360.0);
-    if delta > 180.0 {
-        delta - 360.0
-    } else {
-        delta
-    }
+    if delta > 180.0 { delta - 360.0 } else { delta }
 }

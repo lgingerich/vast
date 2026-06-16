@@ -11,6 +11,7 @@ const STEP_SECONDS: f64 = 10.0;
 const PROPAGATION_HOURS: f64 = 6.0;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // --- configure simulation ---
     let atmosphere = ExponentialAtmosphere::new(
         Distance::from_kilometers(R_EARTH / 1000.0)?,
         Distance::from_kilometers(250.0)?,
@@ -27,6 +28,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let total_duration = Duration::from_seconds(PROPAGATION_HOURS * 3_600.0).unwrap();
 
+    // --- run simulation ---
     let result = SimBuilder::new()
         .orbit(Orbit::CircularEquatorial {
             altitude: Distance::from_kilometers(ALTITUDE_KM)?,
@@ -36,12 +38,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .timestep(TimeStep::from_seconds(STEP_SECONDS)?)
         .duration(total_duration)?;
 
+    // --- inspect results ---
     let s = &result.series;
     let initial_alt_km = s.column(Column::RadiusKm)[0] - R_EARTH / 1000.0;
     let final_alt_km = s.column(Column::RadiusKm)[1] - R_EARTH / 1000.0;
     let energy_delta = s.column(Column::SpecificEnergyM2s2)[1] - s.column(Column::SpecificEnergyM2s2)[0];
     let speed_delta = s.column(Column::SpeedMps)[1] - s.column(Column::SpeedMps)[0];
 
+    // --- print report ---
     println!(
         "Drag decay demo: initial altitude {:.0} km | duration {:.1} h",
         initial_alt_km,
