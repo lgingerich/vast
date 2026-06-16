@@ -14,19 +14,19 @@ const PERIODS: f64 = 3.0;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- configure simulation ---
     let spec = Orbit::CircularInclined {
-        altitude: Distance::from_meters((ALTITUDE_KM) * 1000.0)?,
+        altitude: Distance::new((ALTITUDE_KM) * 1000.0)?,
         inclination: Angle::from_degrees(INCLINATION_DEG)?,
         raan: Angle::from_degrees(RAAN_DEG)?,
     };
     let period = EllipticOrbit::try_from(spec)?.period()?;
-    let num_periods = Duration::from_seconds(period.seconds() * PERIODS).unwrap();
+    let num_periods = Duration::new(period.seconds() * PERIODS).unwrap();
 
     // --- run simulation ---
     let result = SimBuilder::new()
         .orbit(spec)?
         .dynamics(TwoBodyGravity::earth())
         .integrator(VelocityVerletIntegrator)
-        .timestep(TimeStep::from_seconds(STEP_SECONDS)?)
+        .timestep(TimeStep::new(STEP_SECONDS)?)
         .duration(num_periods)?;
 
     // --- inspect results ---

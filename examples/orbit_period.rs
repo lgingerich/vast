@@ -25,7 +25,7 @@ struct Summary {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- configure simulation ---
     let orbit_spec = Orbit::CircularEquatorial {
-        altitude: Distance::from_meters((ALTITUDE_KM) * 1000.0)?,
+        altitude: Distance::new((ALTITUDE_KM) * 1000.0)?,
     };
     let elliptic: EllipticOrbit = orbit_spec.try_into()?;
     let speed = elliptic.speed()?;
@@ -53,7 +53,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // --- sweep timesteps ---
     for step_s in STEP_SECONDS {
-        let dt = TimeStep::from_seconds(step_s)?;
+        let dt = TimeStep::new(step_s)?;
 
         let euler = run(
             "Euler", &orbit_spec, EulerIntegrator, dt, period, &initial_position, speed,

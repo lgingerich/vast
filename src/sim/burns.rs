@@ -75,7 +75,7 @@ mod tests {
     use crate::physics::types::{Position, Velocity};
 
     fn mu() -> GravitationalParameter {
-        GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu")
+        GravitationalParameter::new(MU_EARTH).expect("mu")
     }
 
     fn state(position: Vector3<f64>, velocity: Vector3<f64>) -> CartesianState {

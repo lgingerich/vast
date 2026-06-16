@@ -148,7 +148,7 @@ impl Integrator for RungeKutta4Integrator {
         let state = states.as_view().components(index)?;
         let dt_s = dt.seconds();
         let half_dt_s = 0.5 * dt_s;
-        let half_t = t.advance_by(TimeStep::from_seconds(half_dt_s)?);
+        let half_t = t.advance_by(TimeStep::new(half_dt_s)?);
         let full_t = t.advance_by(dt);
         let position = state.position_vector();
         let velocity = state.velocity_vector();
@@ -274,7 +274,7 @@ mod tests {
             &mut states.view_mut(),
             0,
             Epoch::ZERO,
-            TimeStep::from_seconds(5.0)?,
+            TimeStep::new(5.0)?,
         )?;
         let next = states.read_state(0)?;
 
@@ -303,7 +303,7 @@ mod tests {
                 &mut states.view_mut(),
                 0,
                 Epoch::ZERO,
-                TimeStep::from_seconds(1.0)?,
+                TimeStep::new(1.0)?,
             ),
             Err(PropagationError::Dynamics(
                 DynamicsError::PositionAtGravityCenter
@@ -348,7 +348,7 @@ mod tests {
                 &mut states.view_mut(),
                 0,
                 Epoch::ZERO,
-                TimeStep::from_seconds(2.0)?,
+                TimeStep::new(2.0)?,
             ),
             Err(PropagationError::Numerical(
                 NumericalError::NotFinite { .. }
@@ -374,7 +374,7 @@ mod tests {
                 &mut states.view_mut(),
                 0,
                 Epoch::ZERO,
-                TimeStep::from_seconds(2.0)?,
+                TimeStep::new(2.0)?,
             ),
             Err(PropagationError::Numerical(
                 NumericalError::NotFinite { .. }
@@ -440,7 +440,7 @@ mod tests {
             &mut states.view_mut(),
             0,
             Epoch::ZERO,
-            TimeStep::from_seconds(5.0)?,
+            TimeStep::new(5.0)?,
         )?;
         let next = states.read_state(0)?;
 
@@ -468,7 +468,7 @@ mod tests {
             &mut states.view_mut(),
             0,
             Epoch::ZERO,
-            TimeStep::from_seconds(5.0)?,
+            TimeStep::new(5.0)?,
         )?;
         let next = states.read_state(0)?;
 
@@ -496,7 +496,7 @@ mod tests {
             &mut states.view_mut(),
             0,
             Epoch::ZERO,
-            TimeStep::from_seconds(5.0)?,
+            TimeStep::new(5.0)?,
         )?;
         let next = states.read_state(0)?;
 
@@ -523,7 +523,7 @@ mod tests {
                 &mut states.view_mut(),
                 1,
                 Epoch::ZERO,
-                TimeStep::from_seconds(1.0)?,
+                TimeStep::new(1.0)?,
             ),
             Err(PropagationError::State(StateError::InvalidBodyIndex)),
         ));
@@ -550,7 +550,7 @@ mod tests {
             &mut states.view_mut(),
             0,
             Epoch::ZERO,
-            TimeStep::from_seconds(1.0)?,
+            TimeStep::new(1.0)?,
         )?;
 
         let unchanged = states.read_state(1)?;
@@ -589,7 +589,7 @@ mod tests {
 
     #[test]
     fn two_independent_central_gravity_bodies_conserve_energy() -> TestResult {
-        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
+        let mu = GravitationalParameter::new(MU_EARTH)?;
         let gravity = TwoBodyGravity::new(mu);
         let integrator = RungeKutta4Integrator;
         let mut states = CartesianStateBuffer::<2>::with_len(2)?;
@@ -654,7 +654,7 @@ mod tests {
         integrator: I,
         tolerance: f64,
     ) -> TestResult {
-        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
+        let mu = GravitationalParameter::new(MU_EARTH)?;
         let gravity = TwoBodyGravity::new(mu);
         let orbit = circular_orbit(R_EARTH + 400_000.0, 0.0, mu)?;
         let mut states = CartesianStateBuffer::<2>::with_len(2)?;
@@ -686,13 +686,13 @@ mod tests {
         mu: GravitationalParameter,
     ) -> Result<EllipticOrbit, Box<dyn std::error::Error>> {
         Ok(EllipticOrbit::new(
-            Distance::from_meters(radius_m)?,
-            Eccentricity::from_scalar(0.0)?,
+            Distance::new(radius_m)?,
+            Eccentricity::new(0.0)?,
             mu,
             Angle::ZERO,
             Angle::ZERO,
             Angle::ZERO,
-            Angle::from_radians(phase_rad)?,
+            Angle::new(phase_rad)?,
             OrbitDirection::Prograde,
         )?)
     }
@@ -705,11 +705,11 @@ mod tests {
         period_s: f64,
     ) -> TestResult {
         let mut epoch = Epoch::ZERO;
-        let base_step = TimeStep::from_seconds(30.0)?;
+        let base_step = TimeStep::new(30.0)?;
 
         while epoch.seconds() < period_s {
             let remaining_s = period_s - epoch.seconds();
-            let step = TimeStep::from_seconds(base_step.seconds().min(remaining_s))?;
+            let step = TimeStep::new(base_step.seconds().min(remaining_s))?;
             integrator.step(gravity, &mut states.view_mut(), index, epoch, step)?;
             epoch = epoch.advance_by(step);
         }
@@ -719,12 +719,12 @@ mod tests {
 
     #[test]
     fn time_step_rejects_zero() {
-        assert!(TimeStep::from_seconds(0.0).is_err());
+        assert!(TimeStep::new(0.0).is_err());
     }
 
     #[test]
     fn time_step_rejects_nan() {
-        assert!(TimeStep::from_seconds(f64::NAN).is_err());
+        assert!(TimeStep::new(f64::NAN).is_err());
     }
 
     // ── angular momentum conservation ──────────────────────────────
@@ -745,7 +745,7 @@ mod tests {
         integrator: I,
         tolerance: f64,
     ) -> TestResult {
-        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
+        let mu = GravitationalParameter::new(MU_EARTH)?;
         let gravity = TwoBodyGravity::new(mu);
         let orbit = circular_orbit(R_EARTH + 400_000.0, 0.0, mu)?;
         let mut states = CartesianStateBuffer::<1>::with_len(1)?;
@@ -796,7 +796,7 @@ mod tests {
     fn energy_error_after_one_period<I: Integrator>(
         integrator: I,
     ) -> Result<f64, Box<dyn std::error::Error>> {
-        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
+        let mu = GravitationalParameter::new(MU_EARTH)?;
         let gravity = TwoBodyGravity::new(mu);
         let orbit = circular_orbit(R_EARTH + 400_000.0, 0.0, mu)?;
         let mut states = CartesianStateBuffer::<1>::with_len(1)?;

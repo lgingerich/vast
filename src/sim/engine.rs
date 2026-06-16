@@ -341,7 +341,7 @@ mod tests {
 
     fn propagation_plan(sample_every_steps: usize) -> PropagationPlan {
         PropagationPlan {
-            dt: TimeStep::from_seconds(10.0).expect("dt"),
+            dt: TimeStep::new(10.0).expect("dt"),
             integrator: IntegratorKind::Leapfrog,
             mu: mu(),
             sample_every_steps,
@@ -349,13 +349,13 @@ mod tests {
     }
 
     fn mu() -> GravitationalParameter {
-        GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu")
+        GravitationalParameter::new(MU_EARTH).expect("mu")
     }
 
     fn initial_state() -> CartesianState {
         EllipticOrbit::new(
-            Distance::from_meters(R_EARTH + 400_000.0).expect("radius"),
-            Eccentricity::from_scalar(0.0).expect("eccentricity"),
+            Distance::new(R_EARTH + 400_000.0).expect("radius"),
+            Eccentricity::new(0.0).expect("eccentricity"),
             mu(),
             Angle::ZERO,
             Angle::ZERO,
@@ -405,7 +405,7 @@ mod tests {
 
         let result = propagator
             .run_segment(
-                &TerminationCondition::Duration(Duration::from_seconds(25.0).expect("duration")),
+                &TerminationCondition::Duration(Duration::new(25.0).expect("duration")),
                 None,
             )
             .expect("segment");
@@ -427,7 +427,7 @@ mod tests {
 
         let result = propagator
             .advance_steps(
-                &TerminationCondition::Duration(Duration::from_seconds(100.0).expect("duration")),
+                &TerminationCondition::Duration(Duration::new(100.0).expect("duration")),
                 2,
                 AccelerationCommand::default(),
             )

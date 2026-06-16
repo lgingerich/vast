@@ -286,7 +286,7 @@ impl ExponentialAtmosphere {
         let density = self.reference_density.kilograms_per_cubic_meter()
             * (-(altitude_m - reference_altitude_m) / self.scale_height.meters()).exp();
 
-        MassDensity::from_kilograms_per_cubic_meter(density)
+        MassDensity::new(density)
     }
 }
 
@@ -311,7 +311,7 @@ impl Dynamics for AtmosphericDrag {
 
         let density = self
             .atmosphere
-            .density_at_radius(Distance::from_meters(radius_m)?)?
+            .density_at_radius(Distance::new(radius_m)?)?
             .kilograms_per_cubic_meter();
         let omega = self.atmosphere.angular_rate.radians_per_second();
         let atmosphere_vx = -omega * py;
@@ -376,32 +376,32 @@ mod tests {
 
     fn earth_gravity() -> Result<TwoBodyGravity, Box<dyn std::error::Error>> {
         Ok(TwoBodyGravity::new(
-            GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?,
+            GravitationalParameter::new(MU_EARTH)?,
         ))
     }
 
     fn earth_oblate_gravity(j2: f64) -> Result<OblateBodyGravity, Box<dyn std::error::Error>> {
         Ok(OblateBodyGravity::new(
-            GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?,
-            Distance::from_meters(R_EARTH)?,
-            J2Coefficient::from_scalar(j2)?,
+            GravitationalParameter::new(MU_EARTH)?,
+            Distance::new(R_EARTH)?,
+            J2Coefficient::new(j2)?,
         ))
     }
 
     fn atmosphere() -> Result<ExponentialAtmosphere, Box<dyn std::error::Error>> {
         Ok(ExponentialAtmosphere::new(
-            Distance::from_meters(R_EARTH)?,
-            Distance::from_meters(250_000.0)?,
-            MassDensity::from_kilograms_per_cubic_meter(1.0e-10)?,
-            Distance::from_meters(50_000.0)?,
-            AngularRate::from_radians_per_second(7.292_115_9e-5)?,
+            Distance::new(R_EARTH)?,
+            Distance::new(250_000.0)?,
+            MassDensity::new(1.0e-10)?,
+            Distance::new(50_000.0)?,
+            AngularRate::new(7.292_115_9e-5)?,
         ))
     }
 
     fn drag_model(area_per_mass: f64) -> Result<AtmosphericDrag, Box<dyn std::error::Error>> {
         Ok(AtmosphericDrag::new(
             atmosphere()?,
-            AreaPerMass::from_square_meters_per_kilogram(area_per_mass)?,
+            AreaPerMass::new(area_per_mass)?,
         ))
     }
 
@@ -419,7 +419,7 @@ mod tests {
     #[test]
     fn two_body_gravity_points_toward_origin() -> TestResult {
         let gravity = TwoBodyGravity::new(
-            GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?,
+            GravitationalParameter::new(MU_EARTH)?,
         );
         let radius = R_EARTH + 400_000.0;
         let acceleration = gravity.acceleration_at(
@@ -436,7 +436,7 @@ mod tests {
     #[test]
     fn two_body_gravity_has_inverse_square_magnitude() -> TestResult {
         let gravity = TwoBodyGravity::new(
-            GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?,
+            GravitationalParameter::new(MU_EARTH)?,
         );
         let radius = R_EARTH + 400_000.0;
         let acceleration = gravity
@@ -453,7 +453,7 @@ mod tests {
     #[test]
     fn two_body_gravity_matches_off_axis_vector_formula() -> TestResult {
         let gravity = TwoBodyGravity::new(
-            GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?,
+            GravitationalParameter::new(MU_EARTH)?,
         );
         let radius = R_EARTH + 400_000.0;
         let position = Vector3::new(3.0 * radius, 4.0 * radius, 0.0);
@@ -475,7 +475,7 @@ mod tests {
     #[test]
     fn two_body_gravity_falls_off_with_inverse_square_distance() -> TestResult {
         let gravity = TwoBodyGravity::new(
-            GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?,
+            GravitationalParameter::new(MU_EARTH)?,
         );
         let radius = R_EARTH + 400_000.0;
         let epoch = Epoch::ZERO;
@@ -499,18 +499,18 @@ mod tests {
 
     #[test]
     fn gravitational_parameter_rejects_zero() {
-        assert!(GravitationalParameter::from_meters_cubed_per_second_squared(0.0).is_err());
+        assert!(GravitationalParameter::new(0.0).is_err());
     }
 
     #[test]
     fn gravitational_parameter_rejects_nan() {
-        assert!(GravitationalParameter::from_meters_cubed_per_second_squared(f64::NAN).is_err());
+        assert!(GravitationalParameter::new(f64::NAN).is_err());
     }
 
     #[test]
     fn two_body_gravity_rejects_zero_radius() -> TestResult {
         let gravity = TwoBodyGravity::new(
-            GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?,
+            GravitationalParameter::new(MU_EARTH)?,
         );
         assert!(matches!(
             gravity.acceleration_at(
@@ -525,7 +525,7 @@ mod tests {
     #[test]
     fn two_body_gravity_rejects_nonfinite_acceleration() -> TestResult {
         let gravity = TwoBodyGravity::new(
-            GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?,
+            GravitationalParameter::new(MU_EARTH)?,
         );
         assert!(matches!(
             gravity.acceleration_at(
@@ -593,7 +593,7 @@ mod tests {
     #[test]
     fn oblate_body_gravity_rejects_nonfinite_j2_at_construction() -> TestResult {
         assert!(matches!(
-            J2Coefficient::from_scalar(f64::NAN),
+            J2Coefficient::new(f64::NAN),
             Err(NumericalError::NotFinite {
                 field: "j2 coefficient"
             }),
@@ -603,10 +603,10 @@ mod tests {
 
     #[test]
     fn oblate_body_gravity_stores_j2_coefficient() -> TestResult {
-        let j2 = J2Coefficient::from_scalar(J2_EARTH)?;
+        let j2 = J2Coefficient::new(J2_EARTH)?;
         let gravity = OblateBodyGravity::new(
-            GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?,
-            Distance::from_meters(R_EARTH)?,
+            GravitationalParameter::new(MU_EARTH)?,
+            Distance::new(R_EARTH)?,
             j2,
         );
 
@@ -658,10 +658,10 @@ mod tests {
     fn exponential_atmosphere_density_decreases_with_altitude() -> TestResult {
         let atmosphere = atmosphere()?;
         let low = atmosphere
-            .density_at_radius(Distance::from_meters(R_EARTH + 250_000.0)?)?
+            .density_at_radius(Distance::new(R_EARTH + 250_000.0)?)?
             .kilograms_per_cubic_meter();
         let high = atmosphere
-            .density_at_radius(Distance::from_meters(R_EARTH + 350_000.0)?)?
+            .density_at_radius(Distance::new(R_EARTH + 350_000.0)?)?
             .kilograms_per_cubic_meter();
 
         assert!(high < low);
@@ -671,7 +671,7 @@ mod tests {
     #[test]
     fn exponential_atmosphere_matches_reference_density() -> TestResult {
         let atmosphere = atmosphere()?;
-        let density = atmosphere.density_at_radius(Distance::from_meters(R_EARTH + 250_000.0)?)?;
+        let density = atmosphere.density_at_radius(Distance::new(R_EARTH + 250_000.0)?)?;
 
         assert_close(density.kilograms_per_cubic_meter(), 1.0e-10, EPS);
         Ok(())
@@ -686,9 +686,9 @@ mod tests {
                 base.reference_altitude,
                 base.reference_density,
                 base.scale_height,
-                AngularRate::from_radians_per_second(0.0)?,
+                AngularRate::new(0.0)?,
             ),
-            AreaPerMass::from_square_meters_per_kilogram(0.02)?,
+            AreaPerMass::new(0.02)?,
         );
         let state = state_from_vectors(
             Vector3::new(R_EARTH + 250_000.0, 0.0, 0.0),
@@ -710,7 +710,7 @@ mod tests {
         let omega = atmosphere.angular_rate.radians_per_second();
         let drag = AtmosphericDrag::new(
             atmosphere,
-            AreaPerMass::from_square_meters_per_kilogram(0.02)?,
+            AreaPerMass::new(0.02)?,
         );
         let state = state_from_vectors(
             Vector3::new(radius, 0.0, 0.0),
@@ -732,11 +732,11 @@ mod tests {
             ExponentialAtmosphere::new(
                 base.reference_radius,
                 base.reference_altitude,
-                MassDensity::from_kilograms_per_cubic_meter(f64::MAX)?,
+                MassDensity::new(f64::MAX)?,
                 base.scale_height,
                 base.angular_rate,
             ),
-            AreaPerMass::from_square_meters_per_kilogram(f64::MAX)?,
+            AreaPerMass::new(f64::MAX)?,
         );
         let state = state_from_vectors(
             Vector3::new(R_EARTH + 250_000.0, 0.0, 0.0),
@@ -787,15 +787,15 @@ mod tests {
 
     #[test]
     fn low_orbit_with_drag_loses_specific_energy() -> TestResult {
-        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
+        let mu = GravitationalParameter::new(MU_EARTH)?;
         let orbit = EllipticOrbit::new(
-            Distance::from_meters(R_EARTH + 250_000.0)?,
-            Eccentricity::from_scalar(0.0)?,
+            Distance::new(R_EARTH + 250_000.0)?,
+            Eccentricity::new(0.0)?,
             mu,
             Angle::ZERO,
             Angle::ZERO,
             Angle::ZERO,
-            Angle::from_radians(0.0)?,
+            Angle::new(0.0)?,
             OrbitDirection::Prograde,
         )?;
         let mut states = CartesianStateBuffer::<1>::with_len(1)?;
@@ -805,7 +805,7 @@ mod tests {
             .specific_energy()
             .square_meters_per_square_second();
         let integrator = RungeKutta4Integrator;
-        let dt = TimeStep::from_seconds(10.0)?;
+        let dt = TimeStep::new(10.0)?;
         let mut epoch = Epoch::ZERO;
 
         for _ in 0..120 {
@@ -823,16 +823,16 @@ mod tests {
 
     #[test]
     fn drag_decay_energy_loss_matches_physical_expectation() -> TestResult {
-        let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
+        let mu = GravitationalParameter::new(MU_EARTH)?;
         let radius = R_EARTH + 250_000.0;
         let orbit = EllipticOrbit::new(
-            Distance::from_meters(radius)?,
-            Eccentricity::from_scalar(0.0)?,
+            Distance::new(radius)?,
+            Eccentricity::new(0.0)?,
             mu,
             Angle::ZERO,
             Angle::ZERO,
             Angle::ZERO,
-            Angle::from_radians(0.0)?,
+            Angle::new(0.0)?,
             OrbitDirection::Prograde,
         )?;
         let mut states = CartesianStateBuffer::<1>::with_len(1)?;
@@ -846,13 +846,13 @@ mod tests {
             - R_EARTH;
         let dynamics = CompositeDynamics::new(TwoBodyGravity::new(mu), drag_model(0.1)?);
         let integrator = RungeKutta4Integrator;
-        let dt = TimeStep::from_seconds(10.0)?;
+        let dt = TimeStep::new(10.0)?;
         let mut epoch = Epoch::ZERO;
         let period_s = orbit.period()?.seconds();
 
         while epoch.seconds() < period_s {
             let remaining_s = period_s - epoch.seconds();
-            let step = TimeStep::from_seconds(dt.seconds().min(remaining_s))?;
+            let step = TimeStep::new(dt.seconds().min(remaining_s))?;
             integrator.step(&dynamics, &mut states.view_mut(), 0, epoch, step)?;
             epoch = epoch.advance_by(step);
         }

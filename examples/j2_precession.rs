@@ -15,14 +15,14 @@ const PROPAGATION_DAYS: f64 = 300.0;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- configure simulation ---
     let orbit_spec = Orbit::CircularInclined {
-        altitude: Distance::from_meters((ALTITUDE_KM) * 1000.0)?,
+        altitude: Distance::new((ALTITUDE_KM) * 1000.0)?,
         inclination: Angle::from_degrees(INCLINATION_DEG)?,
         raan: Angle::from_degrees(RAAN_DEG)?,
     };
     let elliptic: EllipticOrbit = orbit_spec.try_into()?;
     let initial_raan_deg = RAAN_DEG;
-    let duration = Duration::from_seconds(PROPAGATION_DAYS * 86_400.0)?;
-    let dt = TimeStep::from_seconds(STEP_SECONDS)?;
+    let duration = Duration::new(PROPAGATION_DAYS * 86_400.0)?;
+    let dt = TimeStep::new(STEP_SECONDS)?;
 
     // --- analytical prediction ---
     let mean_motion =
@@ -47,8 +47,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- run J2 simulation ---
     let j2_dynamics = OblateBodyGravity::new(
         GravitationalParameter::earth(),
-        Distance::from_meters(R_EARTH)?,
-        J2Coefficient::from_scalar(J2_EARTH)?,
+        Distance::new(R_EARTH)?,
+        J2Coefficient::new(J2_EARTH)?,
     );
     let j2 = SimBuilder::new()
         .orbit(orbit_spec)?

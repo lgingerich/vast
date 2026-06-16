@@ -38,21 +38,21 @@ pub struct Sim<D: Dynamics, I: Integrator> {
 /// # use vast::*;
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let orbit: EllipticOrbit = Orbit::CircularInclined {
-///     altitude: Distance::from_meters((6678.0) * 1000.0)?,
+///     altitude: Distance::new((6678.0) * 1000.0)?,
 ///     inclination: Angle::from_degrees(51.6)?,
 ///     raan: Angle::from_degrees(32.0)?,
 /// }.try_into()?;
 /// let period = orbit.period()?;
 /// let result = SimBuilder::new()
 ///     .orbit(Orbit::CircularInclined {
-///         altitude: Distance::from_meters((6678.0) * 1000.0)?,
+///         altitude: Distance::new((6678.0) * 1000.0)?,
 ///         inclination: Angle::from_degrees(51.6)?,
 ///         raan: Angle::from_degrees(32.0)?,
 ///     })?
 ///     .dynamics(TwoBodyGravity::earth())
 ///     .integrator(VelocityVerletIntegrator)
-///     .timestep(TimeStep::from_seconds(10.0)?)
-///     .duration(Duration::from_seconds(period.seconds() * 3.0).unwrap())?;
+///     .timestep(TimeStep::new(10.0)?)
+///     .duration(Duration::new(period.seconds() * 3.0).unwrap())?;
 /// # Ok(())
 /// # }
 /// ```
@@ -194,7 +194,7 @@ impl<D: Dynamics, I: Integrator> Sim<D, I> {
         while self.epoch.seconds() < target {
             let remaining = target - self.epoch.seconds();
             let step_s = self.dt.seconds().min(remaining);
-            let step = TimeStep::from_seconds(step_s)?;
+            let step = TimeStep::new(step_s)?;
             self.integrator.step(
                 &self.dynamics,
                 &mut self.states.view_mut(),

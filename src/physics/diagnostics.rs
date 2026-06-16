@@ -13,7 +13,7 @@ impl SpecificEnergy {
     /// Creates a specific energy from square meters per square second.
     ///
     /// Returns an error if the value is not finite.
-    pub fn from_square_meters_per_second_squared(value: f64) -> Result<Self, NumericalError> {
+    pub fn new(value: f64) -> Result<Self, NumericalError> {
         if value.is_finite() {
             Ok(Self(value))
         } else {
@@ -49,7 +49,7 @@ impl SpecificAngularMomentum {
     /// Creates a specific angular momentum from square meters per second.
     ///
     /// Returns an error if the value is not finite or negative.
-    pub fn from_square_meters_per_second(value: f64) -> Result<Self, NumericalError> {
+    pub fn new(value: f64) -> Result<Self, NumericalError> {
         if !value.is_finite() {
             return Err(NumericalError::NotFinite {
                 field: "specific angular momentum",
@@ -148,7 +148,7 @@ impl OrbitalDiagnostics {
 
         let specific_energy_f64 = 0.5 * speed * speed - mu_f64 / radius;
         let specific_energy =
-            SpecificEnergy::from_square_meters_per_second_squared(specific_energy_f64)?;
+            SpecificEnergy::new(specific_energy_f64)?;
         let specific_angular_momentum_vector = position.cross(&velocity);
         let specific_angular_momentum = specific_angular_momentum_vector.norm();
         let eccentricity_vector =
@@ -159,28 +159,28 @@ impl OrbitalDiagnostics {
         let periapsis_radius = match semi_major_axis {
             Some(axis) => {
                 let axis_m = axis.meters();
-                Some(Distance::from_meters(axis_m * (1.0 - eccentricity))?)
+                Some(Distance::new(axis_m * (1.0 - eccentricity))?)
             }
             None => None,
         };
         let apoapsis_radius = match semi_major_axis {
             Some(axis) => {
                 let axis_m = axis.meters();
-                Some(Distance::from_meters(axis_m * (1.0 + eccentricity))?)
+                Some(Distance::new(axis_m * (1.0 + eccentricity))?)
             }
             None => None,
         };
 
         Ok(Self {
-            radius: Distance::from_meters(radius)?,
-            speed: Speed::from_meters_per_second(speed)?,
+            radius: Distance::new(radius)?,
+            speed: Speed::new(speed)?,
             specific_energy,
             specific_angular_momentum_vector,
-            specific_angular_momentum: SpecificAngularMomentum::from_square_meters_per_second(
+            specific_angular_momentum: SpecificAngularMomentum::new(
                 specific_angular_momentum,
             )?,
             eccentricity_vector,
-            eccentricity: Eccentricity::from_scalar(eccentricity)?,
+            eccentricity: Eccentricity::new(eccentricity)?,
             semi_major_axis,
             periapsis_radius,
             apoapsis_radius,
@@ -335,14 +335,14 @@ impl DiagnosticSeries {
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let result = SimBuilder::new()
     /// #     .orbit(Orbit::CircularInclined {
-    /// #         altitude: Distance::from_meters((6678.0) * 1000.0)?,
+    /// #         altitude: Distance::new((6678.0) * 1000.0)?,
     /// #         inclination: Angle::from_degrees(51.6)?,
     /// #         raan: Angle::from_degrees(32.0)?,
     /// #     })?
     /// #     .dynamics(TwoBodyGravity::earth())
     /// #     .integrator(VelocityVerletIntegrator)
-    /// #     .timestep(TimeStep::from_seconds(10.0)?)
-    /// #     .duration(Duration::from_seconds(5_330.0).unwrap())?;
+    /// #     .timestep(TimeStep::new(10.0)?)
+    /// #     .duration(Duration::new(5_330.0).unwrap())?;
     /// let s = &result.series;
     /// let radius = s.column(Column::Radius);
     /// let drift = (radius[1] - radius[0]).abs();
@@ -371,7 +371,7 @@ fn bound_semi_major_axis(
     }
 
     let mu_f64 = mu.meters_cubed_per_second_squared();
-    Ok(Some(Distance::from_meters(
+    Ok(Some(Distance::new(
         -mu_f64 / (2.0 * specific_energy),
     )?))
 }
@@ -391,19 +391,19 @@ mod tests {
 
     fn circular_orbit() -> Result<EllipticOrbit, Box<dyn std::error::Error>> {
         Ok(EllipticOrbit::new(
-            Distance::from_meters(R_EARTH + ALTITUDE_M)?,
-            Eccentricity::from_scalar(0.0)?,
+            Distance::new(R_EARTH + ALTITUDE_M)?,
+            Eccentricity::new(0.0)?,
             earth_mu()?,
             Angle::ZERO,
             Angle::ZERO,
             Angle::ZERO,
-            Angle::from_radians(0.0)?,
+            Angle::new(0.0)?,
             OrbitDirection::Prograde,
         )?)
     }
 
     fn earth_mu() -> Result<GravitationalParameter, Box<dyn std::error::Error>> {
-        Ok(GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?)
+        Ok(GravitationalParameter::new(MU_EARTH)?)
     }
 
     fn assert_close(actual: f64, expected: f64, tolerance: f64) {

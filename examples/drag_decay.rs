@@ -13,29 +13,29 @@ const PROPAGATION_HOURS: f64 = 6.0;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- configure simulation ---
     let atmosphere = ExponentialAtmosphere::new(
-        Distance::from_meters((R_EARTH / 1000.0) * 1000.0)?,
-        Distance::from_meters((250.0) * 1000.0)?,
-        MassDensity::from_kilograms_per_cubic_meter(1.0e-10)?,
-        Distance::from_meters((50.0) * 1000.0)?,
-        AngularRate::from_radians_per_second(7.292_115_9e-5)?,
+        Distance::new((R_EARTH / 1000.0) * 1000.0)?,
+        Distance::new((250.0) * 1000.0)?,
+        MassDensity::new(1.0e-10)?,
+        Distance::new((50.0) * 1000.0)?,
+        AngularRate::new(7.292_115_9e-5)?,
     );
     let dynamics = CompositeDynamics::new(
         TwoBodyGravity::earth(),
         AtmosphericDrag::new(
             atmosphere,
-            AreaPerMass::from_square_meters_per_kilogram(0.02)?,
+            AreaPerMass::new(0.02)?,
         ),
     );
-    let total_duration = Duration::from_seconds(PROPAGATION_HOURS * 3_600.0).unwrap();
+    let total_duration = Duration::new(PROPAGATION_HOURS * 3_600.0).unwrap();
 
     // --- run simulation ---
     let result = SimBuilder::new()
         .orbit(Orbit::CircularEquatorial {
-            altitude: Distance::from_meters((ALTITUDE_KM) * 1000.0)?,
+            altitude: Distance::new((ALTITUDE_KM) * 1000.0)?,
         })?
         .dynamics(dynamics)
         .integrator(RungeKutta4Integrator)
-        .timestep(TimeStep::from_seconds(STEP_SECONDS)?)
+        .timestep(TimeStep::new(STEP_SECONDS)?)
         .duration(total_duration)?;
 
     // --- inspect results ---

@@ -72,7 +72,7 @@ impl ScenarioConfig {
         )?;
         let mu = propagation.mu;
         let initial_state = circular_initial_state(self.altitude_m, mu)?;
-        let duration = Duration::from_seconds(self.duration_s)?;
+        let duration = Duration::new(self.duration_s)?;
 
         Ok(RolloutPlan {
             initial_state,
@@ -161,7 +161,7 @@ fn propagation_plan(
         });
     }
     Ok(PropagationPlan {
-        dt: TimeStep::from_seconds(dt_s)?,
+        dt: TimeStep::new(dt_s)?,
         integrator,
         mu: runtime_mu(force_model)?,
         sample_every_steps,
@@ -171,7 +171,7 @@ fn propagation_plan(
 fn runtime_mu(force_model: ForceModelKind) -> Result<GravitationalParameter, MissionError> {
     match force_model {
         ForceModelKind::TwoBody => {
-            Ok(GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?)
+            Ok(GravitationalParameter::new(MU_EARTH)?)
         }
     }
 }
@@ -191,8 +191,8 @@ fn initial_state(
             true_anomaly_deg,
         } => {
             let elements = ClassicalOrbitalElements::new(
-                Distance::from_meters(*semi_major_axis_m)?,
-                Eccentricity::from_scalar(*eccentricity)?,
+                Distance::new(*semi_major_axis_m)?,
+                Eccentricity::new(*eccentricity)?,
                 Angle::from_degrees(*inclination_deg)?,
                 Angle::from_degrees(*raan_deg)?,
                 Angle::from_degrees(*arg_periapsis_deg)?,
@@ -207,10 +207,10 @@ fn circular_initial_state(
     altitude_m: f64,
     mu: GravitationalParameter,
 ) -> Result<CartesianState, MissionError> {
-    let radius = Distance::from_meters(R_EARTH + altitude_m)?;
+    let radius = Distance::new(R_EARTH + altitude_m)?;
     let orbit = EllipticOrbit::new(
         radius,
-        Eccentricity::from_scalar(0.0)?,
+        Eccentricity::new(0.0)?,
         mu,
         Angle::ZERO,
         Angle::ZERO,
@@ -229,7 +229,7 @@ fn termination(
         StopConfig::Apoapsis => Ok(TerminationCondition::apoapsis(mu)),
         StopConfig::Periapsis => Ok(TerminationCondition::periapsis(mu)),
         StopConfig::Duration { duration_s } => Ok(TerminationCondition::Duration(
-            Duration::from_seconds(*duration_s)?,
+            Duration::new(*duration_s)?,
         )),
         StopConfig::StepCount { steps } => Ok(TerminationCondition::StepCount(*steps)),
     }

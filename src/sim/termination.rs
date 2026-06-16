@@ -85,7 +85,7 @@ impl TerminationCondition {
                     return None;
                 }
                 let remaining = duration.checked_sub(elapsed).ok()?;
-                TimeStep::from_seconds(remaining.seconds()).ok()
+                TimeStep::new(remaining.seconds()).ok()
             }
             Self::StepCount(_) | Self::Apoapsis { .. } | Self::Periapsis { .. } => None,
         }
@@ -286,9 +286,9 @@ mod tests {
     #[test]
     fn duration_met_when_elapsed_reaches_target() {
         let start = Epoch::ZERO;
-        let current = Epoch::from_seconds(100.0).expect("epoch");
+        let current = Epoch::new(100.0).expect("epoch");
         let condition =
-            TerminationCondition::Duration(Duration::from_seconds(100.0).expect("duration"));
+            TerminationCondition::Duration(Duration::new(100.0).expect("duration"));
         let state = sample_state();
 
         assert_eq!(
@@ -308,7 +308,7 @@ mod tests {
     #[test]
     fn step_count_met_after_limit() {
         let start = Epoch::ZERO;
-        let current = Epoch::from_seconds(1.0).expect("epoch");
+        let current = Epoch::new(1.0).expect("epoch");
         let condition = TerminationCondition::StepCount(5);
         let state = sample_state();
 
@@ -341,10 +341,10 @@ mod tests {
     #[test]
     fn apoapsis_met_on_radial_velocity_sign_crossing() {
         let mu =
-            GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu");
+            GravitationalParameter::new(MU_EARTH).expect("mu");
         let state = sample_state();
         let condition = TerminationCondition::apoapsis(mu);
-        let epoch = Epoch::from_seconds(10.0).expect("epoch");
+        let epoch = Epoch::new(10.0).expect("epoch");
 
         assert_eq!(
             condition.stop_reason(TerminationContext {
@@ -363,10 +363,10 @@ mod tests {
     #[test]
     fn periapsis_met_on_radial_velocity_sign_crossing() {
         let mu =
-            GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu");
+            GravitationalParameter::new(MU_EARTH).expect("mu");
         let state = sample_state();
         let condition = TerminationCondition::periapsis(mu);
-        let epoch = Epoch::from_seconds(10.0).expect("epoch");
+        let epoch = Epoch::new(10.0).expect("epoch");
 
         assert_eq!(
             condition.stop_reason(TerminationContext {
@@ -384,15 +384,15 @@ mod tests {
 
     fn sample_state() -> crate::CartesianState {
         let mu =
-            GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).expect("mu");
+            GravitationalParameter::new(MU_EARTH).expect("mu");
         EllipticOrbit::new(
-            Distance::from_meters(R_EARTH + 400_000.0).expect("radius"),
-            Eccentricity::from_scalar(0.0).expect("eccentricity"),
+            Distance::new(R_EARTH + 400_000.0).expect("radius"),
+            Eccentricity::new(0.0).expect("eccentricity"),
             mu,
             Angle::ZERO,
             Angle::ZERO,
             Angle::ZERO,
-            Angle::from_radians(0.0).expect("phase"),
+            Angle::new(0.0).expect("phase"),
             OrbitDirection::Prograde,
         )
         .expect("orbit")
