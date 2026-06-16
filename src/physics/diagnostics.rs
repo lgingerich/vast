@@ -267,7 +267,7 @@ pub enum Column {
 /// Per-step diagnostic scalars collected across a trajectory.
 ///
 /// Each column is a dense array with one entry per snapshot.
-/// For the initial+final snapshots from [`SimResult`], `len()` is 2.
+/// For the initial+final snapshots from [`crate::SimResult`], `len()` is 2.
 /// Future per-step recording paths can produce series of arbitrary length.
 ///
 /// Values are stored in SI units so callers can compute differences,

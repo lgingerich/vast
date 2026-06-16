@@ -14,7 +14,7 @@ use crate::physics::types::{Duration, Epoch, GravitationalParameter, TimeStep};
 /// It answers "where is this state after N seconds?" without knowing
 /// about termination conditions, sampling cadence, or artifact recording.
 ///
-/// The crate-private [`Propagator`](crate::sim) builds on the same
+/// The crate-private `Propagator` builds on the same
 /// [`Integrator::step`] trait method but adds stop-condition evaluation,
 /// per-segment sampling, and burn application.
 pub struct Sim<D: Dynamics, I: Integrator> {
@@ -97,7 +97,7 @@ impl SimBuilder {
 impl<D, I> SimBuilder<D, I> {
     /// Sets the initial orbit from an [`Orbit`] specification.
     ///
-    /// Converts the spec into a validated [`EllipticOrbit`], then into
+    /// Converts the spec into a validated [`crate::physics::orbits::EllipticOrbit`], then into
     /// the initial [`CartesianState`].
     pub fn orbit(mut self, spec: Orbit) -> Result<Self, PropagationError> {
         let elliptic = crate::physics::orbits::EllipticOrbit::try_from(spec)?;
