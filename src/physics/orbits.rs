@@ -1,3 +1,6 @@
+use std::convert::TryFrom;
+
+use super::constants::R_EARTH;
 use super::elements::EllipticElementSet;
 use super::state::CartesianState;
 use super::types::{Angle, Distance, Duration, Eccentricity, GravitationalParameter, Speed};
@@ -174,10 +177,123 @@ impl EllipticOrbit {
     }
 }
 
+/// Orbital specification that converts into a validated [`EllipticOrbit`].
+///
+/// Each variant carries only the degrees of freedom relevant to that
+/// orbital regime. Missing angles are filled by convention (zero for
+/// circular orbits, prograde direction by default), and the Earth
+/// gravitational parameter is used throughout.
+///
+/// # Examples
+///
+/// ```
+/// use vast::{Orbit, Distance, Angle, EllipticOrbit};
+///
+/// let orbit: EllipticOrbit = Orbit::CircularInclined {
+///     altitude: Distance::from_kilometers(6678.0)?,
+///     inclination: Angle::from_degrees(51.6)?,
+///     raan: Angle::from_degrees(32.0)?,
+/// }.try_into()?;
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Orbit {
+    /// Circular equatorial Earth orbit.
+    CircularEquatorial {
+        /// Altitude above Earth's equatorial surface.
+        altitude: Distance,
+    },
+    /// Circular inclined Earth orbit.
+    CircularInclined {
+        /// Altitude above Earth's equatorial surface.
+        altitude: Distance,
+        /// Inclination from the equatorial plane.
+        inclination: Angle,
+        /// Right ascension of the ascending node.
+        raan: Angle,
+    },
+    /// Elliptic orbit with all classical elements.
+    Elliptic {
+        /// Semi-major axis.
+        semi_major_axis: Distance,
+        /// Orbital eccentricity (0 ≤ e < 1).
+        eccentricity: Eccentricity,
+        /// Inclination from the equatorial plane.
+        inclination: Angle,
+        /// Right ascension of the ascending node.
+        raan: Angle,
+        /// Argument of periapsis.
+        arg_periapsis: Angle,
+        /// True anomaly at epoch.
+        true_anomaly: Angle,
+        /// Direction of orbital motion.
+        direction: OrbitDirection,
+    },
+}
+
+impl TryFrom<Orbit> for EllipticOrbit {
+    type Error = NumericalError;
+
+    fn try_from(spec: Orbit) -> Result<Self, Self::Error> {
+        let mu = GravitationalParameter::earth();
+        match spec {
+            Orbit::CircularEquatorial { altitude } => {
+                let semi_major_axis = Distance::from_meters(R_EARTH + altitude.meters())?;
+                EllipticOrbit::new(
+                    semi_major_axis,
+                    Eccentricity::CIRCULAR,
+                    mu,
+                    Angle::ZERO,
+                    Angle::ZERO,
+                    Angle::ZERO,
+                    Angle::ZERO,
+                    OrbitDirection::Prograde,
+                )
+            }
+            Orbit::CircularInclined {
+                altitude,
+                inclination,
+                raan,
+            } => {
+                let semi_major_axis = Distance::from_meters(R_EARTH + altitude.meters())?;
+                EllipticOrbit::new(
+                    semi_major_axis,
+                    Eccentricity::CIRCULAR,
+                    mu,
+                    inclination,
+                    raan,
+                    Angle::ZERO,
+                    Angle::ZERO,
+                    OrbitDirection::Prograde,
+                )
+            }
+            Orbit::Elliptic {
+                semi_major_axis,
+                eccentricity,
+                inclination,
+                raan,
+                arg_periapsis,
+                true_anomaly,
+                direction,
+            } => EllipticOrbit::new(
+                semi_major_axis,
+                eccentricity,
+                mu,
+                inclination,
+                raan,
+                arg_periapsis,
+                true_anomaly,
+                direction,
+            ),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::physics::constants::{MU_EARTH, R_EARTH};
+    use crate::physics::constants::MU_EARTH;
+    use crate::physics::constants::R_EARTH;
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
 

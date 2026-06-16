@@ -28,6 +28,16 @@ impl SpecificEnergy {
     pub const fn square_meters_per_square_second(self) -> f64 {
         self.0
     }
+
+    /// Absolute difference from another specific energy.
+    ///
+    /// The absolute value keeps the result non-negative so the constructor
+    /// invariant holds even when the underlying `f64` subtraction crosses
+    /// the zero boundary.
+    pub fn abs_diff(self, other: SpecificEnergy) -> Self {
+        let diff = (self.0 - other.0).abs();
+        Self(diff)
+    }
 }
 
 /// Specific angular momentum, measured in square meters per second.
@@ -58,9 +68,20 @@ impl SpecificAngularMomentum {
     pub const fn square_meters_per_second(self) -> f64 {
         self.0
     }
+
+    /// Absolute difference from another specific angular momentum.
+    ///
+    /// The absolute value keeps the result non-negative so the constructor
+    /// invariant holds even when the underlying `f64` subtraction crosses
+    /// the zero boundary.
+    pub fn abs_diff(self, other: SpecificAngularMomentum) -> Self {
+        let diff = (self.0 - other.0).abs();
+        Self(diff)
+    }
 }
 
 /// Two-body orbital diagnostics for a Cartesian state.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct OrbitalDiagnostics {
     /// Current radius from the central body's center of mass.
     radius: Distance,

@@ -2,9 +2,8 @@
 
 use macroquad::prelude::*;
 use vast::{
-    Angle, CartesianStateBuffer, Distance, Duration, Eccentricity, EllipticOrbit, Epoch,
-    GravitationalParameter, Integrator, LeapfrogIntegrator, MU_EARTH, OrbitDirection,
-    OrbitalDiagnostics, R_EARTH, Speed, TimeStep, TwoBodyGravity,
+    CartesianStateBuffer, Distance, Duration, EllipticOrbit, Epoch, Integrator,
+    LeapfrogIntegrator, Orbit, OrbitalDiagnostics, R_EARTH, Speed, TimeStep, TwoBodyGravity,
 };
 
 const TRAIL_POINTS_MAX: usize = 2_000;
@@ -19,7 +18,7 @@ fn main() {
 }
 
 async fn async_main() {
-    let Some(mut scenario) = OrbitVizScenario::new() else {
+    let Ok(mut scenario) = OrbitVizScenario::new() else {
         eprintln!("invalid orbit visualization scenario");
         return;
     };
@@ -33,7 +32,7 @@ struct OrbitVizScenario {
     states: CartesianStateBuffer<1>,
     t: Epoch,
     dt: TimeStep,
-    earth_radius_m: f64,
+    earth_radius_km: f64,
     ideal_orbital_radius: Distance,
     circular_speed: Speed,
     orbital_period: Duration,
@@ -44,42 +43,26 @@ struct OrbitVizScenario {
 }
 
 impl OrbitVizScenario {
-    fn new() -> Option<Self> {
-        let earth = TwoBodyGravity::new(
-            GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH).ok()?,
-        );
+    fn new() -> Result<Self, Box<dyn std::error::Error>> {
+        let earth = TwoBodyGravity::earth();
         let integrator = LeapfrogIntegrator;
+        let altitude = Distance::from_kilometers(400.0)?;
+        let orbit: EllipticOrbit = Orbit::CircularEquatorial { altitude }.try_into()?;
+        let earth_radius_km = R_EARTH / 1000.0;
 
-        let altitude_m = 400_000.0;
-        let earth_radius_m = R_EARTH;
-        let orbital_radius_m = earth_radius_m + altitude_m;
-        let orbit = EllipticOrbit::new(
-            Distance::from_meters(orbital_radius_m).ok()?,
-            Eccentricity::from_scalar(0.0).ok()?,
-            earth.mu(),
-            Angle::ZERO,
-            Angle::ZERO,
-            Angle::ZERO,
-            Angle::from_radians(0.0).ok()?,
-            OrbitDirection::Prograde,
-        )
-        .ok()?;
+        let mut states = CartesianStateBuffer::<1>::with_len(1)?;
+        states.write_from_state(0, &orbit.to_cartesian_state()?)?;
 
-        let mut states = CartesianStateBuffer::<1>::with_len(1).ok()?;
-        states
-            .write_from_state(0, &orbit.to_cartesian_state().ok()?)
-            .ok()?;
-
-        Some(Self {
+        Ok(Self {
             earth,
             integrator,
             states,
-            t: Epoch::from_seconds(0.0).ok()?,
-            dt: TimeStep::from_seconds(1.0).ok()?,
-            earth_radius_m,
+            t: Epoch::from_seconds(0.0)?,
+            dt: TimeStep::from_seconds(1.0)?,
+            earth_radius_km,
             ideal_orbital_radius: orbit.semi_major_axis(),
-            circular_speed: orbit.speed().ok()?,
-            orbital_period: orbit.period().ok()?,
+            circular_speed: orbit.speed()?,
+            orbital_period: orbit.period()?,
             meters_per_pixel: 40_000.0,
             trail: [Vec2::ZERO; TRAIL_POINTS_MAX],
             trail_start: 0,
@@ -153,8 +136,8 @@ impl OrbitVizScenario {
             return;
         };
 
-        let altitude_m = diagnostics.radius().meters() - self.earth_radius_m;
-        let radius_drift_m = diagnostics.radius().meters() - self.ideal_orbital_radius.meters();
+        let altitude_km = diagnostics.radius().km() - self.earth_radius_km;
+        let radius_drift_km = diagnostics.radius().km() - self.ideal_orbital_radius.km();
         let orbit_progress = self.t.seconds() / self.orbital_period.seconds();
         let orbit_progress_percent = orbit_progress.fract() * 100.0;
 
@@ -167,8 +150,7 @@ impl OrbitVizScenario {
             ),
             format!(
                 "altitude = {:.0} km | circular radius drift = {:+.3} km",
-                altitude_m / 1000.0,
-                radius_drift_m / 1000.0,
+                altitude_km, radius_drift_km,
             ),
             format!(
                 "speed = {:.3} km/s | circular speed = {:.3} km/s",

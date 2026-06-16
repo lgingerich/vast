@@ -5,5 +5,6 @@ pub mod elements;
 pub mod integrators;
 pub mod maneuvers;
 pub mod orbits;
+pub mod sim;
 pub mod state;
 pub mod types;

@@ -1,219 +1,73 @@
 #![allow(missing_docs)]
 
 use vast::{
-    Angle, CartesianStateBuffer, Distance, Duration, Eccentricity, EllipticOrbit, Epoch,
-    GravitationalParameter, Integrator, MU_EARTH, OrbitDirection, OrbitalDiagnostics,
-    OrbitalElementClassification, OrbitalElements, R_EARTH, SpecificAngularMomentum,
-    SpecificEnergy, TimeStep, TwoBodyGravity, VelocityVerletIntegrator,
+    Angle, Distance, Duration, EllipticOrbit, Orbit, R_EARTH, SimBuilder, TimeStep,
+    TwoBodyGravity, VelocityVerletIntegrator,
 };
 
-const ALTITUDE_M: f64 = 600_000.0;
+const ALTITUDE_KM: f64 = (R_EARTH + 600_000.0) / 1000.0;
 const INCLINATION_DEG: f64 = 51.6;
 const RAAN_DEG: f64 = 32.0;
 const STEP_SECONDS: f64 = 10.0;
-const PERIODS: usize = 3;
-
-struct PropagationSummary {
-    elapsed: Duration,
-    steps: usize,
-    radius_drift: Distance,
-    specific_energy_error: SpecificEnergy,
-    specific_angular_momentum_error: SpecificAngularMomentum,
-    eccentricity: f64,
-    angular_momentum_direction: (f64, f64, f64),
-}
+const PERIODS: f64 = 3.0;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mu = GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?;
-    let orbit = EllipticOrbit::new(
-        Distance::from_meters(R_EARTH + ALTITUDE_M)?,
-        Eccentricity::from_scalar(0.0)?,
-        mu,
-        Angle::from_radians(INCLINATION_DEG.to_radians())?,
-        Angle::from_radians(RAAN_DEG.to_radians())?,
-        Angle::ZERO,
-        Angle::from_radians(0.0)?,
-        OrbitDirection::Prograde,
-    )?;
-    let initial_state = orbit.to_cartesian_state()?;
-    let initial_diagnostics = OrbitalDiagnostics::from_state(&initial_state, mu)?;
-    let gravity = TwoBodyGravity::new(mu);
-    let integrator = VelocityVerletIntegrator;
-    let dt = TimeStep::from_seconds(STEP_SECONDS)?;
+    let spec = Orbit::CircularInclined {
+        altitude: Distance::from_kilometers(ALTITUDE_KM)?,
+        inclination: Angle::from_degrees(INCLINATION_DEG)?,
+        raan: Angle::from_degrees(RAAN_DEG)?,
+    };
+    let orbit: EllipticOrbit = spec.try_into()?;
     let period = orbit.period()?;
+    let num_periods = Duration::from_seconds(period.seconds() * PERIODS).unwrap();
 
-    let mut states = CartesianStateBuffer::<1>::with_len(1)?;
-    states.write_from_state(0, &initial_state)?;
+    let result = SimBuilder::new()
+        .orbit(spec)?
+        .dynamics(TwoBodyGravity::earth())
+        .integrator(VelocityVerletIntegrator)
+        .timestep(TimeStep::from_seconds(STEP_SECONDS)?)
+        .duration(num_periods)?;
 
-    let summary = propagate(
-        &integrator,
-        &gravity,
-        &mut states,
-        initial_diagnostics,
-        period,
-        dt,
-        PERIODS,
-    )?;
-    let state = states.view().read_state(0)?;
-    let elements =
-        OrbitalElements::from_state(&state, mu, OrbitalElementClassification::default())?;
+    let radius_drift = result
+        .diagnostics
+        .radius()
+        .km_diff(result.initial_diagnostics.radius())
+        .abs();
+    let energy_error = result
+        .initial_diagnostics
+        .specific_energy()
+        .abs_diff(result.diagnostics.specific_energy());
+    let h_error = result
+        .initial_diagnostics
+        .specific_angular_momentum()
+        .abs_diff(result.diagnostics.specific_angular_momentum());
+    let h_hat = result.diagnostics.specific_angular_momentum_vector().normalize();
 
     println!(
-        "Inclined circular orbit: altitude {:.0} km | inclination {:.1} deg | RAAN {:.1} deg",
-        ALTITUDE_M / 1000.0,
-        INCLINATION_DEG,
-        RAAN_DEG,
+        "Inclined circular orbit: altitude {:.0} km | inclination {:.1}° | RAAN {:.1}°",
+        ALTITUDE_KM, INCLINATION_DEG, RAAN_DEG,
     );
     println!(
         "propagated: {:.1} periods | elapsed: {:.1} s | steps: {}",
         PERIODS,
-        summary.elapsed.seconds(),
-        summary.steps,
+        result.elapsed.seconds(),
+        result.steps,
     );
     println!(
         "radius drift: {:.6} km | energy error: {:.6} | h error: {:.6}",
-        summary.radius_drift.meters() / 1000.0,
-        summary
-            .specific_energy_error
-            .square_meters_per_square_second(),
-        summary
-            .specific_angular_momentum_error
-            .square_meters_per_second(),
+        radius_drift,
+        energy_error.square_meters_per_square_second(),
+        h_error.square_meters_per_second(),
     );
-    println!("eccentricity: {:.9}", summary.eccentricity);
+    println!(
+        "eccentricity: {:.9}",
+        result.diagnostics.eccentricity().scalar(),
+    );
     println!(
         "h direction: [{:.6}, {:.6}, {:.6}]",
-        summary.angular_momentum_direction.0,
-        summary.angular_momentum_direction.1,
-        summary.angular_momentum_direction.2,
+        h_hat.x, h_hat.y, h_hat.z,
     );
-    print_elements(&elements);
+    println!("{}", result.elements);
 
     Ok(())
-}
-
-fn propagate<I: Integrator>(
-    integrator: &I,
-    gravity: &TwoBodyGravity,
-    states: &mut CartesianStateBuffer<1>,
-    initial_diagnostics: OrbitalDiagnostics,
-    period: Duration,
-    dt: TimeStep,
-    periods: usize,
-) -> Result<PropagationSummary, Box<dyn std::error::Error>> {
-    let target_seconds = period.seconds() * periods as f64;
-    let mut epoch = Epoch::from_seconds(0.0)?;
-    let mut steps = 0;
-
-    while epoch.seconds() < target_seconds {
-        let remaining_seconds = target_seconds - epoch.seconds();
-        let step = TimeStep::from_seconds(dt.seconds().min(remaining_seconds))?;
-        integrator.step(gravity, &mut states.view_mut(), 0, epoch, step)?;
-        epoch = epoch.advance_by(step);
-        steps += 1;
-    }
-
-    let diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, gravity.mu())?;
-    let radius_drift = Distance::from_meters(
-        (diagnostics.radius().meters() - initial_diagnostics.radius().meters())
-            .abs()
-            .max(f64::EPSILON),
-    )?;
-    let specific_energy_error = SpecificEnergy::from_square_meters_per_second_squared(
-        (diagnostics
-            .specific_energy()
-            .square_meters_per_square_second()
-            - initial_diagnostics
-                .specific_energy()
-                .square_meters_per_square_second())
-        .abs(),
-    )?;
-    let specific_angular_momentum_error = SpecificAngularMomentum::from_square_meters_per_second(
-        (diagnostics
-            .specific_angular_momentum()
-            .square_meters_per_second()
-            - initial_diagnostics
-                .specific_angular_momentum()
-                .square_meters_per_second())
-        .abs(),
-    )?;
-    let angular_momentum_direction = diagnostics.specific_angular_momentum_vector().normalize();
-
-    Ok(PropagationSummary {
-        elapsed: Duration::from_seconds(epoch.seconds())?,
-        steps,
-        radius_drift,
-        specific_energy_error,
-        specific_angular_momentum_error,
-        eccentricity: diagnostics.eccentricity().scalar(),
-        angular_momentum_direction: (
-            angular_momentum_direction.x,
-            angular_momentum_direction.y,
-            angular_momentum_direction.z,
-        ),
-    })
-}
-
-fn print_elements(elements: &OrbitalElements) {
-    match elements {
-        OrbitalElements::Classical(elements) => {
-            println!("elements: classical");
-            println!(
-                "a = {:.3} km | e = {:.9} | i = {:.3} deg",
-                elements.semi_major_axis().meters() / 1000.0,
-                elements.eccentricity().scalar(),
-                elements.inclination().radians().to_degrees(),
-            );
-            println!(
-                "RAAN = {:.3} deg | arg periapsis = {:.3} deg | true anomaly = {:.3} deg",
-                elements
-                    .right_ascension_of_ascending_node()
-                    .radians()
-                    .to_degrees(),
-                elements.argument_of_periapsis().radians().to_degrees(),
-                elements.true_anomaly().radians().to_degrees(),
-            );
-        }
-        OrbitalElements::CircularInclined(elements) => {
-            println!("elements: circular inclined");
-            println!(
-                "a = {:.3} km | e = {:.9} | i = {:.3} deg",
-                elements.semi_major_axis().meters() / 1000.0,
-                elements.eccentricity().scalar(),
-                elements.inclination().radians().to_degrees(),
-            );
-            println!(
-                "RAAN = {:.3} deg | argument of latitude = {:.3} deg",
-                elements
-                    .right_ascension_of_ascending_node()
-                    .radians()
-                    .to_degrees(),
-                elements.argument_of_latitude().radians().to_degrees(),
-            );
-        }
-        OrbitalElements::CircularEquatorial(elements) => {
-            println!("elements: circular equatorial");
-            println!(
-                "a = {:.3} km | e = {:.9} | i = {:.3} deg | true longitude = {:.3} deg",
-                elements.semi_major_axis().meters() / 1000.0,
-                elements.eccentricity().scalar(),
-                elements.inclination().radians().to_degrees(),
-                elements.true_longitude().radians().to_degrees(),
-            );
-        }
-        OrbitalElements::EquatorialElliptic(elements) => {
-            println!("elements: equatorial elliptic");
-            println!(
-                "a = {:.3} km | e = {:.9} | i = {:.3} deg",
-                elements.semi_major_axis().meters() / 1000.0,
-                elements.eccentricity().scalar(),
-                elements.inclination().radians().to_degrees(),
-            );
-            println!(
-                "longitude of periapsis = {:.3} deg | true anomaly = {:.3} deg",
-                elements.longitude_of_periapsis().radians().to_degrees(),
-                elements.true_anomaly().radians().to_degrees(),
-            );
-        }
-    }
 }

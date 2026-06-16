@@ -20,6 +20,14 @@ impl TwoBodyGravity {
         Self { mu }
     }
 
+    /// Point-mass gravity model using Earth's standard gravitational parameter.
+    #[inline]
+    pub const fn earth() -> Self {
+        Self {
+            mu: GravitationalParameter::earth(),
+        }
+    }
+
     /// Returns the central body's gravitational parameter.
     #[inline]
     pub const fn mu(&self) -> GravitationalParameter {

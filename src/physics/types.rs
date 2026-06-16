@@ -306,10 +306,32 @@ impl Distance {
         Ok(Self(value))
     }
 
+    /// Creates a positive distance from kilometers.
+    ///
+    /// Validates finiteness and positivity before converting to meters.
+    pub fn from_kilometers(km: f64) -> Result<Self, NumericalError> {
+        Self::from_meters(km * 1000.0)
+    }
+
     /// Returns this distance in meters.
     #[inline]
     pub const fn meters(self) -> f64 {
         self.0
+    }
+
+    /// Returns this distance in kilometers.
+    #[inline]
+    pub fn km(self) -> f64 {
+        self.0 / 1000.0
+    }
+
+    /// Difference from another distance, in kilometers.
+    ///
+    /// Returns `(self - other) / 1000.0` as a bare `f64` so callers can
+    /// observe sign and zero without boxing the result into a [`Distance`].
+    #[inline]
+    pub fn km_diff(self, other: Distance) -> f64 {
+        (self.0 - other.0) / 1000.0
     }
 }
 
@@ -434,6 +456,16 @@ impl Add for Speed {
 pub struct GravitationalParameter(f64);
 
 impl GravitationalParameter {
+    /// Earth's standard gravitational parameter (3.986004418e14 m³/s²).
+    ///
+    /// Convenience constructor.  Equivalent to
+    /// `GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)`
+    /// but infallible because the constant is trivially valid.
+    #[inline]
+    pub const fn earth() -> Self {
+        Self(crate::physics::constants::MU_EARTH)
+    }
+
     /// Creates a positive gravitational parameter from cubic meters per second squared.
     pub fn from_meters_cubed_per_second_squared(value: f64) -> Result<Self, NumericalError> {
         if !value.is_finite() {
@@ -488,6 +520,9 @@ impl J2Coefficient {
 pub struct Eccentricity(f64);
 
 impl Eccentricity {
+    /// Eccentricity of a perfectly circular orbit.
+    pub const CIRCULAR: Self = Self(0.0);
+
     pub(crate) const DEFAULT_CIRCULAR_CLASSIFICATION_TOLERANCE: Self =
         Self(crate::physics::constants::DEFAULT_CIRCULAR_ECCENTRICITY_TOLERANCE);
 

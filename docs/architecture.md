@@ -91,12 +91,13 @@ The physics layer is re-exported from the crate root:
   `ExponentialAtmosphere`, `AtmosphericDrag`, `CompositeDynamics<A, B>`.
 - Integrators: `Integrator`, `EulerIntegrator`, `VelocityVerletIntegrator`,
   `LeapfrogIntegrator`, `RungeKutta4Integrator`.
-- Orbits and elements: `EllipticOrbit`, `OrbitDirection`, `OrbitalElements`,
-  `OrbitalElementClassification`, `ClassicalOrbitalElements`,
-  `CircularInclinedElements`, `CircularEquatorialElements`,
-  `EquatorialEllipticElements`.
+- Orbits and elements: `EllipticOrbit`, `Orbit`, `OrbitDirection`,
+  `OrbitalElements`, `OrbitalElementClassification`,
+  `ClassicalOrbitalElements`, `CircularInclinedElements`,
+  `CircularEquatorialElements`, `EquatorialEllipticElements`.
 - Diagnostics: `OrbitalDiagnostics`, `SpecificEnergy`,
   `SpecificAngularMomentum`.
+- Propagation convenience: `Sim`, `SimBuilder`, `SimResult`.
 
 `physics::maneuvers` is a module-level API, but its helpers are not re-exported
 at the crate root today. Simulation burns consume them internally, and mission
@@ -149,6 +150,7 @@ inspection, diagnostics, and maneuver vector math.
 | `elements` | Cartesian-to-elements conversion with singular-safe element variants. |
 | `diagnostics` | Two-body orbital invariants and bound-orbit radii. |
 | `maneuvers` | State-dependent impulsive delta-v vector helpers and analytical transfer formulas. |
+| `sim` | Convenience builder for fixed-duration single-body propagation. |
 
 The modules are deliberately flat. Their conceptual dependency direction is:
 
@@ -334,6 +336,17 @@ representations.
 - Computes instantaneous speed and period.
 - Converts to inertial `CartesianState` through the shared internal element-set
   conversion.
+
+`Orbit` is a companion enum that expresses orbital regimes without exposing
+the full 8-argument `EllipticOrbit::new` constructor:
+
+- `Orbit::CircularEquatorial { altitude }` — Earth circular equatorial orbit.
+- `Orbit::CircularInclined { altitude, inclination, raan }` — Earth circular
+  inclined orbit.
+- `Orbit::Elliptic { ... }` — all classical elements.
+
+Converts to `EllipticOrbit` via `TryFrom` (Earth gravitational parameter,
+convention-filled zero angles for circular variants).
 
 `OrbitalElements` is the inverse and round-trip representation for bound states.
 It is an enum because classical elements are singular for circular and
@@ -897,10 +910,11 @@ The architecture currently includes:
 - `Dynamics` and `Integrator` traits
 - two-body, J2, drag, and composite dynamics in physics
 - Euler, velocity Verlet, leapfrog, and RK4 fixed-step integrators
-- elliptic orbit initial-condition construction
+- elliptic orbit initial-condition construction and `Orbit` convenience enum
 - singular-safe bound orbital elements and phase angle extraction
 - orbital diagnostics for analysis and tests
 - prograde, circularize, Hohmann, and bi-elliptic maneuver helpers
+- `Sim` builder for fixed-duration single-body propagation convenience
 - TOML rollout and mission scenario DTOs
 - config-to-runtime plan validation
 - single-body fixed-step `Propagator`

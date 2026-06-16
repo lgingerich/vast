@@ -17,7 +17,10 @@ atmospheric drag, `CompositeDynamics`, fixed-step Euler/RK4/Verlet/Leapfrog
 integrators, orbital diagnostics, classical element conversion (Cartesian ↔
 elements), J2 secular-rate checks, SoA Cartesian state stepping, **circular
 and elliptic orbit initial-condition construction (`EllipticOrbit`,
-including circular via `e=0` convention)**, **propagator
+including circular via `e=0` convention) and the **`Orbit` enum convenience
+variants (`Orbit::CircularEquatorial`, `Orbit::CircularInclined`,
+`Orbit::Elliptic`)**.  **`Sim` builder** for fixed-duration physics-layer
+propagation without termination/sampling.  **propagator
 with duration/step/orbital termination and trajectory sampling**, **impulsive
 burns**, **TOML scenario config**, **`LeoCircularEnv` (`reset` / bounded
 `step(action)` with inertial acceleration command)**,

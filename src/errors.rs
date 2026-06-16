@@ -65,6 +65,9 @@ pub enum PropagationError {
     /// An impulsive burn could not be applied to the current state.
     #[error("impulsive burn is invalid for the current state")]
     InvalidBurn,
+    /// The simulation builder was used before all required fields were set.
+    #[error("simulation builder is incomplete")]
+    BuildIncomplete,
     /// A propagation segment ended without satisfying its termination condition.
     #[error("propagation segment ended without a stop reason")]
     SegmentWithoutStop,

@@ -1,3 +1,5 @@
+use std::fmt;
+
 use nalgebra::Vector3;
 
 use super::state::CartesianState;
@@ -45,7 +47,7 @@ impl Default for OrbitalElementClassification {
 /// Classical orbital elements have singularities for circular and equatorial
 /// orbits, so this enum uses variants that expose only the angles that are
 /// physically defined for the state.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum OrbitalElements {
     /// Non-circular, non-equatorial bound orbit with all classical angles defined.
     Classical(ClassicalOrbitalElements),
@@ -58,7 +60,7 @@ pub enum OrbitalElements {
 }
 
 /// Classical elements for a non-circular, non-equatorial bound orbit.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ClassicalOrbitalElements {
     /// Semi-major axis for the bound orbit.
     semi_major_axis: Distance,
@@ -75,7 +77,7 @@ pub struct ClassicalOrbitalElements {
 }
 
 /// Elements for a circular inclined bound orbit.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CircularInclinedElements {
     /// Semi-major axis for the bound orbit.
     semi_major_axis: Distance,
@@ -90,7 +92,7 @@ pub struct CircularInclinedElements {
 }
 
 /// Elements for a circular equatorial bound orbit.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CircularEquatorialElements {
     /// Semi-major axis for the bound orbit.
     semi_major_axis: Distance,
@@ -103,7 +105,7 @@ pub struct CircularEquatorialElements {
 }
 
 /// Elements for an eccentric equatorial bound orbit.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct EquatorialEllipticElements {
     /// Semi-major axis for the bound orbit.
     semi_major_axis: Distance,
@@ -241,6 +243,109 @@ impl OrbitalElements {
             Self::CircularInclined(elements) => elements.to_cartesian_state(mu),
             Self::CircularEquatorial(elements) => elements.to_cartesian_state(mu),
             Self::EquatorialElliptic(elements) => elements.to_cartesian_state(mu),
+        }
+    }
+
+    /// Semi-major axis (common to all bound-element variants).
+    #[inline]
+    pub const fn semi_major_axis(&self) -> Distance {
+        match self {
+            Self::Classical(e) => e.semi_major_axis(),
+            Self::CircularInclined(e) => e.semi_major_axis(),
+            Self::CircularEquatorial(e) => e.semi_major_axis(),
+            Self::EquatorialElliptic(e) => e.semi_major_axis(),
+        }
+    }
+
+    /// Orbital eccentricity (common to all bound-element variants).
+    #[inline]
+    pub const fn eccentricity(&self) -> Eccentricity {
+        match self {
+            Self::Classical(e) => e.eccentricity(),
+            Self::CircularInclined(e) => e.eccentricity(),
+            Self::CircularEquatorial(e) => e.eccentricity(),
+            Self::EquatorialElliptic(e) => e.eccentricity(),
+        }
+    }
+
+    /// Inclination from the inertial x-y plane (common to all variants).
+    #[inline]
+    pub const fn inclination(&self) -> Angle {
+        match self {
+            Self::Classical(e) => e.inclination(),
+            Self::CircularInclined(e) => e.inclination(),
+            Self::CircularEquatorial(e) => e.inclination(),
+            Self::EquatorialElliptic(e) => e.inclination(),
+        }
+    }
+
+    /// Right ascension of the ascending node, when defined.
+    ///
+    /// Returns `None` for equatorial variants where RAAN is undefined.
+    #[inline]
+    pub const fn right_ascension_of_ascending_node(&self) -> Option<Angle> {
+        match self {
+            Self::Classical(e) => Some(e.right_ascension_of_ascending_node()),
+            Self::CircularInclined(e) => Some(e.right_ascension_of_ascending_node()),
+            Self::CircularEquatorial(_) | Self::EquatorialElliptic(_) => None,
+        }
+    }
+}
+
+impl fmt::Display for OrbitalElements {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let a_km = self.semi_major_axis().km();
+        let e = self.eccentricity().scalar();
+        let i_deg = self.inclination().degrees();
+        match self {
+            Self::Classical(el) => {
+                write!(
+                    f,
+                    "classical: a = {:.3} km | e = {:.9} | i = {:.3}° | RAAN = {:.3}° | \
+                     arg periapsis = {:.3}° | true anomaly = {:.3}°",
+                    a_km,
+                    e,
+                    i_deg,
+                    el.right_ascension_of_ascending_node().degrees(),
+                    el.argument_of_periapsis().degrees(),
+                    el.true_anomaly().degrees(),
+                )
+            }
+            Self::CircularInclined(el) => {
+                write!(
+                    f,
+                    "circular inclined: a = {:.3} km | e = {:.9} | i = {:.3}° | \
+                     RAAN = {:.3}° | argument of latitude = {:.3}°",
+                    a_km,
+                    e,
+                    i_deg,
+                    el.right_ascension_of_ascending_node().degrees(),
+                    el.argument_of_latitude().degrees(),
+                )
+            }
+            Self::CircularEquatorial(el) => {
+                write!(
+                    f,
+                    "circular equatorial: a = {:.3} km | e = {:.9} | i = {:.3}° | \
+                     true longitude = {:.3}°",
+                    a_km,
+                    e,
+                    i_deg,
+                    el.true_longitude().degrees(),
+                )
+            }
+            Self::EquatorialElliptic(el) => {
+                write!(
+                    f,
+                    "equatorial elliptic: a = {:.3} km | e = {:.9} | i = {:.3}° | \
+                     longitude of periapsis = {:.3}° | true anomaly = {:.3}°",
+                    a_km,
+                    e,
+                    i_deg,
+                    el.longitude_of_periapsis().degrees(),
+                    el.true_anomaly().degrees(),
+                )
+            }
         }
     }
 }
