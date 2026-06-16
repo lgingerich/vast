@@ -25,7 +25,7 @@ struct Summary {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- configure simulation ---
     let orbit_spec = Orbit::CircularEquatorial {
-        altitude: Distance::from_kilometers(ALTITUDE_KM)?,
+        altitude: Distance::from_meters((ALTITUDE_KM) * 1000.0)?,
     };
     let elliptic: EllipticOrbit = orbit_spec.try_into()?;
     let speed = elliptic.speed()?;
@@ -35,11 +35,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- print header ---
     println!(
         "Circular Earth orbit at {:.0} km altitude",
-        elliptic.semi_major_axis().km(),
+        elliptic.semi_major_axis().meters() / 1000.0,
     );
     println!(
         "radius: {:.3} km | speed: {:.3} km/s | period: {:.3} min",
-        elliptic.semi_major_axis().km(),
+        elliptic.semi_major_axis().meters() / 1000.0,
         speed.meters_per_second() / 1000.0,
         period.seconds() / 60.0,
     );

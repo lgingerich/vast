@@ -38,14 +38,14 @@ pub struct Sim<D: Dynamics, I: Integrator> {
 /// # use vast::*;
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let orbit: EllipticOrbit = Orbit::CircularInclined {
-///     altitude: Distance::from_kilometers(6678.0)?,
+///     altitude: Distance::from_meters((6678.0) * 1000.0)?,
 ///     inclination: Angle::from_degrees(51.6)?,
 ///     raan: Angle::from_degrees(32.0)?,
 /// }.try_into()?;
 /// let period = orbit.period()?;
 /// let result = SimBuilder::new()
 ///     .orbit(Orbit::CircularInclined {
-///         altitude: Distance::from_kilometers(6678.0)?,
+///         altitude: Distance::from_meters((6678.0) * 1000.0)?,
 ///         inclination: Angle::from_degrees(51.6)?,
 ///         raan: Angle::from_degrees(32.0)?,
 ///     })?

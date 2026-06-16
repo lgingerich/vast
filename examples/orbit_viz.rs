@@ -46,7 +46,7 @@ impl OrbitVizScenario {
     fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let earth = TwoBodyGravity::earth();
         let integrator = LeapfrogIntegrator;
-        let altitude = Distance::from_kilometers(400.0)?;
+        let altitude = Distance::from_meters((400.0) * 1000.0)?;
         let orbit: EllipticOrbit = Orbit::CircularEquatorial { altitude }.try_into()?;
         let earth_radius_km = R_EARTH / 1000.0;
 
@@ -136,8 +136,8 @@ impl OrbitVizScenario {
             return;
         };
 
-        let altitude_km = diagnostics.radius().km() - self.earth_radius_km;
-        let radius_drift_km = diagnostics.radius().km() - self.ideal_orbital_radius.km();
+        let altitude_km = diagnostics.radius().meters() / 1000.0 - self.earth_radius_km;
+        let radius_drift_km = diagnostics.radius().meters() / 1000.0 - self.ideal_orbital_radius.meters() / 1000.0;
         let orbit_progress = self.t.seconds() / self.orbital_period.seconds();
         let orbit_progress_percent = orbit_progress.fract() * 100.0;
 

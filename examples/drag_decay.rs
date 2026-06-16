@@ -13,10 +13,10 @@ const PROPAGATION_HOURS: f64 = 6.0;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- configure simulation ---
     let atmosphere = ExponentialAtmosphere::new(
-        Distance::from_kilometers(R_EARTH / 1000.0)?,
-        Distance::from_kilometers(250.0)?,
+        Distance::from_meters((R_EARTH / 1000.0) * 1000.0)?,
+        Distance::from_meters((250.0) * 1000.0)?,
         MassDensity::from_kilograms_per_cubic_meter(1.0e-10)?,
-        Distance::from_kilometers(50.0)?,
+        Distance::from_meters((50.0) * 1000.0)?,
         AngularRate::from_radians_per_second(7.292_115_9e-5)?,
     );
     let dynamics = CompositeDynamics::new(
@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- run simulation ---
     let result = SimBuilder::new()
         .orbit(Orbit::CircularEquatorial {
-            altitude: Distance::from_kilometers(ALTITUDE_KM)?,
+            altitude: Distance::from_meters((ALTITUDE_KM) * 1000.0)?,
         })?
         .dynamics(dynamics)
         .integrator(RungeKutta4Integrator)

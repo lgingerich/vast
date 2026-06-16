@@ -309,32 +309,10 @@ impl Distance {
         Ok(Self(value))
     }
 
-    /// Creates a positive distance from kilometers.
-    ///
-    /// Validates finiteness and positivity before converting to meters.
-    pub fn from_kilometers(km: f64) -> Result<Self, NumericalError> {
-        Self::from_meters(km * 1000.0)
-    }
-
     /// Returns this distance in meters.
     #[inline]
     pub const fn meters(self) -> f64 {
         self.0
-    }
-
-    /// Returns this distance in kilometers.
-    #[inline]
-    pub fn km(self) -> f64 {
-        self.0 / 1000.0
-    }
-
-    /// Difference from another distance, in kilometers.
-    ///
-    /// Returns `(self - other) / 1000.0` as a bare `f64` so callers can
-    /// observe sign and zero without boxing the result into a [`Distance`].
-    #[inline]
-    pub fn km_diff(self, other: Distance) -> f64 {
-        (self.0 - other.0) / 1000.0
     }
 }
 

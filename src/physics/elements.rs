@@ -294,7 +294,7 @@ impl OrbitalElements {
 
 impl fmt::Display for OrbitalElements {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let a_km = self.semi_major_axis().km();
+        let a_km = self.semi_major_axis().meters() / 1000.0;
         let e = self.eccentricity().scalar();
         let i_deg = self.inclination().degrees();
         match self {

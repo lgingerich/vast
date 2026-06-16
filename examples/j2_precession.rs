@@ -15,7 +15,7 @@ const PROPAGATION_DAYS: f64 = 300.0;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- configure simulation ---
     let orbit_spec = Orbit::CircularInclined {
-        altitude: Distance::from_kilometers(ALTITUDE_KM)?,
+        altitude: Distance::from_meters((ALTITUDE_KM) * 1000.0)?,
         inclination: Angle::from_degrees(INCLINATION_DEG)?,
         raan: Angle::from_degrees(RAAN_DEG)?,
     };
@@ -76,7 +76,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- print report ---
     println!(
         "J2 precession demo: altitude {:.0} km | inclination {:.1}°",
-        elliptic.semi_major_axis().km() - R_EARTH / 1000.0,
+        elliptic.semi_major_axis().meters() / 1000.0 - R_EARTH / 1000.0,
         INCLINATION_DEG,
     );
     println!(

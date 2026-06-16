@@ -14,7 +14,7 @@ const PERIODS: f64 = 3.0;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- configure simulation ---
     let spec = Orbit::CircularInclined {
-        altitude: Distance::from_kilometers(ALTITUDE_KM)?,
+        altitude: Distance::from_meters((ALTITUDE_KM) * 1000.0)?,
         inclination: Angle::from_degrees(INCLINATION_DEG)?,
         raan: Angle::from_degrees(RAAN_DEG)?,
     };

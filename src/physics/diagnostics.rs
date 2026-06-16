@@ -335,7 +335,7 @@ impl DiagnosticSeries {
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let result = SimBuilder::new()
     /// #     .orbit(Orbit::CircularInclined {
-    /// #         altitude: Distance::from_kilometers(6678.0)?,
+    /// #         altitude: Distance::from_meters((6678.0) * 1000.0)?,
     /// #         inclination: Angle::from_degrees(51.6)?,
     /// #         raan: Angle::from_degrees(32.0)?,
     /// #     })?
