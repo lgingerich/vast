@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
 
 use vast::{
-    AngularRate, AreaPerMass, AtmosphericDrag, CompositeDynamics, Distance, Duration,
+    AngularRate, AreaPerMass, AtmosphericDrag, Column, CompositeDynamics, Distance, Duration,
     ExponentialAtmosphere, MassDensity, Orbit, R_EARTH, RungeKutta4Integrator, SimBuilder,
     TimeStep, TwoBodyGravity,
 };
@@ -37,10 +37,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .duration(total_duration)?;
 
     let s = &result.series;
-    let initial_alt_km = s.radius_km()[0] - R_EARTH / 1000.0;
-    let final_alt_km = s.radius_km()[1] - R_EARTH / 1000.0;
-    let energy_delta = s.specific_energy_m2s2()[1] - s.specific_energy_m2s2()[0];
-    let speed_delta = s.speed_mps()[1] - s.speed_mps()[0];
+    let initial_alt_km = s.column(Column::RadiusKm)[0] - R_EARTH / 1000.0;
+    let final_alt_km = s.column(Column::RadiusKm)[1] - R_EARTH / 1000.0;
+    let energy_delta = s.column(Column::SpecificEnergyM2s2)[1] - s.column(Column::SpecificEnergyM2s2)[0];
+    let speed_delta = s.column(Column::SpeedMps)[1] - s.column(Column::SpeedMps)[0];
 
     println!(
         "Drag decay demo: initial altitude {:.0} km | duration {:.1} h",
@@ -56,7 +56,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "specific energy change: {:+.6} | speed change: {:+.6} m/s",
         energy_delta, speed_delta,
     );
-    println!("eccentricity: {:.9}", s.eccentricity()[1]);
+    println!("eccentricity: {:.9}", s.column(Column::Eccentricity)[1]);
 
     Ok(())
 }

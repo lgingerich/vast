@@ -248,9 +248,26 @@ impl OrbitalDiagnostics {
     }
 }
 
+/// Diagnostic metric available in a [`DiagnosticSeries`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Column {
+    /// Radius from the central body center of mass, kilometers.
+    RadiusKm,
+    /// Inertial speed, meters per second.
+    SpeedMps,
+    /// Specific orbital energy, m²/s².
+    SpecificEnergyM2s2,
+    /// Specific angular momentum magnitude, m²/s.
+    SpecificAngularMomentumM2s,
+    /// Orbital eccentricity, dimensionless.
+    Eccentricity,
+    /// Semi-major axis, kilometers. `NaN` for unbound orbits.
+    SemiMajorAxisKm,
+}
+
 /// Per-step diagnostic scalars collected across a trajectory.
 ///
-/// Each field is a dense array with one entry per snapshot.
+/// Each column is a dense array with one entry per snapshot.
 /// For the initial+final snapshots from [`SimResult`], `len()` is 2.
 /// Future per-step recording paths can produce series of arbitrary length.
 ///
@@ -308,34 +325,38 @@ impl DiagnosticSeries {
         self.radius_km.is_empty()
     }
 
-    /// Radius from the central body center of mass, in kilometers.
-    pub fn radius_km(&self) -> &[f64] {
-        &self.radius_km
-    }
-
-    /// Inertial speed, in meters per second.
-    pub fn speed_mps(&self) -> &[f64] {
-        &self.speed_mps
-    }
-
-    /// Specific orbital energy, in m²/s².
-    pub fn specific_energy_m2s2(&self) -> &[f64] {
-        &self.specific_energy_m2s2
-    }
-
-    /// Specific angular momentum magnitude, in m²/s.
-    pub fn specific_angular_momentum_m2s(&self) -> &[f64] {
-        &self.specific_angular_momentum_m2s
-    }
-
-    /// Orbital eccentricity, dimensionless.
-    pub fn eccentricity(&self) -> &[f64] {
-        &self.eccentricity
-    }
-
-    /// Semi-major axis in kilometers, `NaN` for unbound orbits.
-    pub fn semi_major_axis_km(&self) -> &[f64] {
-        &self.semi_major_axis_km
+    /// Returns the values for a diagnostic column.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use vast::*;
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let result = SimBuilder::new()
+    /// #     .orbit(Orbit::CircularInclined {
+    /// #         altitude: Distance::from_kilometers(6678.0)?,
+    /// #         inclination: Angle::from_degrees(51.6)?,
+    /// #         raan: Angle::from_degrees(32.0)?,
+    /// #     })?
+    /// #     .dynamics(TwoBodyGravity::earth())
+    /// #     .integrator(VelocityVerletIntegrator)
+    /// #     .timestep(TimeStep::from_seconds(10.0)?)
+    /// #     .duration(Duration::from_seconds(5_330.0).unwrap())?;
+    /// let s = &result.series;
+    /// let radius_km = s.column(Column::RadiusKm);
+    /// let drift = (radius_km[1] - radius_km[0]).abs();
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn column(&self, column: Column) -> &[f64] {
+        match column {
+            Column::RadiusKm => &self.radius_km,
+            Column::SpeedMps => &self.speed_mps,
+            Column::SpecificEnergyM2s2 => &self.specific_energy_m2s2,
+            Column::SpecificAngularMomentumM2s => &self.specific_angular_momentum_m2s,
+            Column::Eccentricity => &self.eccentricity,
+            Column::SemiMajorAxisKm => &self.semi_major_axis_km,
+        }
     }
 }
 

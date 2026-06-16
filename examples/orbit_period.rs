@@ -1,8 +1,8 @@
 #![allow(missing_docs)]
 
 use vast::{
-    Distance, Duration, EllipticOrbit, EulerIntegrator, LeapfrogIntegrator, Orbit, Position,
-    RungeKutta4Integrator, SimBuilder, Speed, TimeStep, TwoBodyGravity,
+    Column, Distance, Duration, EllipticOrbit, EulerIntegrator, LeapfrogIntegrator, Orbit,
+    Position, RungeKutta4Integrator, SimBuilder, Speed, TimeStep, TwoBodyGravity,
     VelocityVerletIntegrator,
 };
 
@@ -94,14 +94,14 @@ fn run<I: vast::Integrator>(
         - initial_position.vector())
     .norm()
     .max(f64::EPSILON);
-    let speed_error = (result.series.speed_mps()[1]
+    let speed_error = (result.series.column(Column::SpeedMps)[1]
         - circular_speed.meters_per_second())
     .abs();
-    let energy_error = (result.series.specific_energy_m2s2()[1]
-        - result.series.specific_energy_m2s2()[0])
+    let energy_error = (result.series.column(Column::SpecificEnergyM2s2)[1]
+        - result.series.column(Column::SpecificEnergyM2s2)[0])
     .abs();
-    let h_error = (result.series.specific_angular_momentum_m2s()[1]
-        - result.series.specific_angular_momentum_m2s()[0])
+    let h_error = (result.series.column(Column::SpecificAngularMomentumM2s)[1]
+        - result.series.column(Column::SpecificAngularMomentumM2s)[0])
     .abs();
 
     Ok(Summary {
@@ -114,7 +114,7 @@ fn run<I: vast::Integrator>(
         speed_error_mps: speed_error,
         energy_error,
         h_error,
-        eccentricity: result.series.eccentricity()[1],
+        eccentricity: result.series.column(Column::Eccentricity)[1],
     })
 }
 

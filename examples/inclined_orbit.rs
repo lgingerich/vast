@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
 
 use vast::{
-    Angle, Distance, Duration, EllipticOrbit, Orbit, SimBuilder, TimeStep, TwoBodyGravity,
+    Angle, Column, Distance, Duration, EllipticOrbit, Orbit, SimBuilder, TimeStep, TwoBodyGravity,
     VelocityVerletIntegrator,
 };
 
@@ -27,13 +27,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .timestep(TimeStep::from_seconds(STEP_SECONDS)?)
         .duration(num_periods)?;
 
-    let radius_drift = (result.series.radius_km()[1] - result.series.radius_km()[0]).abs();
-    let energy_error = (result.series.specific_energy_m2s2()[1]
-        - result.series.specific_energy_m2s2()[0])
-    .abs();
-    let h_error = (result.series.specific_angular_momentum_m2s()[1]
-        - result.series.specific_angular_momentum_m2s()[0])
-    .abs();
+    let s = &result.series;
+    let radius_drift = (s.column(Column::RadiusKm)[1] - s.column(Column::RadiusKm)[0]).abs();
+    let energy_error =
+        (s.column(Column::SpecificEnergyM2s2)[1] - s.column(Column::SpecificEnergyM2s2)[0]).abs();
+    let h_error =
+        (s.column(Column::SpecificAngularMomentumM2s)[1]
+            - s.column(Column::SpecificAngularMomentumM2s)[0])
+        .abs();
     let h = result.final_state.position.vector()
         .cross(&result.final_state.velocity.vector());
     let h_hat = h.normalize();
@@ -56,7 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!(
         "eccentricity: {:.9}",
-        result.series.eccentricity()[1],
+        s.column(Column::Eccentricity)[1],
     );
     println!(
         "h direction: [{:.6}, {:.6}, {:.6}]",
