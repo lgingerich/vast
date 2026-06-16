@@ -133,6 +133,9 @@ impl AngularRate {
 pub struct Epoch(f64);
 
 impl Epoch {
+    /// Epoch zero — the start of the simulation timeline.
+    pub const ZERO: Self = Self(0.0);
+
     /// Creates an epoch from seconds since the simulation epoch.
     pub fn from_seconds(value: f64) -> Result<Self, NumericalError> {
         if !value.is_finite() {

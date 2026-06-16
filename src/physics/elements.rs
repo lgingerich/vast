@@ -887,7 +887,7 @@ mod tests {
             OrbitalElementClassification::default(),
         )?)
         .ok_or("initial RAAN undefined")?;
-        let mut epoch = Epoch::from_seconds(0.0)?;
+        let mut epoch = Epoch::ZERO;
 
         while epoch.seconds() < duration.seconds() {
             let remaining_seconds = duration.seconds() - epoch.seconds();
@@ -985,7 +985,7 @@ mod tests {
         let integrator = VelocityVerletIntegrator;
         let dt = TimeStep::from_seconds(10.0)?;
         let target_seconds = orbit.period()?.seconds() * 3.0;
-        let mut epoch = Epoch::from_seconds(0.0)?;
+        let mut epoch = Epoch::ZERO;
 
         while epoch.seconds() < target_seconds {
             let remaining_seconds = target_seconds - epoch.seconds();
@@ -1034,7 +1034,7 @@ mod tests {
         let integrator = VelocityVerletIntegrator;
         let dt = TimeStep::from_seconds(10.0)?;
         let target_seconds = orbit.period()?.seconds() * 3.0;
-        let mut epoch = Epoch::from_seconds(0.0)?;
+        let mut epoch = Epoch::ZERO;
 
         while epoch.seconds() < target_seconds {
             let remaining_seconds = target_seconds - epoch.seconds();

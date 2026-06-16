@@ -273,7 +273,7 @@ mod tests {
             &dynamics,
             &mut states.view_mut(),
             0,
-            Epoch::from_seconds(0.0)?,
+            Epoch::ZERO,
             TimeStep::from_seconds(5.0)?,
         )?;
         let next = states.read_state(0)?;
@@ -302,7 +302,7 @@ mod tests {
                 &dynamics,
                 &mut states.view_mut(),
                 0,
-                Epoch::from_seconds(0.0)?,
+                Epoch::ZERO,
                 TimeStep::from_seconds(1.0)?,
             ),
             Err(PropagationError::Dynamics(
@@ -347,7 +347,7 @@ mod tests {
                 &dynamics,
                 &mut states.view_mut(),
                 0,
-                Epoch::from_seconds(0.0)?,
+                Epoch::ZERO,
                 TimeStep::from_seconds(2.0)?,
             ),
             Err(PropagationError::Numerical(
@@ -373,7 +373,7 @@ mod tests {
                 &dynamics,
                 &mut states.view_mut(),
                 0,
-                Epoch::from_seconds(0.0)?,
+                Epoch::ZERO,
                 TimeStep::from_seconds(2.0)?,
             ),
             Err(PropagationError::Numerical(
@@ -439,7 +439,7 @@ mod tests {
             &dynamics,
             &mut states.view_mut(),
             0,
-            Epoch::from_seconds(0.0)?,
+            Epoch::ZERO,
             TimeStep::from_seconds(5.0)?,
         )?;
         let next = states.read_state(0)?;
@@ -467,7 +467,7 @@ mod tests {
             &dynamics,
             &mut states.view_mut(),
             0,
-            Epoch::from_seconds(0.0)?,
+            Epoch::ZERO,
             TimeStep::from_seconds(5.0)?,
         )?;
         let next = states.read_state(0)?;
@@ -495,7 +495,7 @@ mod tests {
             &dynamics,
             &mut states.view_mut(),
             0,
-            Epoch::from_seconds(0.0)?,
+            Epoch::ZERO,
             TimeStep::from_seconds(5.0)?,
         )?;
         let next = states.read_state(0)?;
@@ -522,7 +522,7 @@ mod tests {
                 &dynamics,
                 &mut states.view_mut(),
                 1,
-                Epoch::from_seconds(0.0)?,
+                Epoch::ZERO,
                 TimeStep::from_seconds(1.0)?,
             ),
             Err(PropagationError::State(StateError::InvalidBodyIndex)),
@@ -549,7 +549,7 @@ mod tests {
             &dynamics,
             &mut states.view_mut(),
             0,
-            Epoch::from_seconds(0.0)?,
+            Epoch::ZERO,
             TimeStep::from_seconds(1.0)?,
         )?;
 
@@ -704,7 +704,7 @@ mod tests {
         index: usize,
         period_s: f64,
     ) -> TestResult {
-        let mut epoch = Epoch::from_seconds(0.0)?;
+        let mut epoch = Epoch::ZERO;
         let base_step = TimeStep::from_seconds(30.0)?;
 
         while epoch.seconds() < period_s {

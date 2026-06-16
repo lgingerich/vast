@@ -2,7 +2,8 @@ use super::config::ScenarioConfig;
 use super::engine::{AccelerationCommand, PropagationResult, Propagator};
 use super::plan::RolloutPlan;
 use super::termination::StopReason;
-use crate::errors::{EnvironmentError, NumericalError, PropagationError};
+use crate::errors::{EnvironmentError, NumericalError};
+use crate::physics::types::Epoch;
 use crate::physics::constants::R_EARTH;
 use crate::physics::state::CartesianState;
 
@@ -81,8 +82,7 @@ impl LeoCircularEnv {
     /// Builds an environment from a scenario configuration.
     pub fn from_config(config: &ScenarioConfig) -> Result<Self, EnvironmentError> {
         let plan = config.build()?;
-        let initial_epoch =
-            crate::physics::types::Epoch::from_seconds(0.0).map_err(PropagationError::from)?;
+        let initial_epoch = Epoch::ZERO;
         let propagator = Propagator::new(plan.initial_state, initial_epoch, plan.propagation)?;
         Ok(Self {
             plan,

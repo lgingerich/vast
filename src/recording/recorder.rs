@@ -375,7 +375,7 @@ mod tests {
 
         let mut recorder = RunRecorder::new(&temp, &scenario).expect("recorder");
         let samples = vec![TrajectorySample::new(
-            Epoch::from_seconds(0.0).expect("epoch"),
+            Epoch::ZERO,
             sample_state(),
             None,
         )];

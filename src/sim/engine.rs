@@ -373,7 +373,7 @@ mod tests {
         let plan = propagation_plan(2);
         let mut propagator = Propagator::new(
             initial_state(),
-            Epoch::from_seconds(0.0).expect("epoch"),
+            Epoch::ZERO,
             plan,
         )
         .expect("propagator");
@@ -398,7 +398,7 @@ mod tests {
         let plan = propagation_plan(1);
         let mut propagator = Propagator::new(
             initial_state(),
-            Epoch::from_seconds(0.0).expect("epoch"),
+            Epoch::ZERO,
             plan,
         )
         .expect("propagator");
@@ -420,7 +420,7 @@ mod tests {
         let plan = propagation_plan(1);
         let mut propagator = Propagator::new(
             initial_state(),
-            Epoch::from_seconds(0.0).expect("epoch"),
+            Epoch::ZERO,
             plan,
         )
         .expect("propagator");

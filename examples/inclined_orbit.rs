@@ -17,8 +17,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         inclination: Angle::from_degrees(INCLINATION_DEG)?,
         raan: Angle::from_degrees(RAAN_DEG)?,
     };
-    let orbit: EllipticOrbit = spec.try_into()?;
-    let period = orbit.period()?;
+    let period = EllipticOrbit::try_from(spec)?.period()?;
     let num_periods = Duration::from_seconds(period.seconds() * PERIODS).unwrap();
 
     let result = SimBuilder::new()

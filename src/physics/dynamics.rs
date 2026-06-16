@@ -424,7 +424,7 @@ mod tests {
         let radius = R_EARTH + 400_000.0;
         let acceleration = gravity.acceleration_at(
             state_from_position(radius, 0.0, 0.0),
-            Epoch::from_seconds(0.0)?,
+            Epoch::ZERO,
         )?;
 
         assert!(acceleration.vector().x < 0.0);
@@ -442,7 +442,7 @@ mod tests {
         let acceleration = gravity
             .acceleration_at(
                 state_from_position(radius, 0.0, 0.0),
-                Epoch::from_seconds(0.0)?,
+                Epoch::ZERO,
             )?
             .vector();
 
@@ -462,7 +462,7 @@ mod tests {
         let acceleration = gravity
             .acceleration_at(
                 state_from_position(position.x, position.y, position.z),
-                Epoch::from_seconds(0.0)?,
+                Epoch::ZERO,
             )?
             .vector();
 
@@ -478,7 +478,7 @@ mod tests {
             GravitationalParameter::from_meters_cubed_per_second_squared(MU_EARTH)?,
         );
         let radius = R_EARTH + 400_000.0;
-        let epoch = Epoch::from_seconds(0.0)?;
+        let epoch = Epoch::ZERO;
         let near_acceleration = gravity
             .acceleration_at(state_from_position(radius, 0.0, 0.0), epoch)?
             .vector()
@@ -515,7 +515,7 @@ mod tests {
         assert!(matches!(
             gravity.acceleration_at(
                 state_from_position(0.0, 0.0, 0.0),
-                Epoch::from_seconds(0.0)?
+                Epoch::ZERO
             ),
             Err(DynamicsError::PositionAtGravityCenter),
         ));
@@ -530,7 +530,7 @@ mod tests {
         assert!(matches!(
             gravity.acceleration_at(
                 state_from_position(1.0e-150, 0.0, 0.0),
-                Epoch::from_seconds(0.0)?
+                Epoch::ZERO
             ),
             Err(DynamicsError::Numerical(NumericalError::NotFinite {
                 field: "acceleration"
@@ -544,7 +544,7 @@ mod tests {
         let two_body = earth_gravity()?;
         let oblate = earth_oblate_gravity(0.0)?;
         let px = R_EARTH + 400_000.0;
-        let epoch = Epoch::from_seconds(0.0)?;
+        let epoch = Epoch::ZERO;
 
         let two_body_acceleration = two_body
             .acceleration_at(state_from_position(px, 200_000.0, 300_000.0), epoch)?
@@ -566,7 +566,7 @@ mod tests {
         let acceleration = gravity
             .acceleration_at(
                 state_from_position(R_EARTH + 400_000.0, 500_000.0, 1_000_000.0),
-                Epoch::from_seconds(0.0)?,
+                Epoch::ZERO,
             )?
             .vector();
 
@@ -583,7 +583,7 @@ mod tests {
         assert!(matches!(
             gravity.acceleration_at(
                 state_from_position(0.0, 0.0, 0.0),
-                Epoch::from_seconds(0.0)?,
+                Epoch::ZERO,
             ),
             Err(DynamicsError::PositionAtGravityCenter),
         ));
@@ -618,7 +618,7 @@ mod tests {
     fn oblate_body_gravity_equatorial_j2_increases_inward_acceleration() -> TestResult {
         let two_body = earth_gravity()?;
         let oblate = earth_oblate_gravity(J2_EARTH)?;
-        let epoch = Epoch::from_seconds(0.0)?;
+        let epoch = Epoch::ZERO;
 
         let two_body_x = two_body
             .acceleration_at(state_from_position(R_EARTH + 400_000.0, 0.0, 0.0), epoch)?
@@ -638,7 +638,7 @@ mod tests {
     fn oblate_body_gravity_polar_axis_j2_reduces_inward_acceleration() -> TestResult {
         let two_body = earth_gravity()?;
         let oblate = earth_oblate_gravity(J2_EARTH)?;
-        let epoch = Epoch::from_seconds(0.0)?;
+        let epoch = Epoch::ZERO;
 
         let two_body_z = two_body
             .acceleration_at(state_from_position(0.0, 0.0, R_EARTH + 400_000.0), epoch)?
@@ -696,7 +696,7 @@ mod tests {
         );
 
         let acceleration = drag
-            .acceleration_at(state, Epoch::from_seconds(0.0)?)?
+            .acceleration_at(state, Epoch::ZERO)?
             .vector();
 
         assert!(acceleration.dot(&state.velocity_vector()) < 0.0);
@@ -718,7 +718,7 @@ mod tests {
         );
 
         let acceleration = drag
-            .acceleration_at(state, Epoch::from_seconds(0.0)?)?
+            .acceleration_at(state, Epoch::ZERO)?
             .vector();
 
         assert_close(acceleration.norm(), 0.0, EPS);
@@ -744,7 +744,7 @@ mod tests {
         );
 
         assert!(matches!(
-            drag.acceleration_at(state, Epoch::from_seconds(0.0)?),
+            drag.acceleration_at(state, Epoch::ZERO),
             Err(DynamicsError::Numerical(NumericalError::NotFinite {
                 field: "acceleration"
             })),
@@ -761,7 +761,7 @@ mod tests {
             Vector3::new(R_EARTH + 250_000.0, 0.0, 0.0),
             Vector3::new(0.0, 7_700.0, 0.0),
         );
-        let epoch = Epoch::from_seconds(0.0)?;
+        let epoch = Epoch::ZERO;
 
         let gravity_acceleration = composite.first.acceleration_at(state, epoch)?;
         let drag_acceleration = composite.second.acceleration_at(state, epoch)?;
@@ -806,7 +806,7 @@ mod tests {
             .square_meters_per_square_second();
         let integrator = RungeKutta4Integrator;
         let dt = TimeStep::from_seconds(10.0)?;
-        let mut epoch = Epoch::from_seconds(0.0)?;
+        let mut epoch = Epoch::ZERO;
 
         for _ in 0..120 {
             integrator.step(&dynamics, &mut states.view_mut(), 0, epoch, dt)?;
@@ -847,7 +847,7 @@ mod tests {
         let dynamics = CompositeDynamics::new(TwoBodyGravity::new(mu), drag_model(0.1)?);
         let integrator = RungeKutta4Integrator;
         let dt = TimeStep::from_seconds(10.0)?;
-        let mut epoch = Epoch::from_seconds(0.0)?;
+        let mut epoch = Epoch::ZERO;
         let period_s = orbit.period()?.seconds();
 
         while epoch.seconds() < period_s {

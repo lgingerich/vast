@@ -57,7 +57,7 @@ impl OrbitVizScenario {
             earth,
             integrator,
             states,
-            t: Epoch::from_seconds(0.0)?,
+            t: Epoch::ZERO,
             dt: TimeStep::from_seconds(1.0)?,
             earth_radius_km,
             ideal_orbital_radius: orbit.semi_major_axis(),

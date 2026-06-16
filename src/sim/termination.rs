@@ -285,7 +285,7 @@ mod tests {
 
     #[test]
     fn duration_met_when_elapsed_reaches_target() {
-        let start = Epoch::from_seconds(0.0).expect("epoch");
+        let start = Epoch::ZERO;
         let current = Epoch::from_seconds(100.0).expect("epoch");
         let condition =
             TerminationCondition::Duration(Duration::from_seconds(100.0).expect("duration"));
@@ -307,7 +307,7 @@ mod tests {
 
     #[test]
     fn step_count_met_after_limit() {
-        let start = Epoch::from_seconds(0.0).expect("epoch");
+        let start = Epoch::ZERO;
         let current = Epoch::from_seconds(1.0).expect("epoch");
         let condition = TerminationCondition::StepCount(5);
         let state = sample_state();
@@ -348,7 +348,7 @@ mod tests {
 
         assert_eq!(
             condition.stop_reason(TerminationContext {
-                start_epoch: Epoch::from_seconds(0.0).expect("epoch"),
+                start_epoch: Epoch::ZERO,
                 current_epoch: epoch,
                 steps: 1,
                 state: &state,
@@ -370,7 +370,7 @@ mod tests {
 
         assert_eq!(
             condition.stop_reason(TerminationContext {
-                start_epoch: Epoch::from_seconds(0.0).expect("epoch"),
+                start_epoch: Epoch::ZERO,
                 current_epoch: epoch,
                 steps: 1,
                 state: &state,

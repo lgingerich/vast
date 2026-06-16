@@ -148,7 +148,7 @@ impl<D: Dynamics, I: Integrator> SimBuilder<D, I> {
             .integrator
             .take()
             .ok_or(PropagationError::BuildIncomplete)?;
-        let start_epoch = Epoch::from_seconds(0.0)?;
+        let start_epoch = Epoch::ZERO;
         let mu = GravitationalParameter::earth();
 
         let initial_diagnostics = OrbitalDiagnostics::from_state(&state, mu)?;

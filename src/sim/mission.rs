@@ -30,7 +30,7 @@ pub fn run_mission(config: &MissionScenarioConfig) -> Result<MissionResult, Miss
     let plan = config.build()?;
     let mut propagator = Propagator::new(
         plan.initial_state,
-        crate::physics::types::Epoch::from_seconds(0.0)?,
+        crate::physics::types::Epoch::ZERO,
         plan.propagation,
     )?;
 
@@ -39,7 +39,7 @@ pub fn run_mission(config: &MissionScenarioConfig) -> Result<MissionResult, Miss
     }
 
     let mut segment_results = Vec::with_capacity(plan.segments.len());
-    let mut final_epoch = crate::physics::types::Epoch::from_seconds(0.0)?;
+    let mut final_epoch = crate::physics::types::Epoch::ZERO;
 
     for (segment_index, segment) in plan.segments.iter().enumerate() {
         let propagation = propagator.run_segment(&segment.termination, Some(segment_index))?;
