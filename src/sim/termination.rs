@@ -152,13 +152,16 @@ pub(crate) struct TerminationContext<'a> {
     /// Current Cartesian state.
     pub state: &'a CartesianState,
     /// Previous orbital phase angle in radians, if known.
+    ///
+    /// Should be in `[0, 2π)` as returned by `Angle::radians()`.
     pub previous_orbital_angle_rad: Option<f64>,
     /// Previous radial velocity in meters per second, if known.
     pub previous_radial_velocity_mps: Option<f64>,
     /// Pre-computed current orbital phase angle in radians, if available.
     ///
     /// When supplied by the caller, `orbital_crossing` uses this value
-    /// instead of re-computing `OrbitalElements::from_state`.
+    /// instead of re-computing `OrbitalElements::from_state`. The value
+    /// should be in `[0, 2π)` as returned by `Angle::radians()`.
     pub current_orbital_phase_angle_rad: Option<f64>,
 }
 
@@ -249,29 +252,17 @@ fn orbital_phase_angle_rad(state: &CartesianState, mu: GravitationalParameter) -
     Some(elements.orbital_phase_angle().radians())
 }
 
-fn normalize_angle_rad(angle_rad: f64) -> f64 {
-    let mut angle = angle_rad % std::f64::consts::TAU;
-    if angle < 0.0 {
-        angle += std::f64::consts::TAU;
-    }
-    angle
-}
-
 fn angle_near(angle_rad: f64, target_rad: f64) -> bool {
-    let delta = (normalize_angle_rad(angle_rad) - normalize_angle_rad(target_rad)).abs();
+    let delta = (angle_rad - target_rad).abs();
     delta <= ORBITAL_ANGLE_TOLERANCE_RAD
-        || (std::f64::consts::TAU - delta).abs() <= ORBITAL_ANGLE_TOLERANCE_RAD
+        || (std::f64::consts::TAU - delta) <= ORBITAL_ANGLE_TOLERANCE_RAD
 }
 
 fn crossed_angle(previous_rad: f64, current_rad: f64, target_rad: f64) -> bool {
-    let previous = normalize_angle_rad(previous_rad);
-    let current = normalize_angle_rad(current_rad);
-    let target = normalize_angle_rad(target_rad);
-
-    if previous <= current {
-        previous < target && target <= current + ORBITAL_ANGLE_TOLERANCE_RAD
+    if previous_rad <= current_rad {
+        previous_rad < target_rad && target_rad <= current_rad + ORBITAL_ANGLE_TOLERANCE_RAD
     } else {
-        previous < target || target <= current + ORBITAL_ANGLE_TOLERANCE_RAD
+        previous_rad < target_rad || target_rad <= current_rad + ORBITAL_ANGLE_TOLERANCE_RAD
     }
 }
 
