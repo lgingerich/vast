@@ -2,8 +2,8 @@
 
 use vast::{
     Distance, Duration, EllipticOrbit, EulerIntegrator, LeapfrogIntegrator, Orbit, Position,
-    RungeKutta4Integrator, SimBuilder, SpecificAngularMomentum, SpecificEnergy, Speed, TimeStep,
-    TwoBodyGravity, VelocityVerletIntegrator,
+    RungeKutta4Integrator, SimBuilder, Speed, TimeStep, TwoBodyGravity,
+    VelocityVerletIntegrator,
 };
 
 const ALTITUDE_KM: f64 = (vast::R_EARTH + 400_000.0) / 1000.0;
@@ -17,8 +17,8 @@ struct Summary {
     overshoot_s: f64,
     position_drift_km: f64,
     speed_error_mps: f64,
-    energy_error: SpecificEnergy,
-    h_error: SpecificAngularMomentum,
+    energy_error: f64,
+    h_error: f64,
     eccentricity: f64,
 }
 
@@ -94,17 +94,15 @@ fn run<I: vast::Integrator>(
         - initial_position.vector())
     .norm()
     .max(f64::EPSILON);
-    let speed_error = (result.diagnostics.speed().meters_per_second()
+    let speed_error = (result.series.speed_mps()[1]
         - circular_speed.meters_per_second())
     .abs();
-    let energy_error = result
-        .diagnostics
-        .specific_energy()
-        .abs_diff(result.initial_diagnostics.specific_energy());
-    let h_error = result
-        .diagnostics
-        .specific_angular_momentum()
-        .abs_diff(result.initial_diagnostics.specific_angular_momentum());
+    let energy_error = (result.series.specific_energy_m2s2()[1]
+        - result.series.specific_energy_m2s2()[0])
+    .abs();
+    let h_error = (result.series.specific_angular_momentum_m2s()[1]
+        - result.series.specific_angular_momentum_m2s()[0])
+    .abs();
 
     Ok(Summary {
         method,
@@ -116,7 +114,7 @@ fn run<I: vast::Integrator>(
         speed_error_mps: speed_error,
         energy_error,
         h_error,
-        eccentricity: result.diagnostics.eccentricity().scalar(),
+        eccentricity: result.series.eccentricity()[1],
     })
 }
 
@@ -130,8 +128,8 @@ fn print_summary(s: &Summary) {
         s.overshoot_s,
         s.position_drift_km,
         s.speed_error_mps,
-        s.energy_error.square_meters_per_square_second(),
-        s.h_error.square_meters_per_second(),
+        s.energy_error,
+        s.h_error,
         s.eccentricity,
     );
 }

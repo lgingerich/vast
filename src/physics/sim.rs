@@ -1,5 +1,5 @@
 use crate::errors::PropagationError;
-use crate::physics::diagnostics::OrbitalDiagnostics;
+use crate::physics::diagnostics::{DiagnosticSeries, OrbitalDiagnostics};
 use crate::physics::dynamics::Dynamics;
 use crate::physics::elements::{OrbitalElementClassification, OrbitalElements};
 use crate::physics::integrators::Integrator;
@@ -72,10 +72,8 @@ pub struct SimResult {
     pub final_epoch: Epoch,
     /// Number of integrator steps taken.
     pub steps: usize,
-    /// Two-body diagnostics at the start of propagation.
-    pub initial_diagnostics: OrbitalDiagnostics,
-    /// Two-body diagnostics computed from the final state.
-    pub diagnostics: OrbitalDiagnostics,
+    /// Diagnostic scalars across the trajectory (index 0 = initial, index 1 = final).
+    pub series: DiagnosticSeries,
     /// Bound orbital elements at the start of propagation.
     pub initial_elements: OrbitalElements,
     /// Bound orbital elements computed from the final state.
@@ -215,11 +213,6 @@ impl<D: Dynamics, I: Integrator> Sim<D, I> {
         Ok(self.states.view().read_state(0)?)
     }
 
-    /// Computes two-body diagnostics from the current state.
-    pub fn diagnostics(&self) -> Result<OrbitalDiagnostics, crate::errors::StateError> {
-        OrbitalDiagnostics::from_states(&self.states.view(), 0, self.mu)
-    }
-
     /// Returns the current simulation epoch.
     pub const fn epoch(&self) -> Epoch {
         self.epoch
@@ -230,27 +223,22 @@ impl<D: Dynamics, I: Integrator> Sim<D, I> {
         self.steps
     }
 
-    /// Returns the two-body diagnostics computed at the start of propagation.
-    pub const fn initial_diagnostics(&self) -> &OrbitalDiagnostics {
-        &self.initial_diagnostics
-    }
-
     /// Snapshot of the current state, diagnostics, and orbital elements.
     pub fn snapshot(&self) -> Result<SimResult, PropagationError> {
         let final_state = self.state()?;
-        let diagnostics = OrbitalDiagnostics::from_state(&final_state, self.mu)?;
+        let final_diagnostics = OrbitalDiagnostics::from_state(&final_state, self.mu)?;
         let elements = OrbitalElements::from_state(
             &final_state,
             self.mu,
             OrbitalElementClassification::default(),
         )?;
         let elapsed = self.epoch.duration_since(self.start_epoch);
+        let series = DiagnosticSeries::from_pair(&self.initial_diagnostics, &final_diagnostics);
         Ok(SimResult {
             final_state,
             final_epoch: self.epoch,
             steps: self.steps,
-            initial_diagnostics: self.initial_diagnostics,
-            diagnostics,
+            series,
             initial_elements: self.initial_elements,
             elements,
             elapsed,

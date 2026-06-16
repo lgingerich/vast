@@ -36,18 +36,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .timestep(TimeStep::from_seconds(STEP_SECONDS)?)
         .duration(total_duration)?;
 
-    let initial_alt_km = result.initial_diagnostics.radius().km() - R_EARTH / 1000.0;
-    let final_alt_km = result.diagnostics.radius().km() - R_EARTH / 1000.0;
-    let energy_delta = result
-        .diagnostics
-        .specific_energy()
-        .square_meters_per_square_second()
-        - result
-            .initial_diagnostics
-            .specific_energy()
-            .square_meters_per_square_second();
-    let speed_delta = result.diagnostics.speed().meters_per_second()
-        - result.initial_diagnostics.speed().meters_per_second();
+    let s = &result.series;
+    let initial_alt_km = s.radius_km()[0] - R_EARTH / 1000.0;
+    let final_alt_km = s.radius_km()[1] - R_EARTH / 1000.0;
+    let energy_delta = s.specific_energy_m2s2()[1] - s.specific_energy_m2s2()[0];
+    let speed_delta = s.speed_mps()[1] - s.speed_mps()[0];
 
     println!(
         "Drag decay demo: initial altitude {:.0} km | duration {:.1} h",
@@ -63,10 +56,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "specific energy change: {:+.6} | speed change: {:+.6} m/s",
         energy_delta, speed_delta,
     );
-    println!(
-        "eccentricity: {:.9}",
-        result.diagnostics.eccentricity().scalar(),
-    );
+    println!("eccentricity: {:.9}", s.eccentricity()[1]);
 
     Ok(())
 }

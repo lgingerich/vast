@@ -1,11 +1,11 @@
 #![allow(missing_docs)]
 
 use vast::{
-    Angle, Distance, Duration, EllipticOrbit, Orbit, R_EARTH, SimBuilder, TimeStep,
-    TwoBodyGravity, VelocityVerletIntegrator,
+    Angle, Distance, Duration, EllipticOrbit, Orbit, SimBuilder, TimeStep, TwoBodyGravity,
+    VelocityVerletIntegrator,
 };
 
-const ALTITUDE_KM: f64 = (R_EARTH + 600_000.0) / 1000.0;
+const ALTITUDE_KM: f64 = (vast::R_EARTH + 600_000.0) / 1000.0;
 const INCLINATION_DEG: f64 = 51.6;
 const RAAN_DEG: f64 = 32.0;
 const STEP_SECONDS: f64 = 10.0;
@@ -27,20 +27,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .timestep(TimeStep::from_seconds(STEP_SECONDS)?)
         .duration(num_periods)?;
 
-    let radius_drift = result
-        .diagnostics
-        .radius()
-        .km_diff(result.initial_diagnostics.radius())
-        .abs();
-    let energy_error = result
-        .initial_diagnostics
-        .specific_energy()
-        .abs_diff(result.diagnostics.specific_energy());
-    let h_error = result
-        .initial_diagnostics
-        .specific_angular_momentum()
-        .abs_diff(result.diagnostics.specific_angular_momentum());
-    let h_hat = result.diagnostics.specific_angular_momentum_vector().normalize();
+    let radius_drift = (result.series.radius_km()[1] - result.series.radius_km()[0]).abs();
+    let energy_error = (result.series.specific_energy_m2s2()[1]
+        - result.series.specific_energy_m2s2()[0])
+    .abs();
+    let h_error = (result.series.specific_angular_momentum_m2s()[1]
+        - result.series.specific_angular_momentum_m2s()[0])
+    .abs();
+    let h = result.final_state.position.vector()
+        .cross(&result.final_state.velocity.vector());
+    let h_hat = h.normalize();
 
     println!(
         "Inclined circular orbit: altitude {:.0} km | inclination {:.1}° | RAAN {:.1}°",
@@ -54,13 +50,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!(
         "radius drift: {:.6} km | energy error: {:.6} | h error: {:.6}",
-        radius_drift,
-        energy_error.square_meters_per_square_second(),
-        h_error.square_meters_per_second(),
+        radius_drift.max(f64::EPSILON),
+        energy_error,
+        h_error,
     );
     println!(
         "eccentricity: {:.9}",
-        result.diagnostics.eccentricity().scalar(),
+        result.series.eccentricity()[1],
     );
     println!(
         "h direction: [{:.6}, {:.6}, {:.6}]",

@@ -248,6 +248,97 @@ impl OrbitalDiagnostics {
     }
 }
 
+/// Per-step diagnostic scalars collected across a trajectory.
+///
+/// Each field is a dense array with one entry per snapshot.
+/// For the initial+final snapshots from [`SimResult`], `len()` is 2.
+/// Future per-step recording paths can produce series of arbitrary length.
+///
+/// All scalar values are stored in their natural SI units so callers
+/// can compute differences, variance, and other reductions without
+/// boxing through domain newtypes.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DiagnosticSeries {
+    radius_km: Vec<f64>,
+    speed_mps: Vec<f64>,
+    specific_energy_m2s2: Vec<f64>,
+    specific_angular_momentum_m2s: Vec<f64>,
+    eccentricity: Vec<f64>,
+    semi_major_axis_km: Vec<f64>,
+}
+
+impl DiagnosticSeries {
+    /// Creates a series from a pair of snapshots (initial, final).
+    pub fn from_pair(initial: &OrbitalDiagnostics, terminal: &OrbitalDiagnostics) -> Self {
+        let e_sma_km = |d: &OrbitalDiagnostics| {
+            d.semi_major_axis
+                .map(|a| a.km())
+                .unwrap_or(f64::NAN)
+        };
+        Self {
+            radius_km: vec![initial.radius.km(), terminal.radius.km()],
+            speed_mps: vec![
+                initial.speed.meters_per_second(),
+                terminal.speed.meters_per_second(),
+            ],
+            specific_energy_m2s2: vec![
+                initial.specific_energy.square_meters_per_square_second(),
+                terminal.specific_energy.square_meters_per_square_second(),
+            ],
+            specific_angular_momentum_m2s: vec![
+                initial
+                    .specific_angular_momentum
+                    .square_meters_per_second(),
+                terminal
+                    .specific_angular_momentum
+                    .square_meters_per_second(),
+            ],
+            eccentricity: vec![initial.eccentricity.scalar(), terminal.eccentricity.scalar()],
+            semi_major_axis_km: vec![e_sma_km(initial), e_sma_km(terminal)],
+        }
+    }
+
+    /// Number of snapshots in the series.
+    pub fn len(&self) -> usize {
+        self.radius_km.len()
+    }
+
+    /// Returns `true` if the series is empty.
+    pub fn is_empty(&self) -> bool {
+        self.radius_km.is_empty()
+    }
+
+    /// Radius from the central body center of mass, in kilometers.
+    pub fn radius_km(&self) -> &[f64] {
+        &self.radius_km
+    }
+
+    /// Inertial speed, in meters per second.
+    pub fn speed_mps(&self) -> &[f64] {
+        &self.speed_mps
+    }
+
+    /// Specific orbital energy, in m²/s².
+    pub fn specific_energy_m2s2(&self) -> &[f64] {
+        &self.specific_energy_m2s2
+    }
+
+    /// Specific angular momentum magnitude, in m²/s.
+    pub fn specific_angular_momentum_m2s(&self) -> &[f64] {
+        &self.specific_angular_momentum_m2s
+    }
+
+    /// Orbital eccentricity, dimensionless.
+    pub fn eccentricity(&self) -> &[f64] {
+        &self.eccentricity
+    }
+
+    /// Semi-major axis in kilometers, `NaN` for unbound orbits.
+    pub fn semi_major_axis_km(&self) -> &[f64] {
+        &self.semi_major_axis_km
+    }
+}
+
 fn bound_semi_major_axis(
     mu: GravitationalParameter,
     specific_energy: SpecificEnergy,

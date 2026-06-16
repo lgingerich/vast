@@ -7,7 +7,7 @@ pub(crate) mod sim;
 
 pub use physics::{
     constants::{J2_EARTH, MU_EARTH, R_EARTH},
-    diagnostics::{OrbitalDiagnostics, SpecificAngularMomentum, SpecificEnergy},
+    diagnostics::{DiagnosticSeries, OrbitalDiagnostics, SpecificAngularMomentum, SpecificEnergy},
     dynamics::{
         AtmosphericDrag, CompositeDynamics, Dynamics, ExponentialAtmosphere, OblateBodyGravity,
         TwoBodyGravity,
