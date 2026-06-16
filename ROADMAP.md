@@ -29,7 +29,9 @@ recording with segment metadata**, **`runner` CLI (`run`, `serve`)**,
 **React + R3F replay UI (`ui/`)**, **RL ops dashboard with per-run metrics
 (reward, episode length, stop reasons, final altitude) and synchronized
 multi-episode comparison view**, **two-body/J2/J2+drag force models wired from
-scenario config through the `RuntimeDynamics` dispatch enum**.
+scenario config through the `RuntimeDynamics` dispatch enum**, **`CentralBody`
+and `AtmosphereModel` domain types centralizing Earth constants and atmosphere
+parameters, with force-model resolution reading from the scenario body**.
 
 ---
 
@@ -185,26 +187,6 @@ production simulator; use benchmark sweeps to pick `dt` instead.
 ---
 
 ## Orbit Setup & Domain Model
-
-### P2 — `CentralBody` Domain Type
-
-**What:** A body type owning `mu`, equatorial radius, rotation rate, and later
-gravity/atmosphere parameters, instead of scattering Earth constants through
-scenarios.
-
-**Why:** Scenarios currently assemble gravity, drag, and diagnostics from raw
-constants. A body type makes Mars/Moon/Sun setups cleaner and keeps units and
-invariants in one place.
-
-**How it helps:** Simplifies scenario construction and prepares for multi-body
-environments without leaking body-specific constants into examples.
-
-**First version scope:**
-
-- Earth-first body definition using existing constants.
-- Conversion helpers to existing gravity and atmosphere models.
-
-**Defer:** ephemeris-attached bodies, body catalogs, external SPICE/data files.
 
 ### P3 — Spacecraft Properties Bundle
 

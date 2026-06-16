@@ -1,9 +1,9 @@
 #![allow(missing_docs)]
 
 use vast::{
-    AngularRate, AreaPerMass, AtmosphericDrag, Column, CompositeDynamics, Distance, Duration,
-    ExponentialAtmosphere, MassDensity, Orbit, R_EARTH, RungeKutta4Integrator, SimBuilder,
-    TimeStep, TwoBodyGravity,
+    AreaPerMass, AtmosphericDrag, CentralBody, Column, CompositeDynamics, Distance, Duration,
+    ExponentialAtmosphere, Orbit, R_EARTH, RungeKutta4Integrator, SimBuilder, TimeStep,
+    TwoBodyGravity,
 };
 
 const ALTITUDE_KM: f64 = 250.0;
@@ -12,24 +12,19 @@ const PROPAGATION_HOURS: f64 = 6.0;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- configure simulation ---
-    let atmosphere = ExponentialAtmosphere::new(
-        Distance::new(R_EARTH)?,
-        Distance::new(250.0 * 1000.0)?,
-        MassDensity::new(1.0e-10)?,
-        Distance::new(50.0 * 1000.0)?,
-        AngularRate::new(7.292_115_9e-5)?,
-    );
+    let body = CentralBody::earth()?;
+    let atmosphere = ExponentialAtmosphere::from_body(&body)?;
     let dynamics = CompositeDynamics::new(
-        TwoBodyGravity::earth(),
+        TwoBodyGravity::from_body(&body),
         AtmosphericDrag::new(atmosphere, AreaPerMass::new(0.02)?),
     );
     let total_duration = Duration::new(PROPAGATION_HOURS * 3_600.0).unwrap();
 
     // --- run simulation ---
-    let result = SimBuilder::new()
-        .orbit(Orbit::CircularEquatorial {
-            altitude: Distance::new(ALTITUDE_KM * 1000.0)?,
-        })?
+    let result = SimBuilder::new(body)
+        .orbit(Orbit::circular_equatorial(Distance::new(
+            ALTITUDE_KM * 1000.0,
+        )?))?
         .dynamics(dynamics)
         .integrator(RungeKutta4Integrator)
         .timestep(TimeStep::new(STEP_SECONDS)?)

@@ -1,4 +1,5 @@
 use crate::errors::PropagationError;
+use crate::physics::body::CentralBody;
 use crate::physics::diagnostics::{DiagnosticSeries, OrbitalDiagnostics};
 use crate::physics::dynamics::Dynamics;
 use crate::physics::elements::{OrbitalElementClassification, OrbitalElements};
@@ -37,19 +38,21 @@ pub struct Sim<D: Dynamics, I: Integrator> {
 /// ```
 /// # use vast::*;
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// let orbit: EllipticOrbit = Orbit::CircularInclined {
-///     altitude: Distance::new((6678.0) * 1000.0)?,
-///     inclination: Angle::from_degrees(51.6)?,
-///     raan: Angle::from_degrees(32.0)?,
-/// }.try_into()?;
+/// let body = CentralBody::earth()?;
+/// let orbit: EllipticOrbit = Orbit::circular_inclined(
+///     Distance::new((6678.0) * 1000.0)?,
+///     Angle::from_degrees(51.6)?,
+///     Angle::from_degrees(32.0)?,
+/// )
+/// .to_elliptic(&body)?;
 /// let period = orbit.period()?;
-/// let result = SimBuilder::new()
-///     .orbit(Orbit::CircularInclined {
-///         altitude: Distance::new((6678.0) * 1000.0)?,
-///         inclination: Angle::from_degrees(51.6)?,
-///         raan: Angle::from_degrees(32.0)?,
-///     })?
-///     .dynamics(TwoBodyGravity::earth())
+/// let result = SimBuilder::new(body)
+///     .orbit(Orbit::circular_inclined(
+///         Distance::new((6678.0) * 1000.0)?,
+///         Angle::from_degrees(51.6)?,
+///         Angle::from_degrees(32.0)?,
+///     ))?
+///     .dynamics(TwoBodyGravity::from_body(&body))
 ///     .integrator(VelocityVerletIntegrator)
 ///     .timestep(TimeStep::new(10.0)?)
 ///     .duration(Duration::new(period.seconds() * 3.0).unwrap())?;
@@ -57,6 +60,7 @@ pub struct Sim<D: Dynamics, I: Integrator> {
 /// # }
 /// ```
 pub struct SimBuilder<D = (), I = ()> {
+    body: CentralBody,
     state: Option<CartesianState>,
     dynamics: Option<D>,
     integrator: Option<I>,
@@ -83,9 +87,14 @@ pub struct SimResult {
 }
 
 impl SimBuilder {
-    /// Creates a new builder with nothing configured yet.
-    pub fn new() -> Self {
+    /// Creates a new builder configured for the given central body.
+    ///
+    /// The body supplies the gravitational parameter used for diagnostics and
+    /// orbital-element extraction, and the equatorial radius used when
+    /// converting [`Orbit`] altitude specs into Cartesian state.
+    pub fn new(body: CentralBody) -> Self {
         Self {
+            body,
             state: None,
             dynamics: None,
             integrator: None,
@@ -97,10 +106,11 @@ impl SimBuilder {
 impl<D, I> SimBuilder<D, I> {
     /// Sets the initial orbit from an [`Orbit`] specification.
     ///
-    /// Converts the spec into a validated [`crate::physics::orbits::EllipticOrbit`], then into
-    /// the initial [`CartesianState`].
+    /// Converts the spec into a validated [`crate::physics::orbits::EllipticOrbit`]
+    /// around the builder's central body, then into the initial
+    /// [`CartesianState`].
     pub fn orbit(mut self, spec: Orbit) -> Result<Self, PropagationError> {
-        let elliptic = crate::physics::orbits::EllipticOrbit::try_from(spec)?;
+        let elliptic = spec.to_elliptic(&self.body)?;
         let state = elliptic.to_cartesian_state()?;
         self.state = Some(state);
         Ok(self)
@@ -109,6 +119,7 @@ impl<D, I> SimBuilder<D, I> {
     /// Sets the dynamics model.
     pub fn dynamics<NewD: Dynamics>(self, dynamics: NewD) -> SimBuilder<NewD, I> {
         SimBuilder {
+            body: self.body,
             state: self.state,
             dynamics: Some(dynamics),
             integrator: self.integrator,
@@ -119,6 +130,7 @@ impl<D, I> SimBuilder<D, I> {
     /// Sets the time integrator.
     pub fn integrator<NewI: Integrator>(self, integrator: NewI) -> SimBuilder<D, NewI> {
         SimBuilder {
+            body: self.body,
             state: self.state,
             dynamics: self.dynamics,
             integrator: Some(integrator),
@@ -147,7 +159,7 @@ impl<D: Dynamics, I: Integrator> SimBuilder<D, I> {
             .take()
             .ok_or(PropagationError::BuildIncomplete)?;
         let start_epoch = Epoch::ZERO;
-        let mu = GravitationalParameter::earth();
+        let mu = self.body.mu();
 
         let initial_diagnostics = OrbitalDiagnostics::from_state(&state, mu)?;
         let initial_elements =
@@ -264,11 +276,5 @@ impl<D: Dynamics, I: Integrator> Sim<D, I> {
             elements,
             elapsed,
         })
-    }
-}
-
-impl Default for SimBuilder {
-    fn default() -> Self {
-        Self::new()
     }
 }

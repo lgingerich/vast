@@ -20,12 +20,12 @@ impl TwoBodyGravity {
         Self { mu }
     }
 
-    /// Point-mass gravity model using Earth's standard gravitational parameter.
+    /// Creates a point-mass gravity model from a central body's gravitational
+    /// parameter.
     #[inline]
-    pub const fn earth() -> Self {
-        Self {
-            mu: GravitationalParameter::earth(),
-        }
+    #[must_use]
+    pub const fn from_body(body: &crate::physics::body::CentralBody) -> Self {
+        Self { mu: body.mu() }
     }
 
     /// Returns the central body's gravitational parameter.
@@ -59,6 +59,21 @@ impl OblateBodyGravity {
             equatorial_radius,
             j2,
         }
+    }
+
+    /// Creates an oblate-body gravity model from a central body.
+    ///
+    /// Returns [`NumericalError::ConstraintViolation`] if the body has no J2
+    /// coefficient (point-mass only).
+    #[inline]
+    pub fn from_body(body: &crate::physics::body::CentralBody) -> Result<Self, NumericalError> {
+        let Some(j2) = body.j2() else {
+            return Err(NumericalError::ConstraintViolation {
+                field: "j2",
+                reason: "central body has no J2 coefficient",
+            });
+        };
+        Ok(Self::new(body.mu(), body.equatorial_radius(), j2))
     }
 
     /// Returns the central body's gravitational parameter.
@@ -112,6 +127,27 @@ impl ExponentialAtmosphere {
             scale_height,
             angular_rate,
         }
+    }
+
+    /// Creates an exponential atmosphere from a central body.
+    ///
+    /// Returns [`NumericalError::ConstraintViolation`] if the body has no
+    /// atmosphere.
+    #[inline]
+    pub fn from_body(body: &crate::physics::body::CentralBody) -> Result<Self, NumericalError> {
+        let Some(atmosphere) = body.atmosphere() else {
+            return Err(NumericalError::ConstraintViolation {
+                field: "atmosphere",
+                reason: "central body has no atmosphere",
+            });
+        };
+        Ok(Self::new(
+            body.equatorial_radius(),
+            atmosphere.reference_altitude(),
+            atmosphere.reference_density(),
+            atmosphere.scale_height(),
+            body.rotation_rate(),
+        ))
     }
 
     /// Returns the planet reference radius.

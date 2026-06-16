@@ -1,6 +1,4 @@
-use std::convert::TryFrom;
-
-use super::constants::R_EARTH;
+use super::body::CentralBody;
 use super::elements::EllipticElementSet;
 use super::state::CartesianState;
 use super::types::{Angle, Distance, Duration, Eccentricity, GravitationalParameter, Speed};
@@ -177,35 +175,37 @@ impl EllipticOrbit {
     }
 }
 
-/// Orbital specification that converts into a validated [`EllipticOrbit`].
+/// Convenience orbital specification that converts into a validated
+/// [`EllipticOrbit`] when matched with a [`CentralBody`].
 ///
-/// Each variant carries only the degrees of freedom relevant to that
-/// orbital regime. Missing angles are filled by convention (zero for
-/// circular orbits, prograde direction by default), and the Earth
-/// gravitational parameter is used throughout.
+/// `Orbit` stores only the geometric degrees of freedom for an orbital
+/// regime. The central body's gravitational parameter and equatorial radius
+/// are supplied by the caller when converting via [`Orbit::to_elliptic`].
 ///
 /// # Examples
 ///
 /// ```
-/// use vast::{Orbit, Distance, Angle, EllipticOrbit};
+/// use vast::{CentralBody, Distance, Angle, EllipticOrbit, Orbit};
 ///
-/// let orbit: EllipticOrbit = Orbit::CircularInclined {
-///     altitude: Distance::new((6678.0) * 1000.0)?,
-///     inclination: Angle::from_degrees(51.6)?,
-///     raan: Angle::from_degrees(32.0)?,
-/// }.try_into()?;
+/// let body = CentralBody::earth()?;
+/// let orbit: EllipticOrbit = Orbit::circular_inclined(
+///     Distance::new((6678.0) * 1000.0)?,
+///     Angle::from_degrees(51.6)?,
+///     Angle::from_degrees(32.0)?,
+/// )
+/// .to_elliptic(&body)?;
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Orbit {
-    /// Circular equatorial Earth orbit.
+    /// Circular equatorial orbit.
     CircularEquatorial {
-        /// Altitude above Earth's equatorial surface.
+        /// Altitude above the central body's equatorial surface.
         altitude: Distance,
     },
-    /// Circular inclined Earth orbit.
+    /// Circular inclined orbit.
     CircularInclined {
-        /// Altitude above Earth's equatorial surface.
+        /// Altitude above the central body's equatorial surface.
         altitude: Distance,
         /// Inclination from the equatorial plane.
         inclination: Angle,
@@ -231,14 +231,57 @@ pub enum Orbit {
     },
 }
 
-impl TryFrom<Orbit> for EllipticOrbit {
-    type Error = NumericalError;
+impl Orbit {
+    /// Creates a circular equatorial orbit specification at the given altitude
+    /// above a central body.
+    pub fn circular_equatorial(altitude: Distance) -> Self {
+        Self::CircularEquatorial { altitude }
+    }
 
-    fn try_from(spec: Orbit) -> Result<Self, Self::Error> {
-        let mu = GravitationalParameter::earth();
-        match spec {
+    /// Creates a circular inclined orbit specification at the given altitude
+    /// above a central body.
+    pub fn circular_inclined(altitude: Distance, inclination: Angle, raan: Angle) -> Self {
+        Self::CircularInclined {
+            altitude,
+            inclination,
+            raan,
+        }
+    }
+
+    /// Creates an orbit specification with all classical Keplerian elements.
+    pub fn elliptic(
+        semi_major_axis: Distance,
+        eccentricity: Eccentricity,
+        inclination: Angle,
+        raan: Angle,
+        arg_periapsis: Angle,
+        true_anomaly: Angle,
+        direction: OrbitDirection,
+    ) -> Self {
+        Self::Elliptic {
+            semi_major_axis,
+            eccentricity,
+            inclination,
+            raan,
+            arg_periapsis,
+            true_anomaly,
+            direction,
+        }
+    }
+
+    /// Converts this orbital specification into a validated [`EllipticOrbit`]
+    /// around the given central body.
+    ///
+    /// The body supplies the gravitational parameter and equatorial radius.
+    /// Circular variants compute the semi-major axis as
+    /// `body.equatorial_radius() + altitude`.
+    pub fn to_elliptic(self, body: &CentralBody) -> Result<EllipticOrbit, NumericalError> {
+        let mu = body.mu();
+        let equatorial_radius = body.equatorial_radius();
+        match self {
             Orbit::CircularEquatorial { altitude } => {
-                let semi_major_axis = Distance::new(R_EARTH + altitude.meters())?;
+                let semi_major_axis =
+                    Distance::new(equatorial_radius.meters() + altitude.meters())?;
                 EllipticOrbit::new(
                     semi_major_axis,
                     Eccentricity::CIRCULAR,
@@ -255,7 +298,8 @@ impl TryFrom<Orbit> for EllipticOrbit {
                 inclination,
                 raan,
             } => {
-                let semi_major_axis = Distance::new(R_EARTH + altitude.meters())?;
+                let semi_major_axis =
+                    Distance::new(equatorial_radius.meters() + altitude.meters())?;
                 EllipticOrbit::new(
                     semi_major_axis,
                     Eccentricity::CIRCULAR,

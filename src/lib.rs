@@ -6,6 +6,7 @@ mod recording;
 pub(crate) mod sim;
 
 pub use physics::{
+    body::{AtmosphereModel, CentralBody},
     constants::{J2_EARTH, MU_EARTH, R_EARTH},
     diagnostics::{
         Column, DiagnosticSeries, OrbitalDiagnostics, SpecificAngularMomentum, SpecificEnergy,

@@ -2,9 +2,9 @@ use super::config::ScenarioConfig;
 use super::engine::{AccelerationCommand, PropagationResult, Propagator};
 use super::termination::{StopReason, TerminationCondition};
 use crate::errors::{EnvironmentError, NumericalError};
-use crate::physics::constants::R_EARTH;
+use crate::physics::body::CentralBody;
 use crate::physics::state::CartesianState;
-use crate::physics::types::Epoch;
+use crate::physics::types::{Distance, Epoch};
 
 /// Inertial thrust acceleration action in meters per second squared.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -73,6 +73,7 @@ pub trait Environment {
 /// LEO circular-orbit rollout environment (MVP).
 pub struct LeoCircularEnv {
     initial_state: CartesianState,
+    body: CentralBody,
     termination: TerminationCondition,
     steps_per_env_step: usize,
     propagator: Propagator,
@@ -87,6 +88,7 @@ impl LeoCircularEnv {
         let propagator = Propagator::new(plan.initial_state, initial_epoch, plan.propagation)?;
         Ok(Self {
             initial_state: plan.initial_state,
+            body: plan.body,
             termination: plan.termination,
             steps_per_env_step: plan.steps_per_env_step,
             propagator,
@@ -107,7 +109,8 @@ impl LeoCircularEnv {
                     None,
                 ));
         }
-        let observation = Observation::from_state(&propagation.final_state);
+        let observation =
+            Observation::from_state(&propagation.final_state, self.body.equatorial_radius());
         self.done = true;
         Ok(RolloutEpisodeResult {
             observation,
@@ -118,11 +121,11 @@ impl LeoCircularEnv {
 }
 
 impl Observation {
-    pub(crate) fn from_state(state: &CartesianState) -> Self {
+    pub(crate) fn from_state(state: &CartesianState, equatorial_radius: Distance) -> Self {
         let position = state.position.vector();
         let velocity = state.velocity.vector();
         let radius = position.norm();
-        let altitude = radius - R_EARTH;
+        let altitude = radius - equatorial_radius.meters();
         let speed = velocity.norm();
 
         Self {
@@ -149,14 +152,17 @@ impl Environment for LeoCircularEnv {
     fn reset(&mut self, _seed: u64) -> Result<Observation, EnvironmentError> {
         self.propagator.reset(self.initial_state)?;
         self.done = false;
-        Ok(Observation::from_state(&self.initial_state))
+        Ok(Observation::from_state(
+            &self.initial_state,
+            self.body.equatorial_radius(),
+        ))
     }
 
     fn step(&mut self, action: Action) -> Result<StepResult, EnvironmentError> {
         if self.done {
             let state = self.propagator.current_state()?;
             return Ok(StepResult {
-                observation: Observation::from_state(&state),
+                observation: Observation::from_state(&state, self.body.equatorial_radius()),
                 reward: 0.0,
                 done: true,
                 stop_reason: None,
@@ -172,7 +178,10 @@ impl Environment for LeoCircularEnv {
         self.done = done;
 
         Ok(StepResult {
-            observation: Observation::from_state(&result.final_state),
+            observation: Observation::from_state(
+                &result.final_state,
+                self.body.equatorial_radius(),
+            ),
             reward: 0.0,
             done,
             stop_reason: result.stop_reason,

@@ -328,13 +328,14 @@ impl DiagnosticSeries {
     /// ```
     /// # use vast::*;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let result = SimBuilder::new()
-    /// #     .orbit(Orbit::CircularInclined {
-    /// #         altitude: Distance::new((6678.0) * 1000.0)?,
-    /// #         inclination: Angle::from_degrees(51.6)?,
-    /// #         raan: Angle::from_degrees(32.0)?,
-    /// #     })?
-    /// #     .dynamics(TwoBodyGravity::earth())
+    /// # let body = CentralBody::earth()?;
+    /// # let result = SimBuilder::new(body)
+    /// #     .orbit(Orbit::circular_inclined(
+    /// #         Distance::new((6678.0) * 1000.0)?,
+    /// #         Angle::from_degrees(51.6)?,
+    /// #         Angle::from_degrees(32.0)?,
+    /// #     ))?
+    /// #     .dynamics(TwoBodyGravity::from_body(&body))
     /// #     .integrator(VelocityVerletIntegrator)
     /// #     .timestep(TimeStep::new(10.0)?)
     /// #     .duration(Duration::new(5_330.0).unwrap())?;

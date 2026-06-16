@@ -2,8 +2,8 @@
 
 use macroquad::prelude::*;
 use vast::{
-    Distance, Duration, EllipticOrbit, LeapfrogIntegrator, Orbit, R_EARTH, Sim, SimBuilder, Speed,
-    TimeStep, TwoBodyGravity,
+    CentralBody, Distance, Duration, EllipticOrbit, LeapfrogIntegrator, Orbit, R_EARTH, Sim,
+    SimBuilder, Speed, TimeStep, TwoBodyGravity,
 };
 
 const TRAIL_POINTS_MAX: usize = 2_000;
@@ -40,13 +40,14 @@ struct OrbitVizScenario {
 
 impl OrbitVizScenario {
     fn new() -> Result<Self, Box<dyn std::error::Error>> {
+        let body = CentralBody::earth()?;
         let altitude = Distance::new(400.0 * 1000.0)?;
-        let orbit: EllipticOrbit = Orbit::CircularEquatorial { altitude }.try_into()?;
+        let orbit: EllipticOrbit = Orbit::circular_equatorial(altitude).to_elliptic(&body)?;
         let earth_radius_km = R_EARTH / 1000.0;
 
-        let sim = SimBuilder::new()
-            .orbit(Orbit::CircularEquatorial { altitude })?
-            .dynamics(TwoBodyGravity::earth())
+        let sim = SimBuilder::new(body)
+            .orbit(Orbit::circular_equatorial(altitude))?
+            .dynamics(TwoBodyGravity::from_body(&body))
             .integrator(LeapfrogIntegrator)
             .timestep(TimeStep::new(1.0)?)
             .build()?;

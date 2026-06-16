@@ -1,5 +1,27 @@
 # Project Memory
 
+## 2026-06-16 — Central body as the source of physical constants
+
+**Decision:** Introduce `CentralBody` and `AtmosphereModel` in `physics::body`. A
+body owns `mu`, equatorial radius, rotation rate, optional `J2Coefficient`, and
+optional atmosphere parameters. `ForceModelKind` in TOML now selects which
+perturbations to compose (`two_body`, `j2`, `j2_drag { area_per_mass_m2_kg }`);
+physical constants come from the scenario's chosen `body`. Bare
+`TryFrom<Orbit> for EllipticOrbit` and `SimBuilder::new()` are removed — orbit
+specs and the builder require an explicit `CentralBody`.
+
+**Why:** Scenarios previously restated Earth constants in every force model, and
+J2+drag configs could specify inconsistent radii. Centralizing constants in a
+domain type makes Mars/Moon setups easy later and eliminates the footgun.
+
+**Migration:** `CentralBody::earth()` replaces scattered `MU_EARTH`/`R_EARTH`/
+`J2_EARTH` references. `TwoBodyGravity::earth()` is removed; use
+`TwoBodyGravity::from_body(&body)`. `ExponentialAtmosphere::from_body(&body)`
+builds the atmosphere from the body's parameters.
+
+**Rejected:** Keeping body constants inline in `ForceModelKind`; optional body
+field with Earth default; preserving `SimBuilder::new()`.
+
 ## 2026-06-16 — Enum dispatch over generic propagator
 
 **Decision:** `Propagator` holds a closed `RuntimeDynamics` enum and dispatches

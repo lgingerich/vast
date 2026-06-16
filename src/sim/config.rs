@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::errors::MissionError;
+use crate::physics::body::CentralBody;
 
 /// Loaded scenario kind for the runner.
 #[derive(Debug, Clone, PartialEq)]
@@ -41,6 +42,9 @@ impl LoadedScenario {
 pub struct ScenarioConfig {
     /// Human-readable scenario name.
     pub name: String,
+    /// Central body around which the scenario orbits.
+    #[serde(default = "default_body_config")]
+    pub body: BodyConfig,
     /// Circular orbit altitude above the equatorial radius, in meters.
     pub altitude_m: f64,
     /// Fixed integrator step size in seconds.
@@ -73,6 +77,10 @@ impl ScenarioConfig {
 
 fn default_steps_per_env_step() -> usize {
     1
+}
+
+fn default_body_config() -> BodyConfig {
+    BodyConfig::Earth
 }
 
 /// Serializable mission scenario loaded from TOML.
@@ -133,6 +141,9 @@ pub struct PropagationConfig {
     pub dt_s: f64,
     /// Integrator.
     pub integrator: IntegratorKind,
+    /// Central body shared by all mission segments.
+    #[serde(default = "default_body_config")]
+    pub body: BodyConfig,
     /// Force model.
     pub force_model: ForceModelKind,
     /// Sample trajectory every N integrator steps.
@@ -203,36 +214,41 @@ pub enum IntegratorKind {
     RungeKutta4,
 }
 
+/// Supported central bodies for scenario configuration.
+///
+/// New named bodies can be added here as their scenarios become active.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BodyConfig {
+    /// Earth using WGS 84 / EGM2008 constants and a loose LEO atmosphere.
+    Earth,
+}
+
+impl BodyConfig {
+    /// Resolves this configuration into the validated physics body.
+    pub fn resolve(&self) -> Result<CentralBody, crate::errors::NumericalError> {
+        match self {
+            Self::Earth => CentralBody::earth(),
+        }
+    }
+}
+
 /// Supported force models for scenario configuration.
 ///
 /// Each variant resolves to a concrete `Dynamics` implementation in the
-/// runtime plan. Always written as an inline table with a `kind` tag in TOML.
+/// runtime plan. Physical constants such as gravitational parameter,
+/// equatorial radius, J2, and atmosphere come from the scenario's chosen
+/// central body; only spacecraft or model-specific parameters remain here.
+/// Always written as an inline table with a `kind` tag in TOML.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "kind")]
 pub enum ForceModelKind {
     /// Two-body point-mass gravity.
     TwoBody,
-    /// Oblate central-body gravity with the J2 zonal harmonic.
-    J2 {
-        /// Equatorial reference radius in meters.
-        equatorial_radius_m: f64,
-        /// Dimensionless second zonal harmonic coefficient.
-        j2: f64,
-    },
-    /// J2 gravity plus exponential atmospheric drag.
+    /// Oblate central-body gravity with the body's J2 zonal harmonic.
+    J2,
+    /// Oblate central-body gravity plus exponential atmospheric drag.
     J2Drag {
-        /// Equatorial reference radius in meters.
-        equatorial_radius_m: f64,
-        /// Dimensionless second zonal harmonic coefficient.
-        j2: f64,
-        /// Atmosphere reference altitude above the equatorial radius, in meters.
-        reference_altitude_m: f64,
-        /// Atmospheric density at the reference altitude, in kg/m^3.
-        reference_density_kg_m3: f64,
-        /// Exponential atmosphere scale height in meters.
-        scale_height_m: f64,
-        /// Planet angular rotation rate in radians per second.
-        angular_rate_rad_s: f64,
         /// Drag area per unit mass (C_d * A / m) in m^2/kg.
         area_per_mass_m2_kg: f64,
     },
@@ -247,6 +263,7 @@ mod tests {
         let error = ScenarioConfig::from_toml(
             r#"
             name = "bad"
+            body = "earth"
             altitude_m = 400_000.0
             dt_s = 10.0
             duration_s = 100.0
@@ -274,6 +291,7 @@ mod tests {
 
             [propagation]
             dt_s = 10.0
+            body = "earth"
             integrator = "leapfrog"
             force_model = { kind = "two_body" }
             sample_every_steps = 5

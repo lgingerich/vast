@@ -81,6 +81,7 @@ top-level operations, not the internal runtime plan or propagator machinery.
 The physics layer is re-exported from the crate root:
 
 - Constants: `MU_EARTH`, `R_EARTH`, `J2_EARTH`.
+- Central body: `CentralBody`, `AtmosphereModel`.
 - Domain scalars and vectors: `Angle`, `AngularRate`, `Epoch`, `TimeStep`,
   `Duration`, `Distance`, `Speed`, `MassDensity`, `AreaPerMass`,
   `GravitationalParameter`, `J2Coefficient`, `Eccentricity`, `Position`,
@@ -110,7 +111,7 @@ The simulation layer exposes:
 - Scenario DTOs: `LoadedScenario`, `ScenarioConfig`,
   `MissionScenarioConfig`, `InitialOrbitConfig`, `PropagationConfig`,
   `MissionSegmentConfig`, `StopConfig`, `BurnConfig`, `IntegratorKind`,
-  `ForceModelKind`.
+  `ForceModelKind`, `BodyConfig`.
 - Environment API: `Environment`, `LeoCircularEnv`, `Action`, `Observation`,
   `StepResult`, `RolloutEpisodeResult`.
 - Mission API: `run_mission`, `MissionResult`, `MissionSegmentResult`.
@@ -142,6 +143,7 @@ inspection, diagnostics, and maneuver vector math.
 
 | Module | Responsibility |
 | --- | --- |
+| `body` | `CentralBody` and `AtmosphereModel`: physical constants and atmosphere parameters. |
 | `constants` | Earth constants plus classification tolerances for orbital elements. |
 | `types` | SI domain newtypes and vector wrappers with constructor invariants. |
 | `state` | Boundary `CartesianState`, flat `CartesianStateComponents`, and SoA buffers/views. |
@@ -338,16 +340,18 @@ representations.
 - Converts to inertial `CartesianState` through the shared internal element-set
   conversion.
 
-`Orbit` is a companion enum that expresses orbital regimes without exposing
-the full 8-argument `EllipticOrbit::new` constructor:
+`Orbit` is a companion specification enum that expresses orbital regimes
+without exposing the full 8-argument `EllipticOrbit::new` constructor.
+Convenience factory constructors (`circular_equatorial`, `circular_inclined`,
+`elliptic`) create a spec, and `Orbit::to_elliptic(&CentralBody)` resolves it
+into a validated `EllipticOrbit` using the supplied body's gravitational
+parameter and equatorial radius. Missing circular angles are filled by
+convention (zero, prograde).
 
-- `Orbit::CircularEquatorial { altitude }` — Earth circular equatorial orbit.
-- `Orbit::CircularInclined { altitude, inclination, raan }` — Earth circular
-  inclined orbit.
-- `Orbit::Elliptic { ... }` — all classical elements.
-
-Converts to `EllipticOrbit` via `TryFrom` (Earth gravitational parameter,
-convention-filled zero angles for circular variants).
+- `Orbit::circular_equatorial(altitude)` — circular equatorial orbit.
+- `Orbit::circular_inclined(altitude, inclination, raan)` — circular inclined
+  orbit.
+- `Orbit::elliptic(...)` — all classical elements.
 
 `OrbitalElements` is the inverse and round-trip representation for bound states.
 It is an enum because classical elements are singular for circular and
@@ -445,6 +449,7 @@ enums for structured mission concepts.
 `ScenarioConfig` is the MVP rollout format:
 
 - `name`
+- `body` (default: `"earth"`)
 - `altitude_m`
 - `dt_s`
 - `duration_s`
@@ -453,9 +458,9 @@ enums for structured mission concepts.
 - `sample_every_steps`
 - `steps_per_env_step`
 
-It always represents a circular equatorial LEO rollout around Earth today.
-`steps_per_env_step` defaults to `1`, and `force_model` defaults to
-`two_body`.
+It always represents a circular equatorial LEO rollout around the configured
+body today. `steps_per_env_step` defaults to `1`, `force_model` defaults to
+`two_body`, and `body` defaults to `earth`.
 
 `MissionScenarioConfig` is the structured multi-segment mission format:
 
@@ -476,6 +481,7 @@ Shared propagation fields:
 
 - `dt_s`
 - `integrator`
+- `body` (default: `"earth"`)
 - `force_model`
 - `sample_every_steps`
 
@@ -502,16 +508,16 @@ Supported integrators in config:
 Supported force models in config (internally tagged via `kind`):
 
 - `two_body` — point-mass central gravity
-- `j2` — oblate central gravity with J2 (parameters: `equatorial_radius_m`, `j2`)
-- `j2_drag` — J2 gravity composed with exponential atmospheric drag
-  (parameters: `j2` fields plus `reference_altitude_m`,
-  `reference_density_kg_m3`, `scale_height_m`, `angular_rate_rad_s`,
-  `area_per_mass_m2_kg`)
+- `j2` — oblate central gravity using the body's J2 coefficient
+- `j2_drag` — J2 gravity composed with the body's exponential atmosphere
+  (parameters: spacecraft `area_per_mass_m2_kg`)
 
-Each force model resolves to a variant of the closed `RuntimeDynamics` enum at
-plan-build time. The propagator dispatches on this enum in `step_once`, so
-each arm calls into a statically-known dynamics type with no trait objects on
-the stepping path.
+Body physical constants (`mu`, equatorial radius, `j2`, atmosphere) come from
+the scenario's chosen `body`. The force model selects which perturbations to
+compose. Each force model resolves to a variant of the closed `RuntimeDynamics`
+enum at plan-build time. The propagator dispatches on this enum in `step_once`,
+so each arm calls into a statically-known dynamics type with no trait objects
+on the stepping path.
 
 ### Runtime Plans
 
@@ -964,6 +970,8 @@ architecture:
   implemented.
 - General event condition/action lists are not implemented. Apoapsis/periapsis
   stops are runtime termination conditions, not a separate event system.
+- `MissionResult` does not carry the central body. Callers that need the body
+  radius or other constants can read them from the input scenario config.
 - Low thrust exists only as a per-step inertial acceleration command above
   two-body gravity; there is no actuator, mass depletion, attitude model, or
   thrust profile scheduler.
@@ -1036,23 +1044,19 @@ VAST's north star is deterministic RL rollout throughput:
 Some MVP decisions are recorded in [MEMORY.md](../MEMORY.md). Remaining
 questions:
 
-1. **Central body ownership**: introduce a first-class `CentralBody` with
-   gravitational parameter, radius, J2, rotation, and atmosphere parameters, or
-   keep Earth constants directly in scenario planning until non-Earth scenarios
-   are active?
-2. **Spacecraft properties**: introduce a spacecraft/body property bundle for
+1. **Spacecraft properties**: introduce a spacecraft/body property bundle for
    mass, drag area, and future SRP, or keep force-model parameters external
    now that drag is wired into scenarios as `area_per_mass`?
-3. **Event model**: keep apoapsis/periapsis as termination variants only, or add
+2. **Event model**: keep apoapsis/periapsis as termination variants only, or add
    a bounded condition/action event list for logging, burns, and terminal
    actions?
-4. **Environment adapters**: keep the Rust `Environment` trait as the core
+3. **Environment adapters**: keep the Rust `Environment` trait as the core
    contract and put Gymnasium or other RL framework bindings in tools, or expose
    adapter types from the crate?
-5. **Batch API shape**: expose a simulation-layer `step_many` over many
+4. **Batch API shape**: expose a simulation-layer `step_many` over many
    independent environments, or first add a lower-level CPU backend abstraction
    over `CartesianStateBuffer<N>`?
-6. **2D mode**: represent 2D as constrained 3D states with `z = 0`, or introduce
+5. **2D mode**: represent 2D as constrained 3D states with `z = 0`, or introduce
    separate first-class 2D state/orbit types if training workloads need them?
 
 Resolved for the current MVP:
@@ -1070,6 +1074,9 @@ Resolved for the current MVP:
   each arm calls into a statically-known dynamics type, so the acceleration
   computation is monomorphized per force model with no trait objects on the
   stepping path.
+- `CentralBody` owns gravitational parameter, equatorial radius, J2, rotation
+  rate, and atmosphere parameters. Force models read these from the scenario
+  body rather than restating Earth constants.
 
 ---
 

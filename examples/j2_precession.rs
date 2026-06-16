@@ -1,9 +1,8 @@
 #![allow(missing_docs)]
 
 use vast::{
-    Angle, Distance, Duration, EllipticOrbit, GravitationalParameter, J2_EARTH, J2Coefficient,
-    MU_EARTH, OblateBodyGravity, Orbit, R_EARTH, SimBuilder, TimeStep, TwoBodyGravity,
-    VelocityVerletIntegrator,
+    Angle, CentralBody, Distance, Duration, EllipticOrbit, J2_EARTH, MU_EARTH, OblateBodyGravity,
+    Orbit, R_EARTH, SimBuilder, TimeStep, TwoBodyGravity, VelocityVerletIntegrator,
 };
 
 const ALTITUDE_KM: f64 = 600.0;
@@ -14,12 +13,13 @@ const PROPAGATION_DAYS: f64 = 3.0;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- configure simulation ---
-    let orbit_spec = Orbit::CircularInclined {
-        altitude: Distance::new(ALTITUDE_KM * 1000.0)?,
-        inclination: Angle::from_degrees(INCLINATION_DEG)?,
-        raan: Angle::from_degrees(RAAN_DEG)?,
-    };
-    let elliptic: EllipticOrbit = orbit_spec.try_into()?;
+    let body = CentralBody::earth()?;
+    let orbit_spec = Orbit::circular_inclined(
+        Distance::new(ALTITUDE_KM * 1000.0)?,
+        Angle::from_degrees(INCLINATION_DEG)?,
+        Angle::from_degrees(RAAN_DEG)?,
+    );
+    let elliptic: EllipticOrbit = orbit_spec.to_elliptic(&body)?;
     let initial_raan_deg = RAAN_DEG;
     let duration = Duration::new(PROPAGATION_DAYS * 86_400.0)?;
     let dt = TimeStep::new(STEP_SECONDS)?;
@@ -36,20 +36,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let analytical_drift_deg_per_day = analytical_drift_rad_per_sec.to_degrees() * 86_400.0;
 
     // --- run two-body simulation ---
-    let two_body = SimBuilder::new()
+    let two_body = SimBuilder::new(body)
         .orbit(orbit_spec)?
-        .dynamics(TwoBodyGravity::earth())
+        .dynamics(TwoBodyGravity::from_body(&body))
         .integrator(VelocityVerletIntegrator)
         .timestep(dt)
         .duration(duration)?;
 
     // --- run J2 simulation ---
-    let j2_dynamics = OblateBodyGravity::new(
-        GravitationalParameter::earth(),
-        Distance::new(R_EARTH)?,
-        J2Coefficient::new(J2_EARTH)?,
-    );
-    let j2 = SimBuilder::new()
+    let j2_dynamics = OblateBodyGravity::from_body(&body)?;
+    let j2 = SimBuilder::new(body)
         .orbit(orbit_spec)?
         .dynamics(j2_dynamics)
         .integrator(VelocityVerletIntegrator)

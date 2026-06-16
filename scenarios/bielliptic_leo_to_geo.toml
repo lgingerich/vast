@@ -27,6 +27,7 @@ true_anomaly_deg = 0.0
 
 [propagation]
 dt_s = 30.0
+body = "earth"
 integrator = "rk4"
 force_model = { kind = "two_body" }
 sample_every_steps = 60

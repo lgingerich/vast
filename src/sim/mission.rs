@@ -71,7 +71,7 @@ mod tests {
     use crate::physics::elements::{OrbitalElementClassification, OrbitalElements};
     use crate::physics::types::{Distance, GravitationalParameter};
     use crate::sim::config::{
-        BurnConfig, ForceModelKind, InitialOrbitConfig, IntegratorKind, LoadedScenario,
+        BodyConfig, BurnConfig, ForceModelKind, InitialOrbitConfig, IntegratorKind, LoadedScenario,
         MissionSegmentConfig, PropagationConfig, StopConfig,
     };
 
@@ -95,6 +95,7 @@ mod tests {
             propagation: PropagationConfig {
                 dt_s: 10.0,
                 integrator: IntegratorKind::Leapfrog,
+                body: BodyConfig::Earth,
                 force_model: ForceModelKind::TwoBody,
                 sample_every_steps: 5,
             },
@@ -129,6 +130,7 @@ mod tests {
             propagation: PropagationConfig {
                 dt_s: 30.0,
                 integrator: IntegratorKind::Leapfrog,
+                body: BodyConfig::Earth,
                 force_model: ForceModelKind::TwoBody,
                 sample_every_steps: 20,
             },
@@ -205,6 +207,7 @@ mod tests {
             propagation: PropagationConfig {
                 dt_s: 10.0,
                 integrator: IntegratorKind::Leapfrog,
+                body: BodyConfig::Earth,
                 force_model: ForceModelKind::TwoBody,
                 sample_every_steps: 1,
             },

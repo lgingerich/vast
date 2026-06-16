@@ -1,8 +1,8 @@
 #![allow(missing_docs)]
 
 use vast::{
-    Column, Distance, Duration, EllipticOrbit, EulerIntegrator, LeapfrogIntegrator, Orbit,
-    Position, RungeKutta4Integrator, SimBuilder, Speed, TimeStep, TwoBodyGravity,
+    CentralBody, Column, Distance, Duration, EllipticOrbit, EulerIntegrator, LeapfrogIntegrator,
+    Orbit, Position, RungeKutta4Integrator, SimBuilder, Speed, TimeStep, TwoBodyGravity,
     VelocityVerletIntegrator,
 };
 
@@ -24,10 +24,9 @@ struct Summary {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- configure simulation ---
-    let orbit_spec = Orbit::CircularEquatorial {
-        altitude: Distance::new(ALTITUDE_KM * 1000.0)?,
-    };
-    let elliptic: EllipticOrbit = orbit_spec.try_into()?;
+    let body = CentralBody::earth()?;
+    let orbit_spec = Orbit::circular_equatorial(Distance::new(ALTITUDE_KM * 1000.0)?);
+    let elliptic: EllipticOrbit = orbit_spec.to_elliptic(&body)?;
     let speed = elliptic.speed()?;
     let period = elliptic.period()?;
     let initial_position = elliptic.to_cartesian_state()?.position;
@@ -64,6 +63,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let euler = run(
             "Euler",
+            &body,
             &orbit_spec,
             EulerIntegrator,
             dt,
@@ -73,6 +73,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?;
         let rk4 = run(
             "RK4",
+            &body,
             &orbit_spec,
             RungeKutta4Integrator,
             dt,
@@ -82,6 +83,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?;
         let verlet = run(
             "Verlet",
+            &body,
             &orbit_spec,
             VelocityVerletIntegrator,
             dt,
@@ -91,6 +93,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?;
         let leapfrog = run(
             "Leapfrog",
+            &body,
             &orbit_spec,
             LeapfrogIntegrator,
             dt,
@@ -108,8 +111,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run<I: vast::Integrator>(
     method: &'static str,
+    body: &CentralBody,
     orbit_spec: &Orbit,
     integrator: I,
     dt: TimeStep,
@@ -118,9 +123,9 @@ fn run<I: vast::Integrator>(
     circular_speed: Speed,
 ) -> Result<Summary, Box<dyn std::error::Error>> {
     // --- run simulation ---
-    let result = SimBuilder::new()
+    let result = SimBuilder::new(*body)
         .orbit(*orbit_spec)?
-        .dynamics(TwoBodyGravity::earth())
+        .dynamics(TwoBodyGravity::from_body(body))
         .integrator(integrator)
         .timestep(dt)
         .duration(period)?;

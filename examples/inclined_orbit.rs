@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
 
 use vast::{
-    Angle, Column, Distance, Duration, EllipticOrbit, Orbit, SimBuilder, TimeStep, TwoBodyGravity,
+    Angle, CentralBody, Column, Distance, Duration, Orbit, SimBuilder, TimeStep, TwoBodyGravity,
     VelocityVerletIntegrator,
 };
 
@@ -13,18 +13,19 @@ const PERIODS: f64 = 3.0;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- configure simulation ---
-    let spec = Orbit::CircularInclined {
-        altitude: Distance::new(ALTITUDE_KM * 1000.0)?,
-        inclination: Angle::from_degrees(INCLINATION_DEG)?,
-        raan: Angle::from_degrees(RAAN_DEG)?,
-    };
-    let period = EllipticOrbit::try_from(spec)?.period()?;
+    let body = CentralBody::earth()?;
+    let spec = Orbit::circular_inclined(
+        Distance::new(ALTITUDE_KM * 1000.0)?,
+        Angle::from_degrees(INCLINATION_DEG)?,
+        Angle::from_degrees(RAAN_DEG)?,
+    );
+    let period = spec.to_elliptic(&body)?.period()?;
     let num_periods = Duration::new(period.seconds() * PERIODS).unwrap();
 
     // --- run simulation ---
-    let result = SimBuilder::new()
+    let result = SimBuilder::new(body)
         .orbit(spec)?
-        .dynamics(TwoBodyGravity::earth())
+        .dynamics(TwoBodyGravity::from_body(&body))
         .integrator(VelocityVerletIntegrator)
         .timestep(TimeStep::new(STEP_SECONDS)?)
         .duration(num_periods)?;

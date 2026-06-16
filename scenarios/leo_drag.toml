@@ -1,7 +1,8 @@
 name = "leo_drag"
+body = "earth"
 altitude_m = 250_000.0
 dt_s = 10.0
 duration_s = 21_600.0
 integrator = "runge_kutta4"
-force_model = { kind = "j2_drag", equatorial_radius_m = 6_378_137.0, j2 = 1.08262668e-3, reference_altitude_m = 250_000.0, reference_density_kg_m3 = 1.0e-10, scale_height_m = 50_000.0, angular_rate_rad_s = 7.2921159e-5, area_per_mass_m2_kg = 0.02 }
+force_model = { kind = "j2_drag", area_per_mass_m2_kg = 0.02 }
 sample_every_steps = 20
