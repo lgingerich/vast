@@ -1,9 +1,9 @@
 use super::burns::BurnCommand;
 use super::config::IntegratorKind;
-use super::plan::PropagationPlan;
+use super::plan::{PropagationPlan, RuntimeDynamics};
 use super::termination::{StopReason, TerminationCondition, TerminationTracker};
 use crate::errors::PropagationError;
-use crate::physics::dynamics::{Dynamics, TwoBodyGravity};
+use crate::physics::dynamics::Dynamics;
 use crate::physics::integrators::{
     EulerIntegrator, Integrator, LeapfrogIntegrator, RungeKutta4Integrator,
     VelocityVerletIntegrator,
@@ -103,7 +103,7 @@ impl Propagator {
         burn: BurnCommand,
     ) -> Result<(), crate::errors::MissionError> {
         let state = self.current_state()?;
-        let updated = burn.apply_to(state, self.propagation.mu)?;
+        let updated = burn.apply_to(state, self.propagation.mu())?;
         self.states
             .write_from_state(0, &updated)
             .map_err(PropagationError::from)?;
@@ -213,25 +213,36 @@ impl Propagator {
         step: TimeStep,
         command: AccelerationCommand,
     ) -> Result<(), PropagationError> {
-        let gravity = TwoBodyGravity::new(self.propagation.mu);
-        if command.is_zero() {
-            self.propagation.integrator.step(
-                &gravity,
-                &mut self.states.view_mut(),
+        let integrator = self.propagation.integrator;
+        let states = &mut self.states.view_mut();
+        match &self.propagation.dynamics {
+            RuntimeDynamics::TwoBody(gravity) => integrator.step(
+                &ControlledDynamics {
+                    dynamics: gravity,
+                    command,
+                },
+                states,
                 self.epoch,
                 step,
-            )
-        } else {
-            let dynamics = ControlledDynamics {
-                gravity: &gravity,
-                command,
-            };
-            self.propagation.integrator.step(
-                &dynamics,
-                &mut self.states.view_mut(),
+            ),
+            RuntimeDynamics::J2(gravity) => integrator.step(
+                &ControlledDynamics {
+                    dynamics: gravity,
+                    command,
+                },
+                states,
                 self.epoch,
                 step,
-            )
+            ),
+            RuntimeDynamics::J2Drag(composite) => integrator.step(
+                &ControlledDynamics {
+                    dynamics: composite,
+                    command,
+                },
+                states,
+                self.epoch,
+                step,
+            ),
         }
     }
 }
@@ -278,12 +289,6 @@ impl AccelerationCommand {
         }
         Ok(Self { acceleration_mps2 })
     }
-
-    const fn is_zero(self) -> bool {
-        self.acceleration_mps2[0] == 0.0
-            && self.acceleration_mps2[1] == 0.0
-            && self.acceleration_mps2[2] == 0.0
-    }
 }
 
 impl Default for AccelerationCommand {
@@ -294,22 +299,24 @@ impl Default for AccelerationCommand {
     }
 }
 
-struct ControlledDynamics<'a> {
-    gravity: &'a crate::physics::dynamics::TwoBodyGravity,
+/// Adds a piecewise-constant inertial acceleration command above an arbitrary
+/// base dynamics model.
+struct ControlledDynamics<'a, D: Dynamics + ?Sized> {
+    dynamics: &'a D,
     command: AccelerationCommand,
 }
 
-impl Dynamics for ControlledDynamics<'_> {
+impl<D: Dynamics + ?Sized> Dynamics for ControlledDynamics<'_, D> {
     fn acceleration_at(
         &self,
         state: CartesianStateComponents,
         epoch: Epoch,
     ) -> Result<Acceleration, crate::errors::DynamicsError> {
-        let gravity = self.gravity.acceleration_at(state, epoch)?.vector();
+        let base = self.dynamics.acceleration_at(state, epoch)?.vector();
         let total = nalgebra::Vector3::new(
-            gravity.x + self.command.acceleration_mps2[0],
-            gravity.y + self.command.acceleration_mps2[1],
-            gravity.z + self.command.acceleration_mps2[2],
+            base.x + self.command.acceleration_mps2[0],
+            base.y + self.command.acceleration_mps2[1],
+            base.z + self.command.acceleration_mps2[2],
         );
         Ok(Acceleration::from_vector(total)?)
     }
@@ -336,6 +343,7 @@ impl IntegratorKind {
 mod tests {
     use super::*;
     use crate::physics::constants::{MU_EARTH, R_EARTH};
+    use crate::physics::dynamics::TwoBodyGravity;
     use crate::physics::orbits::{EllipticOrbit, OrbitDirection};
     use crate::physics::types::{Angle, Distance, Duration, Eccentricity, GravitationalParameter};
 
@@ -343,7 +351,7 @@ mod tests {
         PropagationPlan {
             dt: TimeStep::new(10.0).expect("dt"),
             integrator: IntegratorKind::Leapfrog,
-            mu: mu(),
+            dynamics: RuntimeDynamics::TwoBody(TwoBodyGravity::new(mu())),
             sample_every_steps,
         }
     }

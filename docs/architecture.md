@@ -122,6 +122,7 @@ The following are intentionally crate-private:
 - `RolloutPlan`, `MissionPlan`, `PropagationPlan`, and `MissionSegmentPlan`.
 - `Propagator`, `AdvanceResult`, `AccelerationCommand`, and
   `ControlledDynamics`.
+- `RuntimeDynamics`.
 - `BurnCommand`.
 - `TerminationCondition`, `TerminationTracker`, and `TerminationContext`.
 
@@ -498,13 +499,19 @@ Supported integrators in config:
 - `euler`
 - `runge_kutta4` with alias `rk4`
 
-Supported force models in config:
+Supported force models in config (internally tagged via `kind`):
 
-- `two_body`
+- `two_body` — point-mass central gravity
+- `j2` — oblate central gravity with J2 (parameters: `equatorial_radius_m`, `j2`)
+- `j2_drag` — J2 gravity composed with exponential atmospheric drag
+  (parameters: `j2` fields plus `reference_altitude_m`,
+  `reference_density_kg_m3`, `scale_height_m`, `angular_rate_rad_s`,
+  `area_per_mass_m2_kg`)
 
-Although physics already implements J2, drag, and composite dynamics, scenario
-dispatch currently exposes only `ForceModelKind::TwoBody`; the engine constructs
-`TwoBodyGravity` directly from the runtime gravitational parameter.
+Each force model resolves to a variant of the closed `RuntimeDynamics` enum at
+plan-build time. The propagator dispatches on this enum in `step_once`, so
+each arm calls into a statically-known dynamics type with no trait objects on
+the stepping path.
 
 ### Runtime Plans
 
@@ -515,10 +522,15 @@ public DTOs into crate-private runtime plans:
   `steps_per_env_step`.
 - `MissionPlan`: initial state, propagation plan, initial burns, and ordered
   segment plans.
-- `PropagationPlan`: typed `TimeStep`, `IntegratorKind`,
-  `GravitationalParameter`, and sample cadence.
+- `PropagationPlan`: typed `TimeStep`, `IntegratorKind`, `RuntimeDynamics`,
+  and sample cadence.
 - `MissionSegmentPlan`: runtime `TerminationCondition` and post-segment
   `BurnCommand`s.
+
+`RuntimeDynamics` is a closed enum wrapping the concrete `Dynamics` models
+(`TwoBodyGravity`, `OblateBodyGravity`, `CompositeDynamics<OblateBodyGravity,
+AtmosphericDrag>`). It exposes `mu()` so burn application can resolve orbital
+elements without matching on the variant.
 
 Validation and conversion performed here:
 
@@ -537,8 +549,8 @@ Validation and conversion performed here:
 - burn DTOs become `BurnCommand`s.
 - stop DTOs become `TerminationCondition`s.
 
-The runtime gravitational parameter currently comes from `ForceModelKind` and
-resolves to Earth `MU_EARTH` for `TwoBody`.
+The runtime gravitational parameter is carried by `RuntimeDynamics::mu()`;
+the underlying value is Earth `MU_EARTH` for all current force models.
 
 ### Propagator Engine
 
@@ -551,7 +563,7 @@ The internal `Propagator` owns:
 
 - current `Epoch`
 - initial `Epoch`
-- validated `PropagationPlan`
+- validated `PropagationPlan` (with `RuntimeDynamics`)
 - `CartesianStateBuffer<1>` with body index `0`
 
 This is intentionally a single-body simulation engine today. The physics storage
@@ -587,10 +599,15 @@ episode termination is normal and not an error.
 
 Current dynamics selection:
 
-- Zero acceleration command: integrate with `TwoBodyGravity`.
-- Non-zero acceleration command: wrap two-body gravity with sim-local
-  `ControlledDynamics`, which adds a finite inertial acceleration vector to the
-  gravity acceleration.
+- The propagator holds a `RuntimeDynamics` enum. Each `step_once` wraps the
+  active variant in sim-local `ControlledDynamics`, which adds the
+  piecewise-constant inertial acceleration command to the base dynamics
+  acceleration. A zero command still flows through `ControlledDynamics` (the
+  add of a zero vector is free), keeping one code path with no per-step
+  branching on the command magnitude.
+- Each match arm calls into a statically-known dynamics type, so the
+  acceleration computation is monomorphized per force model with no trait
+  objects on the stepping path.
 
 Current allocation behavior:
 
@@ -729,7 +746,7 @@ Public action and observation shapes:
 
 `LeoCircularEnv` is the MVP environment:
 
-- Built from `ScenarioConfig`.
+- Built from `ScenarioConfig` via `LeoCircularEnv::from_config`.
 - Uses the rollout `RolloutPlan`.
 - Owns a `Propagator`.
 - `reset(seed)` restores epoch and state to the validated initial state. The
@@ -756,6 +773,7 @@ Full-episode artifact recording is deliberately not the `step(action)` contract.
 ScenarioConfig / rollout TOML
   -> ScenarioConfig::build()
       validates fields
+      resolves ForceModelKind to RuntimeDynamics
       constructs circular Earth initial state
       creates PropagationPlan
       creates Duration termination
@@ -779,6 +797,7 @@ ScenarioConfig / rollout TOML
 MissionScenarioConfig / mission TOML
   -> MissionScenarioConfig::build()
       validates mission structure
+      resolves ForceModelKind to RuntimeDynamics
       constructs circular or classical initial state
       validates shared propagation settings
       maps stops to TerminationCondition
@@ -805,7 +824,7 @@ Propagator::advance
     if max_steps reached:
       return final state, epoch, steps, no stop reason
     choose dt or duration remainder
-    build TwoBodyGravity or ControlledDynamics
+    wrap active RuntimeDynamics variant in ControlledDynamics
     dispatch IntegratorKind to physics integrator
     epoch = epoch.advance_by(step)
     read typed state from CartesianStateBuffer<1>
@@ -918,6 +937,8 @@ The architecture currently includes:
 - TOML rollout and mission scenario DTOs
 - config-to-runtime plan validation
 - single-body fixed-step `Propagator`
+- two-body, J2, and J2+drag force models wired from scenario config through to
+  the `RuntimeDynamics` dispatch enum
 - duration, step-count, apoapsis, and periapsis termination
 - runtime impulsive burn commands
 - mission runner over ordered segments
@@ -932,8 +953,6 @@ The architecture currently includes:
 These are known gaps in the current implementation, not contradictions in the
 architecture:
 
-- `ForceModelKind` exposes only `TwoBody`; J2 and drag exist in physics but are
-  not wired into scenario runtime dispatch.
 - `Propagator` is single-body and owns `CartesianStateBuffer<1>`; batch
   simulation is future work despite physics supporting indexed buffers.
 - `StepBudgetExceeded` exists as a public stop reason but is not assigned by the
@@ -1023,7 +1042,7 @@ questions:
    are active?
 2. **Spacecraft properties**: introduce a spacecraft/body property bundle for
    mass, drag area, and future SRP, or keep force-model parameters external
-   until drag is wired into scenarios?
+   now that drag is wired into scenarios as `area_per_mass`?
 3. **Event model**: keep apoapsis/periapsis as termination variants only, or add
    a bounded condition/action event list for logging, burns, and terminal
    actions?
@@ -1047,6 +1066,10 @@ Resolved for the current MVP:
 - `PropagationResult` owns segment stop reason and sampled trajectory data.
 - The runner/recorder flatten or serialize simulation results at the artifact
   boundary, not inside `MissionResult`.
+- The propagator dispatches on a closed `RuntimeDynamics` enum in `step_once`;
+  each arm calls into a statically-known dynamics type, so the acceleration
+  computation is monomorphized per force model with no trait objects on the
+  stepping path.
 
 ---
 

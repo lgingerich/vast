@@ -36,6 +36,7 @@ impl TwoBodyGravity {
 }
 
 /// Gravity model for an oblate central body with J2 perturbation.
+#[derive(Debug)]
 pub struct OblateBodyGravity {
     /// Standard gravitational parameter in cubic meters per second squared.
     mu: GravitationalParameter,
@@ -80,6 +81,7 @@ impl OblateBodyGravity {
 }
 
 /// Spherical exponential atmosphere rotating about the inertial z axis.
+#[derive(Debug)]
 pub struct ExponentialAtmosphere {
     /// Planet reference radius in meters.
     reference_radius: Distance,
@@ -144,6 +146,7 @@ impl ExponentialAtmosphere {
 }
 
 /// Cannonball atmospheric drag model.
+#[derive(Debug)]
 pub struct AtmosphericDrag {
     /// Atmosphere model.
     atmosphere: ExponentialAtmosphere,
@@ -178,6 +181,7 @@ impl AtmosphericDrag {
 ///
 /// Binary composition keeps the stepping path allocation-free. For three or
 /// more models, nest: `CompositeDynamics<A, CompositeDynamics<B, C>>`.
+#[derive(Debug)]
 pub struct CompositeDynamics<A, B> {
     first: A,
     second: B,

@@ -3,5 +3,5 @@ altitude_m = 400_000.0
 dt_s = 10.0
 duration_s = 600.0
 integrator = "leapfrog"
-force_model = "two_body"
+force_model = { kind = "two_body" }
 sample_every_steps = 5

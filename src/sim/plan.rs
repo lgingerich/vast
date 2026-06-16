@@ -6,11 +6,15 @@ use super::config::{
 use super::termination::TerminationCondition;
 use crate::errors::MissionError;
 use crate::physics::constants::{MU_EARTH, R_EARTH};
+use crate::physics::dynamics::{
+    AtmosphericDrag, CompositeDynamics, ExponentialAtmosphere, OblateBodyGravity, TwoBodyGravity,
+};
 use crate::physics::elements::ClassicalOrbitalElements;
 use crate::physics::orbits::{EllipticOrbit, OrbitDirection};
 use crate::physics::state::CartesianState;
 use crate::physics::types::{
-    Angle, Distance, Duration, Eccentricity, GravitationalParameter, TimeStep,
+    Angle, AngularRate, AreaPerMass, Distance, Duration, Eccentricity, GravitationalParameter,
+    J2Coefficient, MassDensity, TimeStep,
 };
 
 /// Validated runtime rollout scenario.
@@ -32,12 +36,44 @@ pub(crate) struct MissionPlan {
 }
 
 /// Runtime propagation settings shared by rollout and mission plans.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub(crate) struct PropagationPlan {
     pub(crate) dt: TimeStep,
     pub(crate) integrator: IntegratorKind,
-    pub(crate) mu: GravitationalParameter,
+    pub(crate) dynamics: RuntimeDynamics,
     pub(crate) sample_every_steps: usize,
+}
+
+impl PropagationPlan {
+    /// Returns the gravitational parameter of the configured force model.
+    pub(crate) const fn mu(&self) -> GravitationalParameter {
+        self.dynamics.mu()
+    }
+}
+
+/// Resolved force model used by the propagator.
+///
+/// Closed enum so the stepping path can dispatch without trait objects and
+/// stay allocation-free. Each variant owns its fully-validated dynamics model.
+#[derive(Debug)]
+pub(crate) enum RuntimeDynamics {
+    /// Point-mass central gravity.
+    TwoBody(TwoBodyGravity),
+    /// Oblate central gravity with J2.
+    J2(OblateBodyGravity),
+    /// J2 gravity composed with exponential atmospheric drag.
+    J2Drag(CompositeDynamics<OblateBodyGravity, AtmosphericDrag>),
+}
+
+impl RuntimeDynamics {
+    /// Returns the gravitational parameter of the central body.
+    pub(crate) const fn mu(&self) -> GravitationalParameter {
+        match self {
+            Self::TwoBody(gravity) => gravity.mu(),
+            Self::J2(gravity) => gravity.mu(),
+            Self::J2Drag(composite) => composite.first().mu(),
+        }
+    }
 }
 
 /// Runtime mission segment.
@@ -67,10 +103,10 @@ impl ScenarioConfig {
         let propagation = propagation_plan(
             self.dt_s,
             self.integrator,
-            self.force_model,
+            &self.force_model,
             self.sample_every_steps,
         )?;
-        let mu = propagation.mu;
+        let mu = propagation.mu();
         let initial_state = circular_initial_state(self.altitude_m, mu)?;
         let duration = Duration::new(self.duration_s)?;
 
@@ -103,10 +139,10 @@ impl MissionScenarioConfig {
         let propagation = propagation_plan(
             self.propagation.dt_s,
             self.propagation.integrator,
-            self.propagation.force_model,
+            &self.propagation.force_model,
             self.propagation.sample_every_steps,
         )?;
-        let mu = propagation.mu;
+        let mu = propagation.mu();
         let initial_state = initial_state(&self.initial_orbit, mu)?;
         let initial_burns = self
             .initial_burns
@@ -151,7 +187,7 @@ fn validate_name(name: &str) -> Result<(), MissionError> {
 fn propagation_plan(
     dt_s: f64,
     integrator: IntegratorKind,
-    force_model: ForceModelKind,
+    force_model: &ForceModelKind,
     sample_every_steps: usize,
 ) -> Result<PropagationPlan, MissionError> {
     if sample_every_steps == 0 {
@@ -163,14 +199,50 @@ fn propagation_plan(
     Ok(PropagationPlan {
         dt: TimeStep::new(dt_s)?,
         integrator,
-        mu: runtime_mu(force_model)?,
+        dynamics: runtime_dynamics(force_model)?,
         sample_every_steps,
     })
 }
 
-fn runtime_mu(force_model: ForceModelKind) -> Result<GravitationalParameter, MissionError> {
+/// Resolves a configured force model into a validated runtime dynamics.
+fn runtime_dynamics(force_model: &ForceModelKind) -> Result<RuntimeDynamics, MissionError> {
+    let mu = GravitationalParameter::new(MU_EARTH)?;
     match force_model {
-        ForceModelKind::TwoBody => Ok(GravitationalParameter::new(MU_EARTH)?),
+        ForceModelKind::TwoBody => Ok(RuntimeDynamics::TwoBody(TwoBodyGravity::new(mu))),
+        ForceModelKind::J2 {
+            equatorial_radius_m,
+            j2,
+        } => {
+            let gravity = OblateBodyGravity::new(
+                mu,
+                Distance::new(*equatorial_radius_m)?,
+                J2Coefficient::new(*j2)?,
+            );
+            Ok(RuntimeDynamics::J2(gravity))
+        }
+        ForceModelKind::J2Drag {
+            equatorial_radius_m,
+            j2,
+            reference_altitude_m,
+            reference_density_kg_m3,
+            scale_height_m,
+            angular_rate_rad_s,
+            area_per_mass_m2_kg,
+        } => {
+            let equatorial_radius = Distance::new(*equatorial_radius_m)?;
+            let gravity = OblateBodyGravity::new(mu, equatorial_radius, J2Coefficient::new(*j2)?);
+            let atmosphere = ExponentialAtmosphere::new(
+                equatorial_radius,
+                Distance::new(*reference_altitude_m)?,
+                MassDensity::new(*reference_density_kg_m3)?,
+                Distance::new(*scale_height_m)?,
+                AngularRate::new(*angular_rate_rad_s)?,
+            );
+            let drag = AtmosphericDrag::new(atmosphere, AreaPerMass::new(*area_per_mass_m2_kg)?);
+            Ok(RuntimeDynamics::J2Drag(CompositeDynamics::new(
+                gravity, drag,
+            )))
+        }
     }
 }
 
@@ -245,21 +317,6 @@ fn burn_command(config: BurnConfig) -> Result<BurnCommand, MissionError> {
 mod tests {
     use super::*;
 
-    fn rollout_toml(extra: &str) -> String {
-        format!(
-            r#"
-            name = "test"
-            altitude_m = 400_000.0
-            dt_s = 10.0
-            duration_s = 100.0
-            integrator = "leapfrog"
-            force_model = "two_body"
-            sample_every_steps = 5
-            {extra}
-            "#
-        )
-    }
-
     #[test]
     fn rollout_build_rejects_zero_env_horizon() {
         let config =
@@ -279,7 +336,7 @@ mod tests {
             dt_s = 10.0
             duration_s = 100.0
             integrator = "leapfrog"
-            force_model = "two_body"
+            force_model = { kind = "two_body" }
             sample_every_steps = 0
             "#,
         )
@@ -290,5 +347,176 @@ mod tests {
             .expect_err("zero sample interval should fail");
 
         assert!(error.to_string().contains("sample_every_steps"));
+    }
+
+    #[test]
+    fn j2_force_model_resolves_to_oblate_gravity() {
+        let config = ScenarioConfig::from_toml(
+            r#"
+            name = "j2_test"
+            altitude_m = 400_000.0
+            dt_s = 10.0
+            duration_s = 100.0
+            integrator = "leapfrog"
+            force_model = { kind = "j2", equatorial_radius_m = 6_378_137.0, j2 = 1.08262668e-3 }
+            sample_every_steps = 5
+            "#,
+        )
+        .expect("config");
+
+        let plan = config.build().expect("plan");
+        assert!(matches!(plan.propagation.dynamics, RuntimeDynamics::J2(_)));
+    }
+
+    #[test]
+    fn j2_drag_force_model_resolves_to_composite() {
+        let config = ScenarioConfig::from_toml(
+            r#"
+            name = "drag_test"
+            altitude_m = 250_000.0
+            dt_s = 10.0
+            duration_s = 100.0
+            integrator = "runge_kutta4"
+            force_model = { kind = "j2_drag", equatorial_radius_m = 6_378_137.0, j2 = 1.08262668e-3, reference_altitude_m = 250_000.0, reference_density_kg_m3 = 1.0e-10, scale_height_m = 50_000.0, angular_rate_rad_s = 7.2921159e-5, area_per_mass_m2_kg = 0.02 }
+            sample_every_steps = 5
+            "#,
+        )
+        .expect("config");
+
+        let plan = config.build().expect("plan");
+        assert!(matches!(
+            plan.propagation.dynamics,
+            RuntimeDynamics::J2Drag(_)
+        ));
+    }
+
+    #[test]
+    fn j2_scenario_precesses_raan_relative_to_two_body() {
+        // An inclined orbit under J2 should precess its RAAN; under pure
+        // two-body the RAAN is fixed. Propagating both for several orbits
+        // and comparing the final RAAN distinguishes the two models.
+        let inclination_deg = 51.6_f64;
+        let two_body_final_raan = final_raan_deg(inclination_deg, "{ kind = \"two_body\" }");
+        let j2_final_raan = final_raan_deg(
+            inclination_deg,
+            "{ kind = \"j2\", equatorial_radius_m = 6_378_137.0, j2 = 1.08262668e-3 }",
+        );
+
+        assert!(
+            (two_body_final_raan - j2_final_raan).abs() > 0.1,
+            "J2 RAAN {j2_final_raan} deg should differ from two-body {two_body_final_raan} deg"
+        );
+    }
+
+    #[test]
+    fn drag_scenario_loses_energy_relative_to_two_body() {
+        // Drag dissipates orbital energy; two-body conserves it. Propagating
+        // a low orbit under both models for several orbits and comparing the
+        // specific energy change separates them.
+        let two_body_energy_delta = energy_delta("{ kind = \"two_body\" }");
+        let drag_energy_delta = energy_delta(
+            "{ kind = \"j2_drag\", equatorial_radius_m = 6_378_137.0, j2 = 1.08262668e-3, reference_altitude_m = 250_000.0, reference_density_kg_m3 = 1.0e-10, scale_height_m = 50_000.0, angular_rate_rad_s = 7.2921159e-5, area_per_mass_m2_kg = 0.02 }",
+        );
+
+        assert!(
+            two_body_energy_delta.abs() < 0.01,
+            "two-body energy should be conserved, got delta {two_body_energy_delta}"
+        );
+        assert!(
+            drag_energy_delta < -1.0e-3,
+            "drag should lose energy, got delta {drag_energy_delta}"
+        );
+    }
+
+    fn rollout_toml(extra: &str) -> String {
+        format!(
+            r#"
+            name = "test"
+            altitude_m = 400_000.0
+            dt_s = 10.0
+            duration_s = 100.0
+            integrator = "leapfrog"
+            force_model = {{ kind = "two_body" }}
+            sample_every_steps = 5
+            {extra}
+            "#
+        )
+    }
+
+    /// Propagates an inclined circular orbit under the given force model and
+    /// returns the final RAAN in degrees.
+    fn final_raan_deg(inclination_deg: f64, force_model_inline: &str) -> f64 {
+        use crate::physics::elements::{OrbitalElementClassification, OrbitalElements};
+
+        let mission_toml = format!(
+            r#"
+            name = "raan"
+            kind = "mission"
+
+            [initial_orbit]
+            kind = "classical"
+            semi_major_axis_m = {semi_major_axis}
+            eccentricity = 0.0
+            inclination_deg = {inclination_deg}
+            raan_deg = 0.0
+            arg_periapsis_deg = 0.0
+            true_anomaly_deg = 0.0
+
+            [propagation]
+            dt_s = 10.0
+            integrator = "leapfrog"
+            force_model = {force_model_inline}
+            sample_every_steps = 1000
+
+            [[segments]]
+            stop = {{ kind = "duration", duration_s = 30_000.0 }}
+            "#,
+            semi_major_axis = 6_378_137.0_f64 + 400_000.0,
+        );
+
+        let config: MissionScenarioConfig = toml::from_str(&mission_toml).expect("mission");
+        let result = crate::sim::mission::run_mission(&config).expect("run");
+        let elements = OrbitalElements::from_state(
+            &result.final_state,
+            GravitationalParameter::new(MU_EARTH).expect("mu"),
+            OrbitalElementClassification::default(),
+        )
+        .expect("elements");
+        elements
+            .right_ascension_of_ascending_node()
+            .map_or(0.0, |angle| angle.degrees())
+    }
+
+    /// Propagates a low circular orbit under the given force model and returns
+    /// the change in specific orbital energy (J/kg) over the episode.
+    fn energy_delta(force_model_inline: &str) -> f64 {
+        use crate::physics::diagnostics::OrbitalDiagnostics;
+
+        let toml = format!(
+            r#"
+            name = "energy"
+            altitude_m = 250_000.0
+            dt_s = 10.0
+            duration_s = 7_200.0
+            integrator = "runge_kutta4"
+            force_model = {force_model_inline}
+            sample_every_steps = 1000
+            "#,
+        );
+        let config = ScenarioConfig::from_toml(&toml).expect("config");
+        let mut env = crate::sim::environment::LeoCircularEnv::from_config(&config).expect("env");
+        let episode = env.run_episode(0).expect("episode");
+        let initial = &episode.propagation.samples[0].state;
+        let final_state = &episode.propagation.final_state;
+        let mu = GravitationalParameter::new(MU_EARTH).expect("mu");
+        let initial_energy = OrbitalDiagnostics::from_state(initial, mu)
+            .expect("initial diagnostics")
+            .specific_energy()
+            .square_meters_per_square_second();
+        let final_energy = OrbitalDiagnostics::from_state(final_state, mu)
+            .expect("final diagnostics")
+            .specific_energy()
+            .square_meters_per_square_second();
+        final_energy - initial_energy
     }
 }

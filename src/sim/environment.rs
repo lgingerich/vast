@@ -1,7 +1,6 @@
 use super::config::ScenarioConfig;
 use super::engine::{AccelerationCommand, PropagationResult, Propagator};
-use super::plan::RolloutPlan;
-use super::termination::StopReason;
+use super::termination::{StopReason, TerminationCondition};
 use crate::errors::{EnvironmentError, NumericalError};
 use crate::physics::constants::R_EARTH;
 use crate::physics::state::CartesianState;
@@ -73,7 +72,9 @@ pub trait Environment {
 
 /// LEO circular-orbit rollout environment (MVP).
 pub struct LeoCircularEnv {
-    plan: RolloutPlan,
+    initial_state: CartesianState,
+    termination: TerminationCondition,
+    steps_per_env_step: usize,
     propagator: Propagator,
     done: bool,
 }
@@ -85,7 +86,9 @@ impl LeoCircularEnv {
         let initial_epoch = Epoch::ZERO;
         let propagator = Propagator::new(plan.initial_state, initial_epoch, plan.propagation)?;
         Ok(Self {
-            plan,
+            initial_state: plan.initial_state,
+            termination: plan.termination,
+            steps_per_env_step: plan.steps_per_env_step,
             propagator,
             done: false,
         })
@@ -94,7 +97,7 @@ impl LeoCircularEnv {
     /// Runs a full rollout episode for artifact recording.
     pub fn run_episode(&mut self, seed: u64) -> Result<RolloutEpisodeResult, EnvironmentError> {
         let _ = self.reset(seed)?;
-        let mut propagation = self.propagator.run_segment(&self.plan.termination, None)?;
+        let mut propagation = self.propagator.run_segment(&self.termination, None)?;
         if propagation.samples.is_empty() {
             propagation
                 .samples
@@ -144,9 +147,9 @@ pub struct RolloutEpisodeResult {
 
 impl Environment for LeoCircularEnv {
     fn reset(&mut self, _seed: u64) -> Result<Observation, EnvironmentError> {
-        self.propagator.reset(self.plan.initial_state)?;
+        self.propagator.reset(self.initial_state)?;
         self.done = false;
-        Ok(Observation::from_state(&self.plan.initial_state))
+        Ok(Observation::from_state(&self.initial_state))
     }
 
     fn step(&mut self, action: Action) -> Result<StepResult, EnvironmentError> {
@@ -162,11 +165,9 @@ impl Environment for LeoCircularEnv {
         }
 
         let command = AccelerationCommand::inertial(action.acceleration_mps2())?;
-        let result = self.propagator.advance_steps(
-            &self.plan.termination,
-            self.plan.steps_per_env_step,
-            command,
-        )?;
+        let result =
+            self.propagator
+                .advance_steps(&self.termination, self.steps_per_env_step, command)?;
         let done = result.stop_reason.is_some();
         self.done = done;
 
@@ -194,7 +195,7 @@ mod tests {
             dt_s = 10.0
             duration_s = 100.0
             integrator = "leapfrog"
-            force_model = "two_body"
+            force_model = { kind = "two_body" }
             sample_every_steps = 5
             steps_per_env_step = 3
             "#,
@@ -220,7 +221,7 @@ mod tests {
             dt_s = 10.0
             duration_s = 100.0
             integrator = "leapfrog"
-            force_model = "two_body"
+            force_model = { kind = "two_body" }
             sample_every_steps = 5
             "#,
         )

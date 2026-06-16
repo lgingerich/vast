@@ -8,7 +8,7 @@ altitude_m = 400_000.0
 [propagation]
 dt_s = 30.0
 integrator = "leapfrog"
-force_model = "two_body"
+force_model = { kind = "two_body" }
 sample_every_steps = 20
 
 [[initial_burns]]

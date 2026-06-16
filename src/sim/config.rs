@@ -50,7 +50,6 @@ pub struct ScenarioConfig {
     /// Integrator.
     pub integrator: IntegratorKind,
     /// Force model.
-    #[serde(default)]
     pub force_model: ForceModelKind,
     /// Sample trajectory every N integrator steps.
     pub sample_every_steps: usize,
@@ -135,7 +134,6 @@ pub struct PropagationConfig {
     /// Integrator.
     pub integrator: IntegratorKind,
     /// Force model.
-    #[serde(default)]
     pub force_model: ForceModelKind,
     /// Sample trajectory every N integrator steps.
     pub sample_every_steps: usize,
@@ -206,12 +204,38 @@ pub enum IntegratorKind {
 }
 
 /// Supported force models for scenario configuration.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
+///
+/// Each variant resolves to a concrete `Dynamics` implementation in the
+/// runtime plan. Always written as an inline table with a `kind` tag in TOML.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "kind")]
 pub enum ForceModelKind {
     /// Two-body point-mass gravity.
-    #[default]
     TwoBody,
+    /// Oblate central-body gravity with the J2 zonal harmonic.
+    J2 {
+        /// Equatorial reference radius in meters.
+        equatorial_radius_m: f64,
+        /// Dimensionless second zonal harmonic coefficient.
+        j2: f64,
+    },
+    /// J2 gravity plus exponential atmospheric drag.
+    J2Drag {
+        /// Equatorial reference radius in meters.
+        equatorial_radius_m: f64,
+        /// Dimensionless second zonal harmonic coefficient.
+        j2: f64,
+        /// Atmosphere reference altitude above the equatorial radius, in meters.
+        reference_altitude_m: f64,
+        /// Atmospheric density at the reference altitude, in kg/m^3.
+        reference_density_kg_m3: f64,
+        /// Exponential atmosphere scale height in meters.
+        scale_height_m: f64,
+        /// Planet angular rotation rate in radians per second.
+        angular_rate_rad_s: f64,
+        /// Drag area per unit mass (C_d * A / m) in m^2/kg.
+        area_per_mass_m2_kg: f64,
+    },
 }
 
 #[cfg(test)]
@@ -227,7 +251,7 @@ mod tests {
             dt_s = 10.0
             duration_s = 100.0
             integrator = "leapfrog"
-            force_model = "two_body"
+            force_model = { kind = "two_body" }
             sample_every_steps = 5
             typo_field = true
             "#,
@@ -251,7 +275,7 @@ mod tests {
             [propagation]
             dt_s = 10.0
             integrator = "leapfrog"
-            force_model = "two_body"
+            force_model = { kind = "two_body" }
             sample_every_steps = 5
 
             [[initial_burns]]

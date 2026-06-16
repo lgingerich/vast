@@ -1,5 +1,26 @@
 # Project Memory
 
+## 2026-06-16 — Enum dispatch over generic propagator
+
+**Decision:** `Propagator` holds a closed `RuntimeDynamics` enum and dispatches
+on it in `step_once`. Each match arm wraps the active dynamics variant in
+`ControlledDynamics` (which adds the piecewise-constant acceleration command)
+and calls the integrator with a statically-known type. A zero command flows
+through the same `ControlledDynamics` path — the add of a zero vector is free —
+so there is one code path with no per-step branching on command magnitude.
+
+**Rejected:** Making `Propagator<D>` generic over `D: Dynamics` (Option C).
+The generic version required a dispatch boundary (`ResolvedRollout` /
+`ResolvedMission` enums) at the config-to-runtime edge, triplicated build
+code per force model, a `Box<dyn RolloutEnvironment>` with a new trait to
+keep the public env API constructible from config, and generic plans that
+infected every holder. The performance win over the enum was negligible: the
+old match was already monomorphized per arm (each branch called
+`integrator.step(concrete_type, ...)`), so Option C removed one predicted
+branch per integrator step while adding real structural complexity. The enum
+is simpler, adds a force model with one match arm, and keeps the public API
+non-generic.
+
 ## 2026-06-13 — Simulation cleanup ownership boundaries
 
 **Decision:** `Propagator` owns its validated `PropagationPlan`, and

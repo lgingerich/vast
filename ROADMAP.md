@@ -25,10 +25,11 @@ with duration/step/orbital termination and trajectory sampling**, **impulsive
 burns**, **TOML scenario config**, **`LeoCircularEnv` (`reset` / bounded
 `step(action)` with inertial acceleration command)**,
 **mission scenarios (`MissionRunner`, segment stops/burns)**, **run artifact
-recording with segment metadata**, **`runner` CLI (`run`, `serve`)**, and
+recording with segment metadata**, **`runner` CLI (`run`, `serve`)**,
 **React + R3F replay UI (`ui/`)**, **RL ops dashboard with per-run metrics
 (reward, episode length, stop reasons, final altitude) and synchronized
-multi-episode comparison view**.
+multi-episode comparison view**, **two-body/J2/J2+drag force models wired from
+scenario config through the `RuntimeDynamics` dispatch enum**.
 
 ---
 
@@ -71,20 +72,6 @@ next gap is "how do two policies compare?" and "what happened when?".
 
 **Defer:** hosted job queue UI, scenario editor forms, ECI ↔ ECEF view toggle
 (separate roadmap item), WebSocket streaming of in-progress runs.
-
-### P2 — Scenario Extensions
-
-**What:** Extend `ScenarioConfig` beyond LEO circular two-body: J2, drag,
-integrator defaults, scenario file discovery.
-
-**Why:** MVP scenario covers one reference case for the rollout shell.
-
-**First version scope:**
-
-- `force_model = "j2"` and drag stack fields.
-- Classical element ICs (when element→Cartesian lands).
-
-**Defer:** scenario catalogs, serialization versioning beyond v1 artifacts.
 
 ### P2 — Boundary And Constraint Checks
 

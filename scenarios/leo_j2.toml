@@ -1,0 +1,7 @@
+name = "leo_j2"
+altitude_m = 400_000.0
+dt_s = 10.0
+duration_s = 5400.0
+integrator = "leapfrog"
+force_model = { kind = "j2", equatorial_radius_m = 6_378_137.0, j2 = 1.08262668e-3 }
+sample_every_steps = 10

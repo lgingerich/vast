@@ -2,6 +2,7 @@ use super::config::MissionScenarioConfig;
 use super::engine::{PropagationResult, Propagator};
 use crate::errors::MissionError;
 use crate::physics::state::CartesianState;
+use crate::physics::types::Epoch;
 
 /// Result of one mission segment.
 #[derive(Debug, Clone, PartialEq)]
@@ -22,24 +23,20 @@ pub struct MissionResult {
     /// Final Cartesian state after all segments and burns.
     pub final_state: CartesianState,
     /// Final simulation epoch.
-    pub final_epoch: crate::physics::types::Epoch,
+    pub final_epoch: Epoch,
 }
 
 /// Runs a mission scenario once from its initial state.
 pub fn run_mission(config: &MissionScenarioConfig) -> Result<MissionResult, MissionError> {
     let plan = config.build()?;
-    let mut propagator = Propagator::new(
-        plan.initial_state,
-        crate::physics::types::Epoch::ZERO,
-        plan.propagation,
-    )?;
+    let mut propagator = Propagator::new(plan.initial_state, Epoch::ZERO, plan.propagation)?;
 
     for burn in &plan.initial_burns {
         propagator.apply_burn(*burn)?;
     }
 
     let mut segment_results = Vec::with_capacity(plan.segments.len());
-    let mut final_epoch = crate::physics::types::Epoch::ZERO;
+    let mut final_epoch = Epoch::ZERO;
 
     for (segment_index, segment) in plan.segments.iter().enumerate() {
         let propagation = propagator.run_segment(&segment.termination, Some(segment_index))?;
