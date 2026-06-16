@@ -1,9 +1,9 @@
 #![allow(missing_docs)]
 
 use vast::{
-    Angle, Distance, Duration, EllipticOrbit, GravitationalParameter, J2Coefficient, J2_EARTH,
-    MU_EARTH, OblateBodyGravity, Orbit, SimBuilder, TimeStep, TwoBodyGravity,
-    VelocityVerletIntegrator, R_EARTH,
+    Angle, Distance, Duration, EllipticOrbit, GravitationalParameter, J2_EARTH, J2Coefficient,
+    MU_EARTH, OblateBodyGravity, Orbit, R_EARTH, SimBuilder, TimeStep, TwoBodyGravity,
+    VelocityVerletIntegrator,
 };
 
 const ALTITUDE_KM: f64 = 600.0;
@@ -25,8 +25,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dt = TimeStep::new(STEP_SECONDS)?;
 
     // --- analytical prediction ---
-    let mean_motion =
-        (MU_EARTH / elliptic.semi_major_axis().meters().powi(3)).sqrt();
+    let mean_motion = (MU_EARTH / elliptic.semi_major_axis().meters().powi(3)).sqrt();
     let radius_ratio = R_EARTH / elliptic.semi_major_axis().meters();
     let analytical_drift_rad_per_sec = -1.5
         * J2_EARTH

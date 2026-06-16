@@ -371,12 +371,8 @@ mod tests {
     #[test]
     fn run_segment_samples_at_configured_cadence() {
         let plan = propagation_plan(2);
-        let mut propagator = Propagator::new(
-            initial_state(),
-            Epoch::ZERO,
-            plan,
-        )
-        .expect("propagator");
+        let mut propagator =
+            Propagator::new(initial_state(), Epoch::ZERO, plan).expect("propagator");
 
         let result = propagator
             .run_segment(&TerminationCondition::StepCount(5), Some(7))
@@ -396,12 +392,8 @@ mod tests {
     #[test]
     fn duration_segment_uses_partial_final_step() {
         let plan = propagation_plan(1);
-        let mut propagator = Propagator::new(
-            initial_state(),
-            Epoch::ZERO,
-            plan,
-        )
-        .expect("propagator");
+        let mut propagator =
+            Propagator::new(initial_state(), Epoch::ZERO, plan).expect("propagator");
 
         let result = propagator
             .run_segment(
@@ -418,12 +410,8 @@ mod tests {
     #[test]
     fn bounded_advance_can_end_without_terminal_stop() {
         let plan = propagation_plan(1);
-        let mut propagator = Propagator::new(
-            initial_state(),
-            Epoch::ZERO,
-            plan,
-        )
-        .expect("propagator");
+        let mut propagator =
+            Propagator::new(initial_state(), Epoch::ZERO, plan).expect("propagator");
 
         let result = propagator
             .advance_steps(

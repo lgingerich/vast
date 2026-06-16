@@ -150,8 +150,7 @@ mod tests {
 
     #[test]
     fn bielliptic_rejects_invalid_intermediate_radius() {
-        let mu =
-            GravitationalParameter::new(3.986e14).expect("mu");
+        let mu = GravitationalParameter::new(3.986e14).expect("mu");
         let departure = Distance::new(R_EARTH + 400_000.0).expect("distance");
         let arrival = Distance::new(R_EARTH + 35_786_000.0).expect("distance");
         let intermediate = Distance::new(R_EARTH + 400_000.0).expect("distance");
@@ -173,8 +172,7 @@ mod tests {
 
     #[test]
     fn circularize_delta_v_removes_radial_velocity() {
-        let mu =
-            GravitationalParameter::new(3.986e14).expect("mu");
+        let mu = GravitationalParameter::new(3.986e14).expect("mu");
         let radius_m = R_EARTH + 400_000.0;
         let state = state(
             Vector3::new(radius_m, 0.0, 0.0),

@@ -147,8 +147,7 @@ impl OrbitalDiagnostics {
         }
 
         let specific_energy_f64 = 0.5 * speed * speed - mu_f64 / radius;
-        let specific_energy =
-            SpecificEnergy::new(specific_energy_f64)?;
+        let specific_energy = SpecificEnergy::new(specific_energy_f64)?;
         let specific_angular_momentum_vector = position.cross(&velocity);
         let specific_angular_momentum = specific_angular_momentum_vector.norm();
         let eccentricity_vector =
@@ -176,9 +175,7 @@ impl OrbitalDiagnostics {
             speed: Speed::new(speed)?,
             specific_energy,
             specific_angular_momentum_vector,
-            specific_angular_momentum: SpecificAngularMomentum::new(
-                specific_angular_momentum,
-            )?,
+            specific_angular_momentum: SpecificAngularMomentum::new(specific_angular_momentum)?,
             eccentricity_vector,
             eccentricity: Eccentricity::new(eccentricity)?,
             semi_major_axis,
@@ -288,11 +285,8 @@ pub struct DiagnosticSeries {
 impl DiagnosticSeries {
     /// Creates a series from a pair of snapshots (initial, final).
     pub fn from_pair(initial: &OrbitalDiagnostics, terminal: &OrbitalDiagnostics) -> Self {
-        let sma = |d: &OrbitalDiagnostics| {
-            d.semi_major_axis
-                .map(|a| a.meters())
-                .unwrap_or(f64::NAN)
-        };
+        let sma =
+            |d: &OrbitalDiagnostics| d.semi_major_axis.map(|a| a.meters()).unwrap_or(f64::NAN);
         Self {
             radius: vec![initial.radius.meters(), terminal.radius.meters()],
             speed: vec![
@@ -304,14 +298,15 @@ impl DiagnosticSeries {
                 terminal.specific_energy.square_meters_per_square_second(),
             ],
             specific_angular_momentum: vec![
-                initial
-                    .specific_angular_momentum
-                    .square_meters_per_second(),
+                initial.specific_angular_momentum.square_meters_per_second(),
                 terminal
                     .specific_angular_momentum
                     .square_meters_per_second(),
             ],
-            eccentricity: vec![initial.eccentricity.scalar(), terminal.eccentricity.scalar()],
+            eccentricity: vec![
+                initial.eccentricity.scalar(),
+                terminal.eccentricity.scalar(),
+            ],
             semi_major_axis: vec![sma(initial), sma(terminal)],
         }
     }
@@ -371,9 +366,7 @@ fn bound_semi_major_axis(
     }
 
     let mu_f64 = mu.meters_cubed_per_second_squared();
-    Ok(Some(Distance::new(
-        -mu_f64 / (2.0 * specific_energy),
-    )?))
+    Ok(Some(Distance::new(-mu_f64 / (2.0 * specific_energy))?))
 }
 
 #[cfg(test)]

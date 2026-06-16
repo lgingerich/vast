@@ -375,9 +375,7 @@ mod tests {
     }
 
     fn earth_gravity() -> Result<TwoBodyGravity, Box<dyn std::error::Error>> {
-        Ok(TwoBodyGravity::new(
-            GravitationalParameter::new(MU_EARTH)?,
-        ))
+        Ok(TwoBodyGravity::new(GravitationalParameter::new(MU_EARTH)?))
     }
 
     fn earth_oblate_gravity(j2: f64) -> Result<OblateBodyGravity, Box<dyn std::error::Error>> {
@@ -418,14 +416,10 @@ mod tests {
 
     #[test]
     fn two_body_gravity_points_toward_origin() -> TestResult {
-        let gravity = TwoBodyGravity::new(
-            GravitationalParameter::new(MU_EARTH)?,
-        );
+        let gravity = TwoBodyGravity::new(GravitationalParameter::new(MU_EARTH)?);
         let radius = R_EARTH + 400_000.0;
-        let acceleration = gravity.acceleration_at(
-            state_from_position(radius, 0.0, 0.0),
-            Epoch::ZERO,
-        )?;
+        let acceleration =
+            gravity.acceleration_at(state_from_position(radius, 0.0, 0.0), Epoch::ZERO)?;
 
         assert!(acceleration.vector().x < 0.0);
         assert_close(acceleration.vector().y, 0.0, EPS);
@@ -435,15 +429,10 @@ mod tests {
 
     #[test]
     fn two_body_gravity_has_inverse_square_magnitude() -> TestResult {
-        let gravity = TwoBodyGravity::new(
-            GravitationalParameter::new(MU_EARTH)?,
-        );
+        let gravity = TwoBodyGravity::new(GravitationalParameter::new(MU_EARTH)?);
         let radius = R_EARTH + 400_000.0;
         let acceleration = gravity
-            .acceleration_at(
-                state_from_position(radius, 0.0, 0.0),
-                Epoch::ZERO,
-            )?
+            .acceleration_at(state_from_position(radius, 0.0, 0.0), Epoch::ZERO)?
             .vector();
 
         assert_close(acceleration.norm(), MU_EARTH / radius.powi(2), EPS);
@@ -452,9 +441,7 @@ mod tests {
 
     #[test]
     fn two_body_gravity_matches_off_axis_vector_formula() -> TestResult {
-        let gravity = TwoBodyGravity::new(
-            GravitationalParameter::new(MU_EARTH)?,
-        );
+        let gravity = TwoBodyGravity::new(GravitationalParameter::new(MU_EARTH)?);
         let radius = R_EARTH + 400_000.0;
         let position = Vector3::new(3.0 * radius, 4.0 * radius, 0.0);
         let expected = -MU_EARTH * position / position.norm().powi(3);
@@ -474,9 +461,7 @@ mod tests {
 
     #[test]
     fn two_body_gravity_falls_off_with_inverse_square_distance() -> TestResult {
-        let gravity = TwoBodyGravity::new(
-            GravitationalParameter::new(MU_EARTH)?,
-        );
+        let gravity = TwoBodyGravity::new(GravitationalParameter::new(MU_EARTH)?);
         let radius = R_EARTH + 400_000.0;
         let epoch = Epoch::ZERO;
         let near_acceleration = gravity
@@ -509,14 +494,9 @@ mod tests {
 
     #[test]
     fn two_body_gravity_rejects_zero_radius() -> TestResult {
-        let gravity = TwoBodyGravity::new(
-            GravitationalParameter::new(MU_EARTH)?,
-        );
+        let gravity = TwoBodyGravity::new(GravitationalParameter::new(MU_EARTH)?);
         assert!(matches!(
-            gravity.acceleration_at(
-                state_from_position(0.0, 0.0, 0.0),
-                Epoch::ZERO
-            ),
+            gravity.acceleration_at(state_from_position(0.0, 0.0, 0.0), Epoch::ZERO),
             Err(DynamicsError::PositionAtGravityCenter),
         ));
         Ok(())
@@ -524,14 +504,9 @@ mod tests {
 
     #[test]
     fn two_body_gravity_rejects_nonfinite_acceleration() -> TestResult {
-        let gravity = TwoBodyGravity::new(
-            GravitationalParameter::new(MU_EARTH)?,
-        );
+        let gravity = TwoBodyGravity::new(GravitationalParameter::new(MU_EARTH)?);
         assert!(matches!(
-            gravity.acceleration_at(
-                state_from_position(1.0e-150, 0.0, 0.0),
-                Epoch::ZERO
-            ),
+            gravity.acceleration_at(state_from_position(1.0e-150, 0.0, 0.0), Epoch::ZERO),
             Err(DynamicsError::Numerical(NumericalError::NotFinite {
                 field: "acceleration"
             })),
@@ -581,10 +556,7 @@ mod tests {
         let gravity = earth_oblate_gravity(J2_EARTH)?;
 
         assert!(matches!(
-            gravity.acceleration_at(
-                state_from_position(0.0, 0.0, 0.0),
-                Epoch::ZERO,
-            ),
+            gravity.acceleration_at(state_from_position(0.0, 0.0, 0.0), Epoch::ZERO,),
             Err(DynamicsError::PositionAtGravityCenter),
         ));
         Ok(())
@@ -695,9 +667,7 @@ mod tests {
             Vector3::new(0.0, 7_700.0, 0.0),
         );
 
-        let acceleration = drag
-            .acceleration_at(state, Epoch::ZERO)?
-            .vector();
+        let acceleration = drag.acceleration_at(state, Epoch::ZERO)?.vector();
 
         assert!(acceleration.dot(&state.velocity_vector()) < 0.0);
         Ok(())
@@ -708,18 +678,13 @@ mod tests {
         let atmosphere = atmosphere()?;
         let radius = R_EARTH + 250_000.0;
         let omega = atmosphere.angular_rate.radians_per_second();
-        let drag = AtmosphericDrag::new(
-            atmosphere,
-            AreaPerMass::new(0.02)?,
-        );
+        let drag = AtmosphericDrag::new(atmosphere, AreaPerMass::new(0.02)?);
         let state = state_from_vectors(
             Vector3::new(radius, 0.0, 0.0),
             Vector3::new(0.0, omega * radius, 0.0),
         );
 
-        let acceleration = drag
-            .acceleration_at(state, Epoch::ZERO)?
-            .vector();
+        let acceleration = drag.acceleration_at(state, Epoch::ZERO)?.vector();
 
         assert_close(acceleration.norm(), 0.0, EPS);
         Ok(())

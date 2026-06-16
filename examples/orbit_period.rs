@@ -35,7 +35,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- print header ---
     println!(
         "Circular Earth orbit at {:.0} km altitude",
-        elliptic.semi_major_axis().meters() / 1000.0,
+        (elliptic.semi_major_axis().meters() - vast::R_EARTH) / 1000.0,
     );
     println!(
         "radius: {:.3} km | speed: {:.3} km/s | period: {:.3} min",
@@ -46,8 +46,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
     println!(
         "{:>8} {:>8} {:>8} {:>12} {:>13} {:>20} {:>18} {:>18} {:>16} {:>12}",
-        "method", "dt(s)", "steps", "elapsed(s)", "overshoot(s)",
-        "position drift(km)", "speed error(m/s)", "energy error", "h error",
+        "method",
+        "dt(s)",
+        "steps",
+        "elapsed(s)",
+        "overshoot(s)",
+        "position drift(km)",
+        "speed error(m/s)",
+        "energy error",
+        "h error",
         "eccentricity",
     );
 
@@ -56,16 +63,40 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let dt = TimeStep::new(step_s)?;
 
         let euler = run(
-            "Euler", &orbit_spec, EulerIntegrator, dt, period, &initial_position, speed,
+            "Euler",
+            &orbit_spec,
+            EulerIntegrator,
+            dt,
+            period,
+            &initial_position,
+            speed,
         )?;
         let rk4 = run(
-            "RK4", &orbit_spec, RungeKutta4Integrator, dt, period, &initial_position, speed,
+            "RK4",
+            &orbit_spec,
+            RungeKutta4Integrator,
+            dt,
+            period,
+            &initial_position,
+            speed,
         )?;
         let verlet = run(
-            "Verlet", &orbit_spec, VelocityVerletIntegrator, dt, period, &initial_position, speed,
+            "Verlet",
+            &orbit_spec,
+            VelocityVerletIntegrator,
+            dt,
+            period,
+            &initial_position,
+            speed,
         )?;
         let leapfrog = run(
-            "Leapfrog", &orbit_spec, LeapfrogIntegrator, dt, period, &initial_position, speed,
+            "Leapfrog",
+            &orbit_spec,
+            LeapfrogIntegrator,
+            dt,
+            period,
+            &initial_position,
+            speed,
         )?;
 
         print_summary(&euler);
@@ -95,19 +126,17 @@ fn run<I: vast::Integrator>(
         .duration(period)?;
 
     // --- inspect results ---
-    let pos_drift = (result.final_state.position.vector()
-        - initial_position.vector())
-    .norm()
-    .max(f64::EPSILON);
-    let speed_error = (result.series.column(Column::Speed)[1]
-        - circular_speed.meters_per_second())
-    .abs();
+    let pos_drift = (result.final_state.position.vector() - initial_position.vector())
+        .norm()
+        .max(f64::EPSILON);
+    let speed_error =
+        (result.series.column(Column::Speed)[1] - circular_speed.meters_per_second()).abs();
     let energy_error = (result.series.column(Column::SpecificEnergy)[1]
         - result.series.column(Column::SpecificEnergy)[0])
-    .abs();
+        .abs();
     let h_error = (result.series.column(Column::SpecificAngularMomentum)[1]
         - result.series.column(Column::SpecificAngularMomentum)[0])
-    .abs();
+        .abs();
 
     Ok(Summary {
         method,

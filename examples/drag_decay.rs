@@ -21,10 +21,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let dynamics = CompositeDynamics::new(
         TwoBodyGravity::earth(),
-        AtmosphericDrag::new(
-            atmosphere,
-            AreaPerMass::new(0.02)?,
-        ),
+        AtmosphericDrag::new(atmosphere, AreaPerMass::new(0.02)?),
     );
     let total_duration = Duration::new(PROPAGATION_HOURS * 3_600.0).unwrap();
 

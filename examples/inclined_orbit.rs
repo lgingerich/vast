@@ -34,11 +34,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let radius_drift = (s.column(Column::Radius)[1] - s.column(Column::Radius)[0]).abs();
     let energy_error =
         (s.column(Column::SpecificEnergy)[1] - s.column(Column::SpecificEnergy)[0]).abs();
-    let h_error =
-        (s.column(Column::SpecificAngularMomentum)[1]
-            - s.column(Column::SpecificAngularMomentum)[0])
+    let h_error = (s.column(Column::SpecificAngularMomentum)[1]
+        - s.column(Column::SpecificAngularMomentum)[0])
         .abs();
-    let h = result.final_state.position.vector()
+    let h = result
+        .final_state
+        .position
+        .vector()
         .cross(&result.final_state.velocity.vector());
     let h_hat = h.normalize();
 
@@ -59,10 +61,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         energy_error,
         h_error,
     );
-    println!(
-        "eccentricity: {:.9}",
-        s.column(Column::Eccentricity)[1],
-    );
+    println!("eccentricity: {:.9}", s.column(Column::Eccentricity)[1],);
     println!(
         "h direction: [{:.6}, {:.6}, {:.6}]",
         h_hat.x, h_hat.y, h_hat.z,

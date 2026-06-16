@@ -412,8 +412,8 @@ mod tests {
     #[test]
     fn elliptic_orbit_retrograde_reverses_velocity() -> TestResult {
         let e = Eccentricity::new(0.3)?;
-        let prograde = elliptic_orbit(e, Angle::new(0.7)?, OrbitDirection::Prograde)?
-            .to_cartesian_state()?;
+        let prograde =
+            elliptic_orbit(e, Angle::new(0.7)?, OrbitDirection::Prograde)?.to_cartesian_state()?;
         let retrograde = elliptic_orbit(e, Angle::new(0.7)?, OrbitDirection::Retrograde)?
             .to_cartesian_state()?;
 

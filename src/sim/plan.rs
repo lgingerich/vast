@@ -170,9 +170,7 @@ fn propagation_plan(
 
 fn runtime_mu(force_model: ForceModelKind) -> Result<GravitationalParameter, MissionError> {
     match force_model {
-        ForceModelKind::TwoBody => {
-            Ok(GravitationalParameter::new(MU_EARTH)?)
-        }
+        ForceModelKind::TwoBody => Ok(GravitationalParameter::new(MU_EARTH)?),
     }
 }
 
@@ -228,9 +226,9 @@ fn termination(
     match stop {
         StopConfig::Apoapsis => Ok(TerminationCondition::apoapsis(mu)),
         StopConfig::Periapsis => Ok(TerminationCondition::periapsis(mu)),
-        StopConfig::Duration { duration_s } => Ok(TerminationCondition::Duration(
-            Duration::new(*duration_s)?,
-        )),
+        StopConfig::Duration { duration_s } => {
+            Ok(TerminationCondition::Duration(Duration::new(*duration_s)?))
+        }
         StopConfig::StepCount { steps } => Ok(TerminationCondition::StepCount(*steps)),
     }
 }

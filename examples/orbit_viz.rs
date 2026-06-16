@@ -2,8 +2,8 @@
 
 use macroquad::prelude::*;
 use vast::{
-    Distance, Duration, EllipticOrbit, LeapfrogIntegrator, Orbit, R_EARTH, Sim,
-    SimBuilder, Speed, TimeStep, TwoBodyGravity,
+    Distance, Duration, EllipticOrbit, LeapfrogIntegrator, Orbit, R_EARTH, Sim, SimBuilder, Speed,
+    TimeStep, TwoBodyGravity,
 };
 
 const TRAIL_POINTS_MAX: usize = 2_000;
@@ -117,7 +117,8 @@ impl OrbitVizScenario {
         };
 
         let altitude_km = diagnostics.radius().meters() / 1000.0 - self.earth_radius_km;
-        let radius_drift_km = diagnostics.radius().meters() / 1000.0 - self.ideal_orbital_radius.meters() / 1000.0;
+        let radius_drift_km =
+            diagnostics.radius().meters() / 1000.0 - self.ideal_orbital_radius.meters() / 1000.0;
         let orbit_progress = self.sim.epoch().seconds() / self.orbital_period.seconds();
         let orbit_progress_percent = orbit_progress.fract() * 100.0;
 

@@ -337,8 +337,7 @@ mod tests {
     };
 
     fn sample_state() -> CartesianState {
-        let mu =
-            GravitationalParameter::new(MU_EARTH).expect("mu");
+        let mu = GravitationalParameter::new(MU_EARTH).expect("mu");
         EllipticOrbit::new(
             Distance::new(R_EARTH + 400_000.0).expect("radius"),
             Eccentricity::new(0.0).expect("eccentricity"),
@@ -374,11 +373,7 @@ mod tests {
         .expect("scenario");
 
         let mut recorder = RunRecorder::new(&temp, &scenario).expect("recorder");
-        let samples = vec![TrajectorySample::new(
-            Epoch::ZERO,
-            sample_state(),
-            None,
-        )];
+        let samples = vec![TrajectorySample::new(Epoch::ZERO, sample_state(), None)];
         recorder
             .write_episode(EpisodeRecord {
                 episode_index: 0,

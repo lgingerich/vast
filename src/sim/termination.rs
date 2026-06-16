@@ -287,8 +287,7 @@ mod tests {
     fn duration_met_when_elapsed_reaches_target() {
         let start = Epoch::ZERO;
         let current = Epoch::new(100.0).expect("epoch");
-        let condition =
-            TerminationCondition::Duration(Duration::new(100.0).expect("duration"));
+        let condition = TerminationCondition::Duration(Duration::new(100.0).expect("duration"));
         let state = sample_state();
 
         assert_eq!(
@@ -340,8 +339,7 @@ mod tests {
 
     #[test]
     fn apoapsis_met_on_radial_velocity_sign_crossing() {
-        let mu =
-            GravitationalParameter::new(MU_EARTH).expect("mu");
+        let mu = GravitationalParameter::new(MU_EARTH).expect("mu");
         let state = sample_state();
         let condition = TerminationCondition::apoapsis(mu);
         let epoch = Epoch::new(10.0).expect("epoch");
@@ -362,8 +360,7 @@ mod tests {
 
     #[test]
     fn periapsis_met_on_radial_velocity_sign_crossing() {
-        let mu =
-            GravitationalParameter::new(MU_EARTH).expect("mu");
+        let mu = GravitationalParameter::new(MU_EARTH).expect("mu");
         let state = sample_state();
         let condition = TerminationCondition::periapsis(mu);
         let epoch = Epoch::new(10.0).expect("epoch");
@@ -383,8 +380,7 @@ mod tests {
     }
 
     fn sample_state() -> crate::CartesianState {
-        let mu =
-            GravitationalParameter::new(MU_EARTH).expect("mu");
+        let mu = GravitationalParameter::new(MU_EARTH).expect("mu");
         EllipticOrbit::new(
             Distance::new(R_EARTH + 400_000.0).expect("radius"),
             Eccentricity::new(0.0).expect("eccentricity"),

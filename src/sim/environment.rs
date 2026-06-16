@@ -3,9 +3,9 @@ use super::engine::{AccelerationCommand, PropagationResult, Propagator};
 use super::plan::RolloutPlan;
 use super::termination::StopReason;
 use crate::errors::{EnvironmentError, NumericalError};
-use crate::physics::types::Epoch;
 use crate::physics::constants::R_EARTH;
 use crate::physics::state::CartesianState;
+use crate::physics::types::Epoch;
 
 /// Inertial thrust acceleration action in meters per second squared.
 #[derive(Debug, Clone, Copy, PartialEq)]
