@@ -249,20 +249,22 @@ impl OrbitalDiagnostics {
 }
 
 /// Diagnostic metric available in a [`DiagnosticSeries`].
+///
+/// Values are in SI units (meters, seconds, m²/s², etc.).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Column {
-    /// Radius from the central body center of mass, kilometers.
-    RadiusKm,
-    /// Inertial speed, meters per second.
-    SpeedMps,
+    /// Radius from the central body center of mass, meters.
+    Radius,
+    /// Inertial speed, m/s.
+    Speed,
     /// Specific orbital energy, m²/s².
-    SpecificEnergyM2s2,
+    SpecificEnergy,
     /// Specific angular momentum magnitude, m²/s.
-    SpecificAngularMomentumM2s,
+    SpecificAngularMomentum,
     /// Orbital eccentricity, dimensionless.
     Eccentricity,
-    /// Semi-major axis, kilometers. `NaN` for unbound orbits.
-    SemiMajorAxisKm,
+    /// Semi-major axis, meters. `NaN` for unbound orbits.
+    SemiMajorAxis,
 }
 
 /// Per-step diagnostic scalars collected across a trajectory.
@@ -271,38 +273,37 @@ pub enum Column {
 /// For the initial+final snapshots from [`SimResult`], `len()` is 2.
 /// Future per-step recording paths can produce series of arbitrary length.
 ///
-/// All scalar values are stored in their natural SI units so callers
-/// can compute differences, variance, and other reductions without
-/// boxing through domain newtypes.
+/// Values are stored in SI units so callers can compute differences,
+/// variance, and other reductions without boxing through domain newtypes.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DiagnosticSeries {
-    radius_km: Vec<f64>,
-    speed_mps: Vec<f64>,
-    specific_energy_m2s2: Vec<f64>,
-    specific_angular_momentum_m2s: Vec<f64>,
+    radius: Vec<f64>,
+    speed: Vec<f64>,
+    specific_energy: Vec<f64>,
+    specific_angular_momentum: Vec<f64>,
     eccentricity: Vec<f64>,
-    semi_major_axis_km: Vec<f64>,
+    semi_major_axis: Vec<f64>,
 }
 
 impl DiagnosticSeries {
     /// Creates a series from a pair of snapshots (initial, final).
     pub fn from_pair(initial: &OrbitalDiagnostics, terminal: &OrbitalDiagnostics) -> Self {
-        let e_sma_km = |d: &OrbitalDiagnostics| {
+        let sma = |d: &OrbitalDiagnostics| {
             d.semi_major_axis
-                .map(|a| a.km())
+                .map(|a| a.meters())
                 .unwrap_or(f64::NAN)
         };
         Self {
-            radius_km: vec![initial.radius.km(), terminal.radius.km()],
-            speed_mps: vec![
+            radius: vec![initial.radius.meters(), terminal.radius.meters()],
+            speed: vec![
                 initial.speed.meters_per_second(),
                 terminal.speed.meters_per_second(),
             ],
-            specific_energy_m2s2: vec![
+            specific_energy: vec![
                 initial.specific_energy.square_meters_per_square_second(),
                 terminal.specific_energy.square_meters_per_square_second(),
             ],
-            specific_angular_momentum_m2s: vec![
+            specific_angular_momentum: vec![
                 initial
                     .specific_angular_momentum
                     .square_meters_per_second(),
@@ -311,18 +312,18 @@ impl DiagnosticSeries {
                     .square_meters_per_second(),
             ],
             eccentricity: vec![initial.eccentricity.scalar(), terminal.eccentricity.scalar()],
-            semi_major_axis_km: vec![e_sma_km(initial), e_sma_km(terminal)],
+            semi_major_axis: vec![sma(initial), sma(terminal)],
         }
     }
 
     /// Number of snapshots in the series.
     pub fn len(&self) -> usize {
-        self.radius_km.len()
+        self.radius.len()
     }
 
     /// Returns `true` if the series is empty.
     pub fn is_empty(&self) -> bool {
-        self.radius_km.is_empty()
+        self.radius.is_empty()
     }
 
     /// Returns the values for a diagnostic column.
@@ -343,19 +344,19 @@ impl DiagnosticSeries {
     /// #     .timestep(TimeStep::from_seconds(10.0)?)
     /// #     .duration(Duration::from_seconds(5_330.0).unwrap())?;
     /// let s = &result.series;
-    /// let radius_km = s.column(Column::RadiusKm);
-    /// let drift = (radius_km[1] - radius_km[0]).abs();
+    /// let radius = s.column(Column::Radius);
+    /// let drift = (radius[1] - radius[0]).abs();
     /// # Ok(())
     /// # }
     /// ```
     pub fn column(&self, column: Column) -> &[f64] {
         match column {
-            Column::RadiusKm => &self.radius_km,
-            Column::SpeedMps => &self.speed_mps,
-            Column::SpecificEnergyM2s2 => &self.specific_energy_m2s2,
-            Column::SpecificAngularMomentumM2s => &self.specific_angular_momentum_m2s,
+            Column::Radius => &self.radius,
+            Column::Speed => &self.speed,
+            Column::SpecificEnergy => &self.specific_energy,
+            Column::SpecificAngularMomentum => &self.specific_angular_momentum,
             Column::Eccentricity => &self.eccentricity,
-            Column::SemiMajorAxisKm => &self.semi_major_axis_km,
+            Column::SemiMajorAxis => &self.semi_major_axis,
         }
     }
 }

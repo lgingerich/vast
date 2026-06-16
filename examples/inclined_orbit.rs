@@ -31,12 +31,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // --- inspect results ---
     let s = &result.series;
-    let radius_drift = (s.column(Column::RadiusKm)[1] - s.column(Column::RadiusKm)[0]).abs();
+    let radius_drift = (s.column(Column::Radius)[1] - s.column(Column::Radius)[0]).abs();
     let energy_error =
-        (s.column(Column::SpecificEnergyM2s2)[1] - s.column(Column::SpecificEnergyM2s2)[0]).abs();
+        (s.column(Column::SpecificEnergy)[1] - s.column(Column::SpecificEnergy)[0]).abs();
     let h_error =
-        (s.column(Column::SpecificAngularMomentumM2s)[1]
-            - s.column(Column::SpecificAngularMomentumM2s)[0])
+        (s.column(Column::SpecificAngularMomentum)[1]
+            - s.column(Column::SpecificAngularMomentum)[0])
         .abs();
     let h = result.final_state.position.vector()
         .cross(&result.final_state.velocity.vector());
@@ -55,7 +55,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!(
         "radius drift: {:.6} km | energy error: {:.6} | h error: {:.6}",
-        radius_drift.max(f64::EPSILON),
+        radius_drift.max(f64::EPSILON) / 1000.0,
         energy_error,
         h_error,
     );

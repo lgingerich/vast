@@ -99,14 +99,14 @@ fn run<I: vast::Integrator>(
         - initial_position.vector())
     .norm()
     .max(f64::EPSILON);
-    let speed_error = (result.series.column(Column::SpeedMps)[1]
+    let speed_error = (result.series.column(Column::Speed)[1]
         - circular_speed.meters_per_second())
     .abs();
-    let energy_error = (result.series.column(Column::SpecificEnergyM2s2)[1]
-        - result.series.column(Column::SpecificEnergyM2s2)[0])
+    let energy_error = (result.series.column(Column::SpecificEnergy)[1]
+        - result.series.column(Column::SpecificEnergy)[0])
     .abs();
-    let h_error = (result.series.column(Column::SpecificAngularMomentumM2s)[1]
-        - result.series.column(Column::SpecificAngularMomentumM2s)[0])
+    let h_error = (result.series.column(Column::SpecificAngularMomentum)[1]
+        - result.series.column(Column::SpecificAngularMomentum)[0])
     .abs();
 
     Ok(Summary {

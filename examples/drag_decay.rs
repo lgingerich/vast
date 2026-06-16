@@ -40,10 +40,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // --- inspect results ---
     let s = &result.series;
-    let initial_alt_km = s.column(Column::RadiusKm)[0] - R_EARTH / 1000.0;
-    let final_alt_km = s.column(Column::RadiusKm)[1] - R_EARTH / 1000.0;
-    let energy_delta = s.column(Column::SpecificEnergyM2s2)[1] - s.column(Column::SpecificEnergyM2s2)[0];
-    let speed_delta = s.column(Column::SpeedMps)[1] - s.column(Column::SpeedMps)[0];
+    let initial_alt_km = (s.column(Column::Radius)[0] - R_EARTH) / 1000.0;
+    let final_alt_km = (s.column(Column::Radius)[1] - R_EARTH) / 1000.0;
+    let energy_delta = s.column(Column::SpecificEnergy)[1] - s.column(Column::SpecificEnergy)[0];
+    let speed_delta = s.column(Column::Speed)[1] - s.column(Column::Speed)[0];
 
     // --- print report ---
     println!(
