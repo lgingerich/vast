@@ -23,7 +23,6 @@ pub use physics::{
         EulerIntegrator, Integrator, LeapfrogIntegrator, RungeKutta4Integrator,
         VelocityVerletIntegrator,
     },
-    orbits::EllipticOrbit,
     orbits::Orbit,
     orbits::OrbitDirection,
     sim::{Sim, SimBuilder, SimResult},

@@ -39,13 +39,12 @@ pub struct Sim<D: Dynamics, I: Integrator> {
 /// # use vast::*;
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let body = CentralBody::earth()?;
-/// let orbit: EllipticOrbit = Orbit::circular_inclined(
+/// let orbit = Orbit::circular_inclined(
 ///     Distance::new((6678.0) * 1000.0)?,
 ///     Angle::from_degrees(51.6)?,
 ///     Angle::from_degrees(32.0)?,
-/// )
-/// .to_elliptic(&body)?;
-/// let period = orbit.period()?;
+/// );
+/// let period = orbit.period(&body)?;
 /// let result = SimBuilder::new(body)
 ///     .orbit(Orbit::circular_inclined(
 ///         Distance::new((6678.0) * 1000.0)?,
@@ -106,12 +105,10 @@ impl SimBuilder {
 impl<D, I> SimBuilder<D, I> {
     /// Sets the initial orbit from an [`Orbit`] specification.
     ///
-    /// Converts the spec into a validated [`crate::physics::orbits::EllipticOrbit`]
-    /// around the builder's central body, then into the initial
-    /// [`CartesianState`].
+    /// Converts the spec into the initial [`CartesianState`] around the
+    /// builder's central body.
     pub fn orbit(mut self, spec: Orbit) -> Result<Self, PropagationError> {
-        let elliptic = spec.to_elliptic(&self.body)?;
-        let state = elliptic.to_cartesian_state()?;
+        let state = spec.to_cartesian_state(&self.body)?;
         self.state = Some(state);
         Ok(self)
     }

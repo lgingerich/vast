@@ -331,26 +331,13 @@ pub fn stop_reason_name(reason: StopReason) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        Angle, CartesianState, Distance, Eccentricity, EllipticOrbit, Epoch,
-        GravitationalParameter, MU_EARTH, OrbitDirection, R_EARTH, TrajectorySample,
-    };
+    use crate::{CartesianState, CentralBody, Distance, Epoch, Orbit, TrajectorySample};
 
     fn sample_state() -> CartesianState {
-        let mu = GravitationalParameter::new(MU_EARTH).expect("mu");
-        EllipticOrbit::new(
-            Distance::new(R_EARTH + 400_000.0).expect("radius"),
-            Eccentricity::new(0.0).expect("eccentricity"),
-            mu,
-            Angle::ZERO,
-            Angle::ZERO,
-            Angle::ZERO,
-            Angle::new(0.0).expect("phase"),
-            OrbitDirection::Prograde,
-        )
-        .expect("orbit")
-        .to_cartesian_state()
-        .expect("state")
+        let body = CentralBody::earth().expect("body");
+        Orbit::circular_equatorial(Distance::new(400_000.0).expect("altitude"))
+            .to_cartesian_state(&body)
+            .expect("state")
     }
 
     #[test]

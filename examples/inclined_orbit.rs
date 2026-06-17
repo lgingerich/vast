@@ -19,7 +19,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Angle::from_degrees(INCLINATION_DEG)?,
         Angle::from_degrees(RAAN_DEG)?,
     );
-    let period = spec.to_elliptic(&body)?.period()?;
+    let period = spec.period(&body)?;
     let num_periods = Duration::new(period.seconds() * PERIODS).unwrap();
 
     // --- run simulation ---

@@ -777,12 +777,13 @@ fn angle_between_in_plane(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::CentralBody;
     use crate::physics::constants::{
         DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE_RAD, J2_EARTH, MU_EARTH, R_EARTH,
     };
     use crate::physics::dynamics::{OblateBodyGravity, TwoBodyGravity};
     use crate::physics::integrators::{Integrator, VelocityVerletIntegrator};
-    use crate::physics::orbits::{EllipticOrbit, OrbitDirection};
+    use crate::physics::orbits::Orbit;
     use crate::physics::state::CartesianStateBuffer;
     use crate::physics::types::{
         Angle, Distance, Duration, Eccentricity, Epoch, GravitationalParameter, J2Coefficient,
@@ -800,17 +801,16 @@ mod tests {
     fn circular_orbit(
         inclination: Angle,
         raan: Angle,
-    ) -> Result<EllipticOrbit, Box<dyn std::error::Error>> {
-        Ok(EllipticOrbit::new(
+    ) -> Result<Orbit, Box<dyn std::error::Error>> {
+        Ok(Orbit::elliptic(
             Distance::new(R_EARTH + 600_000.0)?,
             Eccentricity::new(0.0)?,
-            earth_mu()?,
             inclination,
             raan,
             Angle::ZERO,
             Angle::new(0.4)?,
-            OrbitDirection::Prograde,
-        )?)
+            crate::physics::orbits::OrbitDirection::Prograde,
+        ))
     }
 
     fn state_at(
@@ -855,28 +855,20 @@ mod tests {
 
     #[test]
     fn simulated_j2_raan_drift_matches_analytical_rate() -> TestResult {
-        let mu = earth_mu()?;
+        let body = CentralBody::earth()?;
+        let mu = body.mu();
         let inclination = 51.6_f64.to_radians();
         let j2 = J2_EARTH;
-        let equatorial_radius = R_EARTH;
-        let radius_m = R_EARTH + 600_000.0;
-        let orbit = EllipticOrbit::new(
-            Distance::new(radius_m)?,
-            Eccentricity::new(0.0)?,
-            mu,
+        let equatorial_radius = body.equatorial_radius();
+        let altitude_m = 600_000.0;
+        let orbit = Orbit::circular_inclined(
+            Distance::new(altitude_m)?,
             Angle::new(inclination)?,
             Angle::new(32.0_f64.to_radians())?,
-            Angle::ZERO,
-            Angle::new(0.0)?,
-            OrbitDirection::Prograde,
-        )?;
-        let mut states = CartesianStateBuffer::<1>::with_len(1)?;
-        states.write_from_state(0, &orbit.to_cartesian_state()?)?;
-        let gravity = OblateBodyGravity::new(
-            mu,
-            Distance::new(equatorial_radius)?,
-            J2Coefficient::new(j2)?,
         );
+        let mut states = CartesianStateBuffer::<1>::with_len(1)?;
+        states.write_from_state(0, &orbit.to_cartesian_state(&body)?)?;
+        let gravity = OblateBodyGravity::new(mu, equatorial_radius, J2Coefficient::new(j2)?);
         let integrator = VelocityVerletIntegrator;
         let dt = TimeStep::new(30.0)?;
         let duration = Duration::new(3.0 * 86_400.0)?;
@@ -907,8 +899,9 @@ mod tests {
             angle_delta_degrees(final_raan, initial_raan) / (duration.seconds() / 86_400.0);
 
         // First-order J2 secular RAAN rate: Ω̇ = −3/2 · J₂ · n · (Rₑ/a)² · cos i
-        let mean_motion = (mu.meters_cubed_per_second_squared() / radius_m.powi(3)).sqrt();
-        let radius_ratio = equatorial_radius / radius_m;
+        let semi_major_axis_m = orbit.semi_major_axis(&body).meters();
+        let mean_motion = (mu.meters_cubed_per_second_squared() / semi_major_axis_m.powi(3)).sqrt();
+        let radius_ratio = equatorial_radius.meters() / semi_major_axis_m;
         let analytic_rad_per_sec =
             -1.5 * j2 * mean_motion * radius_ratio * radius_ratio * inclination.cos();
         let analytical_drift_degrees_per_day = analytic_rad_per_sec.to_degrees() * 86_400.0;
@@ -923,14 +916,15 @@ mod tests {
 
     #[test]
     fn inclined_circular_state_maps_to_circular_inclined_elements() -> TestResult {
+        let body = CentralBody::earth()?;
         let inclination = Angle::new(0.9)?;
         let raan = Angle::new(1.1)?;
         let orbit = circular_orbit(inclination, raan)?;
-        let state = orbit.to_cartesian_state()?;
+        let state = orbit.to_cartesian_state(&body)?;
 
         let elements = OrbitalElements::from_state(
             &state,
-            orbit.mu(),
+            body.mu(),
             OrbitalElementClassification::default(),
         )?;
 
@@ -945,7 +939,7 @@ mod tests {
         );
         assert_close(
             elements.argument_of_latitude.radians(),
-            orbit.true_anomaly().radians(),
+            orbit.true_anomaly(&body).radians(),
             EPS,
         );
         Ok(())
@@ -953,12 +947,13 @@ mod tests {
 
     #[test]
     fn equatorial_circular_state_maps_to_circular_equatorial_elements() -> TestResult {
+        let body = CentralBody::earth()?;
         let orbit = circular_orbit(Angle::ZERO, Angle::ZERO)?;
-        let state = orbit.to_cartesian_state()?;
+        let state = orbit.to_cartesian_state(&body)?;
 
         let elements = OrbitalElements::from_state(
             &state,
-            orbit.mu(),
+            body.mu(),
             OrbitalElementClassification::default(),
         )?;
 
@@ -968,7 +963,7 @@ mod tests {
         assert_close(elements.inclination.radians(), 0.0, EPS);
         assert_close(
             elements.true_longitude.radians(),
-            orbit.true_anomaly().radians(),
+            orbit.true_anomaly(&body).radians(),
             EPS,
         );
         Ok(())
@@ -976,15 +971,16 @@ mod tests {
 
     #[test]
     fn propagated_inclined_circular_state_stays_circular_in_elements() -> TestResult {
+        let body = CentralBody::earth()?;
         let inclination = Angle::new(0.9)?;
         let raan = Angle::new(1.1)?;
         let orbit = circular_orbit(inclination, raan)?;
         let mut states = CartesianStateBuffer::<1>::with_len(1)?;
-        states.write_from_state(0, &orbit.to_cartesian_state()?)?;
-        let gravity = TwoBodyGravity::new(orbit.mu());
+        states.write_from_state(0, &orbit.to_cartesian_state(&body)?)?;
+        let gravity = TwoBodyGravity::new(body.mu());
         let integrator = VelocityVerletIntegrator;
         let dt = TimeStep::new(10.0)?;
-        let target_seconds = orbit.period()?.seconds() * 3.0;
+        let target_seconds = orbit.period(&body)?.seconds() * 3.0;
         let mut epoch = Epoch::ZERO;
 
         while epoch.seconds() < target_seconds {
@@ -997,7 +993,7 @@ mod tests {
         let state = states.view().read_state(0)?;
         let elements = OrbitalElements::from_state(
             &state,
-            orbit.mu(),
+            body.mu(),
             OrbitalElementClassification::default(),
         )?;
 
@@ -1025,15 +1021,16 @@ mod tests {
 
     #[test]
     fn strict_classification_can_keep_near_circular_state_classical() -> TestResult {
+        let body = CentralBody::earth()?;
         let inclination = Angle::new(0.9)?;
         let raan = Angle::new(1.1)?;
         let orbit = circular_orbit(inclination, raan)?;
         let mut states = CartesianStateBuffer::<1>::with_len(1)?;
-        states.write_from_state(0, &orbit.to_cartesian_state()?)?;
-        let gravity = TwoBodyGravity::new(orbit.mu());
+        states.write_from_state(0, &orbit.to_cartesian_state(&body)?)?;
+        let gravity = TwoBodyGravity::new(body.mu());
         let integrator = VelocityVerletIntegrator;
         let dt = TimeStep::new(10.0)?;
-        let target_seconds = orbit.period()?.seconds() * 3.0;
+        let target_seconds = orbit.period(&body)?.seconds() * 3.0;
         let mut epoch = Epoch::ZERO;
 
         while epoch.seconds() < target_seconds {
@@ -1048,7 +1045,7 @@ mod tests {
             Angle::new(DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE_RAD)?,
         );
         let state = states.view().read_state(0)?;
-        let elements = OrbitalElements::from_state(&state, orbit.mu(), strict_classification)?;
+        let elements = OrbitalElements::from_state(&state, body.mu(), strict_classification)?;
 
         let OrbitalElements::Classical(elements) = elements else {
             return Err("expected classical elements".into());

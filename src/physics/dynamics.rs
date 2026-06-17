@@ -395,12 +395,13 @@ impl<A: Dynamics, B: Dynamics> Dynamics for CompositeDynamics<A, B> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::CentralBody;
     use crate::physics::constants::{J2_EARTH, MU_EARTH, R_EARTH};
     use crate::physics::diagnostics::OrbitalDiagnostics;
     use crate::physics::integrators::{Integrator, RungeKutta4Integrator};
-    use crate::physics::orbits::{EllipticOrbit, OrbitDirection};
+    use crate::physics::orbits::Orbit;
     use crate::physics::state::CartesianStateBuffer;
-    use crate::physics::types::{Angle, Eccentricity, Position, TimeStep};
+    use crate::physics::types::{Position, TimeStep};
     use nalgebra::Vector3;
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -792,19 +793,11 @@ mod tests {
 
     #[test]
     fn low_orbit_with_drag_loses_specific_energy() -> TestResult {
-        let mu = GravitationalParameter::new(MU_EARTH)?;
-        let orbit = EllipticOrbit::new(
-            Distance::new(R_EARTH + 250_000.0)?,
-            Eccentricity::new(0.0)?,
-            mu,
-            Angle::ZERO,
-            Angle::ZERO,
-            Angle::ZERO,
-            Angle::new(0.0)?,
-            OrbitDirection::Prograde,
-        )?;
+        let body = CentralBody::earth()?;
+        let mu = body.mu();
+        let orbit = Orbit::circular_equatorial(Distance::new(250_000.0)?);
         let mut states = CartesianStateBuffer::<1>::with_len(1)?;
-        states.write_from_state(0, &orbit.to_cartesian_state()?)?;
+        states.write_from_state(0, &orbit.to_cartesian_state(&body)?)?;
         let dynamics = CompositeDynamics::new(TwoBodyGravity::new(mu), drag_model(0.05)?);
         let initial_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
             .specific_energy()
@@ -828,20 +821,12 @@ mod tests {
 
     #[test]
     fn drag_decay_energy_loss_matches_physical_expectation() -> TestResult {
-        let mu = GravitationalParameter::new(MU_EARTH)?;
-        let radius = R_EARTH + 250_000.0;
-        let orbit = EllipticOrbit::new(
-            Distance::new(radius)?,
-            Eccentricity::new(0.0)?,
-            mu,
-            Angle::ZERO,
-            Angle::ZERO,
-            Angle::ZERO,
-            Angle::new(0.0)?,
-            OrbitDirection::Prograde,
-        )?;
+        let body = CentralBody::earth()?;
+        let mu = body.mu();
+        let altitude_m = 250_000.0;
+        let orbit = Orbit::circular_equatorial(Distance::new(altitude_m)?);
         let mut states = CartesianStateBuffer::<1>::with_len(1)?;
-        states.write_from_state(0, &orbit.to_cartesian_state()?)?;
+        states.write_from_state(0, &orbit.to_cartesian_state(&body)?)?;
         let initial_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
             .specific_energy()
             .square_meters_per_square_second();
@@ -853,7 +838,7 @@ mod tests {
         let integrator = RungeKutta4Integrator;
         let dt = TimeStep::new(10.0)?;
         let mut epoch = Epoch::ZERO;
-        let period_s = orbit.period()?.seconds();
+        let period_s = orbit.period(&body)?.seconds();
 
         while epoch.seconds() < period_s {
             let remaining_s = period_s - epoch.seconds();

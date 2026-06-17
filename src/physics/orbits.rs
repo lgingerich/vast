@@ -1,7 +1,7 @@
 use super::body::CentralBody;
 use super::elements::EllipticElementSet;
 use super::state::CartesianState;
-use super::types::{Angle, Distance, Duration, Eccentricity, GravitationalParameter, Speed};
+use super::types::{Angle, Distance, Duration, Eccentricity, Speed};
 use crate::errors::NumericalError;
 
 /// Direction of motion around an orbital plane.
@@ -15,187 +15,14 @@ pub enum OrbitDirection {
 
 /// Keplerian (classical) two-body orbit around a central body.
 ///
-/// An orbit with eccentricity in `[0, 1)`. When `eccentricity = 0` the
-/// orbit is circular; set `argument_of_periapsis = 0` in that case (the
-/// perifocal-to-inertial rotation is defined by convention and the
-/// physics is unaffected).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct EllipticOrbit {
-    /// Semi-major axis of the elliptical orbit.
-    semi_major_axis: Distance,
-    /// Orbital eccentricity (0 ≤ e < 1).
-    eccentricity: Eccentricity,
-    /// Standard gravitational parameter of the central body.
-    mu: GravitationalParameter,
-    /// Inclination from the inertial x-y plane.
-    inclination: Angle,
-    /// Right ascension of the ascending node in the inertial x-y plane.
-    right_ascension_of_ascending_node: Angle,
-    /// Argument of periapsis measured from the ascending node.
-    argument_of_periapsis: Angle,
-    /// True anomaly at epoch.
-    true_anomaly: Angle,
-    /// Direction of motion around the orbital plane.
-    direction: OrbitDirection,
-}
-
-impl EllipticOrbit {
-    /// Creates a validated elliptic orbit.
-    ///
-    /// Eccentricity must be in `[0, 1)`. Parabolic and hyperbolic orbits are
-    /// intentionally not represented by this type.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "orbital element construction is clearer with explicit domain fields"
-    )]
-    pub fn new(
-        semi_major_axis: Distance,
-        eccentricity: Eccentricity,
-        mu: GravitationalParameter,
-        inclination: Angle,
-        right_ascension_of_ascending_node: Angle,
-        argument_of_periapsis: Angle,
-        true_anomaly: Angle,
-        direction: OrbitDirection,
-    ) -> Result<Self, NumericalError> {
-        if eccentricity.scalar() >= 1.0 {
-            return Err(NumericalError::ConstraintViolation {
-                field: "eccentricity",
-                reason: "must be less than 1 for an elliptic orbit",
-            });
-        }
-
-        Ok(Self {
-            semi_major_axis,
-            eccentricity,
-            mu,
-            inclination,
-            right_ascension_of_ascending_node,
-            argument_of_periapsis,
-            true_anomaly,
-            direction,
-        })
-    }
-
-    /// Returns the semi-major axis.
-    #[inline]
-    pub const fn semi_major_axis(&self) -> Distance {
-        self.semi_major_axis
-    }
-
-    /// Returns the orbital eccentricity.
-    #[inline]
-    pub const fn eccentricity(&self) -> Eccentricity {
-        self.eccentricity
-    }
-
-    /// Returns the standard gravitational parameter.
-    #[inline]
-    pub const fn mu(&self) -> GravitationalParameter {
-        self.mu
-    }
-
-    /// Returns the inclination.
-    #[inline]
-    pub const fn inclination(&self) -> Angle {
-        self.inclination
-    }
-
-    /// Returns the right ascension of the ascending node.
-    #[inline]
-    pub const fn right_ascension_of_ascending_node(&self) -> Angle {
-        self.right_ascension_of_ascending_node
-    }
-
-    /// Returns the argument of periapsis.
-    #[inline]
-    pub const fn argument_of_periapsis(&self) -> Angle {
-        self.argument_of_periapsis
-    }
-
-    /// Returns the true anomaly.
-    #[inline]
-    pub const fn true_anomaly(&self) -> Angle {
-        self.true_anomaly
-    }
-
-    /// Returns the direction of motion.
-    #[inline]
-    pub const fn direction(&self) -> OrbitDirection {
-        self.direction
-    }
-
-    /// Instantaneous orbital speed at the current true anomaly.
-    ///
-    /// Returns an error if the computed speed is non-finite or negative.
-    pub fn speed(&self) -> Result<Speed, NumericalError> {
-        let mu = self.mu.meters_cubed_per_second_squared();
-        let semi_major_axis = self.semi_major_axis.meters();
-        let eccentricity = self.eccentricity.scalar();
-        let true_anomaly = self.true_anomaly.radians();
-
-        let radius = semi_major_axis * (1.0 - eccentricity * eccentricity)
-            / (1.0 + eccentricity * true_anomaly.cos());
-
-        Speed::new((mu * (2.0 / radius - 1.0 / semi_major_axis)).sqrt())
-    }
-
-    /// Orbital period from Kepler's third law.
-    ///
-    /// Returns an error if the computed period is non-finite or non-positive.
-    pub fn period(&self) -> Result<Duration, NumericalError> {
-        let mu = self.mu.meters_cubed_per_second_squared();
-        let semi_major_axis = self.semi_major_axis.meters();
-
-        Duration::new(2.0 * std::f64::consts::PI * (semi_major_axis.powi(3) / mu).sqrt())
-    }
-
-    /// Converts this orbit into an inertial Cartesian state.
-    ///
-    /// Returns an error if the orbital parameters are physically invalid
-    /// (e.g. parabolic or hyperbolic eccentricity) or a computed quantity
-    /// is non-finite.
-    pub fn to_cartesian_state(&self) -> Result<CartesianState, NumericalError> {
-        let velocity_sign = match self.direction {
-            OrbitDirection::Prograde => 1.0,
-            OrbitDirection::Retrograde => -1.0,
-        };
-
-        EllipticElementSet::new(
-            self.semi_major_axis,
-            self.eccentricity,
-            self.mu,
-            self.inclination,
-            self.right_ascension_of_ascending_node,
-            self.argument_of_periapsis,
-            self.true_anomaly,
-            velocity_sign,
-        )?
-        .to_cartesian_state()
-    }
-}
-
-/// Convenience orbital specification that converts into a validated
-/// [`EllipticOrbit`] when matched with a [`CentralBody`].
+/// `Orbit` is the single public orbit specification type. The geometric degrees
+/// of freedom are stored according to the orbital regime; the central body's
+/// gravitational parameter and equatorial radius are supplied when the spec is
+/// converted to a Cartesian state or queried for derived quantities.
 ///
-/// `Orbit` stores only the geometric degrees of freedom for an orbital
-/// regime. The central body's gravitational parameter and equatorial radius
-/// are supplied by the caller when converting via [`Orbit::to_elliptic`].
-///
-/// # Examples
-///
-/// ```
-/// use vast::{CentralBody, Distance, Angle, EllipticOrbit, Orbit};
-///
-/// let body = CentralBody::earth()?;
-/// let orbit: EllipticOrbit = Orbit::circular_inclined(
-///     Distance::new((6678.0) * 1000.0)?,
-///     Angle::from_degrees(51.6)?,
-///     Angle::from_degrees(32.0)?,
-/// )
-/// .to_elliptic(&body)?;
-/// # Ok::<(), Box<dyn std::error::Error>>(())
-/// ```
+/// All variants represent bound orbits with eccentricity in `[0, 1)`. Use
+/// [`Orbit::elliptic`] for the fully general case, or the circular convenience
+/// constructors for equatorial and inclined orbits.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Orbit {
     /// Circular equatorial orbit.
@@ -269,49 +96,44 @@ impl Orbit {
         }
     }
 
-    /// Converts this orbital specification into a validated [`EllipticOrbit`]
+    /// Converts this orbital specification into an inertial Cartesian state
     /// around the given central body.
     ///
-    /// The body supplies the gravitational parameter and equatorial radius.
-    /// Circular variants compute the semi-major axis as
-    /// `body.equatorial_radius() + altitude`.
-    pub fn to_elliptic(self, body: &CentralBody) -> Result<EllipticOrbit, NumericalError> {
-        let mu = body.mu();
-        let equatorial_radius = body.equatorial_radius();
-        match self {
-            Orbit::CircularEquatorial { altitude } => {
-                let semi_major_axis =
-                    Distance::new(equatorial_radius.meters() + altitude.meters())?;
-                EllipticOrbit::new(
-                    semi_major_axis,
+    /// Returns an error if the orbital parameters are physically invalid or a
+    /// computed quantity is non-finite.
+    pub fn to_cartesian_state(&self, body: &CentralBody) -> Result<CartesianState, NumericalError> {
+        match *self {
+            Self::CircularEquatorial { altitude } => {
+                let element_set = EllipticElementSet::new(
+                    body.equatorial_radius() + altitude,
                     Eccentricity::CIRCULAR,
-                    mu,
+                    body.mu(),
                     Angle::ZERO,
                     Angle::ZERO,
                     Angle::ZERO,
                     Angle::ZERO,
-                    OrbitDirection::Prograde,
-                )
+                    1.0,
+                )?;
+                element_set.to_cartesian_state()
             }
-            Orbit::CircularInclined {
+            Self::CircularInclined {
                 altitude,
                 inclination,
                 raan,
             } => {
-                let semi_major_axis =
-                    Distance::new(equatorial_radius.meters() + altitude.meters())?;
-                EllipticOrbit::new(
-                    semi_major_axis,
+                let element_set = EllipticElementSet::new(
+                    body.equatorial_radius() + altitude,
                     Eccentricity::CIRCULAR,
-                    mu,
+                    body.mu(),
                     inclination,
                     raan,
                     Angle::ZERO,
                     Angle::ZERO,
-                    OrbitDirection::Prograde,
-                )
+                    1.0,
+                )?;
+                element_set.to_cartesian_state()
             }
-            Orbit::Elliptic {
+            Self::Elliptic {
                 semi_major_axis,
                 eccentricity,
                 inclination,
@@ -319,16 +141,129 @@ impl Orbit {
                 arg_periapsis,
                 true_anomaly,
                 direction,
-            } => EllipticOrbit::new(
-                semi_major_axis,
-                eccentricity,
-                mu,
-                inclination,
-                raan,
-                arg_periapsis,
-                true_anomaly,
-                direction,
-            ),
+            } => {
+                let velocity_sign = match direction {
+                    OrbitDirection::Prograde => 1.0,
+                    OrbitDirection::Retrograde => -1.0,
+                };
+                let element_set = EllipticElementSet::new(
+                    semi_major_axis,
+                    eccentricity,
+                    body.mu(),
+                    inclination,
+                    raan,
+                    arg_periapsis,
+                    true_anomaly,
+                    velocity_sign,
+                )?;
+                element_set.to_cartesian_state()
+            }
+        }
+    }
+
+    /// Instantaneous orbital speed at the current true anomaly.
+    ///
+    /// Returns an error if the computed speed is non-finite or negative.
+    pub fn speed(&self, body: &CentralBody) -> Result<Speed, NumericalError> {
+        let mu = body.mu().meters_cubed_per_second_squared();
+        let semi_major_axis = self.semi_major_axis(body).meters();
+        let eccentricity = self.eccentricity().scalar();
+        let true_anomaly = self.true_anomaly(body).radians();
+
+        let radius = semi_major_axis * (1.0 - eccentricity * eccentricity)
+            / (1.0 + eccentricity * true_anomaly.cos());
+
+        Speed::new((mu * (2.0 / radius - 1.0 / semi_major_axis)).sqrt())
+    }
+
+    /// Orbital period from Kepler's third law.
+    ///
+    /// Returns an error if the computed period is non-finite or non-positive.
+    pub fn period(&self, body: &CentralBody) -> Result<Duration, NumericalError> {
+        let mu = body.mu().meters_cubed_per_second_squared();
+        let semi_major_axis = self.semi_major_axis(body).meters();
+
+        Duration::new(2.0 * std::f64::consts::PI * (semi_major_axis.powi(3) / mu).sqrt())
+    }
+
+    /// Returns the semi-major axis for this orbit around the given body.
+    ///
+    /// Circular variants compute the semi-major axis as
+    /// `body.equatorial_radius() + altitude`.
+    pub fn semi_major_axis(&self, body: &CentralBody) -> Distance {
+        match *self {
+            Self::CircularEquatorial { altitude } | Self::CircularInclined { altitude, .. } => {
+                body.equatorial_radius() + altitude
+            }
+            Self::Elliptic {
+                semi_major_axis, ..
+            } => semi_major_axis,
+        }
+    }
+
+    /// Returns the orbital eccentricity.
+    pub const fn eccentricity(&self) -> Eccentricity {
+        match *self {
+            Self::CircularEquatorial { .. } | Self::CircularInclined { .. } => {
+                Eccentricity::CIRCULAR
+            }
+            Self::Elliptic { eccentricity, .. } => eccentricity,
+        }
+    }
+
+    /// Returns the inclination.
+    pub const fn inclination(&self) -> Angle {
+        match *self {
+            Self::CircularEquatorial { .. } => Angle::ZERO,
+            Self::CircularInclined { inclination, .. } | Self::Elliptic { inclination, .. } => {
+                inclination
+            }
+        }
+    }
+
+    /// Returns the right ascension of the ascending node.
+    ///
+    /// For circular equatorial orbits, where RAAN is undefined, this returns
+    /// `Angle::ZERO` by convention.
+    pub const fn raan(&self) -> Angle {
+        match *self {
+            Self::CircularEquatorial { .. } => Angle::ZERO,
+            Self::CircularInclined { raan, .. } | Self::Elliptic { raan, .. } => raan,
+        }
+    }
+
+    /// Returns the argument of periapsis.
+    ///
+    /// For circular orbits, where the argument of periapsis is undefined,
+    /// this returns `Angle::ZERO` by convention.
+    pub const fn argument_of_periapsis(&self) -> Angle {
+        match *self {
+            Self::CircularEquatorial { .. } | Self::CircularInclined { .. } => Angle::ZERO,
+            Self::Elliptic { arg_periapsis, .. } => arg_periapsis,
+        }
+    }
+
+    /// Returns the true anomaly.
+    ///
+    /// For circular orbits, where true anomaly is not an independent element,
+    /// this returns `Angle::ZERO` by convention.
+    pub const fn true_anomaly(&self, _body: &CentralBody) -> Angle {
+        match *self {
+            Self::CircularEquatorial { .. } | Self::CircularInclined { .. } => Angle::ZERO,
+            Self::Elliptic { true_anomaly, .. } => true_anomaly,
+        }
+    }
+
+    /// Returns the direction of motion.
+    ///
+    /// Circular specifications are implicitly prograde; use
+    /// [`Orbit::elliptic`] with `e = 0` to specify a retrograde circular orbit.
+    pub const fn direction(&self) -> OrbitDirection {
+        match *self {
+            Self::CircularEquatorial { .. } | Self::CircularInclined { .. } => {
+                OrbitDirection::Prograde
+            }
+            Self::Elliptic { direction, .. } => direction,
         }
     }
 }
@@ -336,8 +271,8 @@ impl Orbit {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::physics::constants::MU_EARTH;
-    use crate::physics::constants::R_EARTH;
+    use crate::physics::body::CentralBody;
+    use crate::physics::constants::{MU_EARTH, R_EARTH};
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -350,83 +285,87 @@ mod tests {
         );
     }
 
-    // ── EllipticOrbit tests ──────────────────────────────────────
+    fn earth() -> Result<CentralBody, Box<dyn std::error::Error>> {
+        Ok(CentralBody::earth()?)
+    }
 
     fn elliptic_orbit(
         eccentricity: Eccentricity,
         true_anomaly: Angle,
         direction: OrbitDirection,
-    ) -> Result<EllipticOrbit, Box<dyn std::error::Error>> {
-        Ok(EllipticOrbit::new(
+    ) -> Result<Orbit, Box<dyn std::error::Error>> {
+        Ok(Orbit::elliptic(
             Distance::new(R_EARTH + 1_000_000.0)?,
             eccentricity,
-            GravitationalParameter::new(MU_EARTH)?,
             Angle::new(0.0)?,
             Angle::new(0.0)?,
             Angle::new(0.0)?,
             true_anomaly,
             direction,
-        )?)
+        ))
     }
 
     #[test]
     fn elliptic_orbit_speed_at_periapsis_matches_vis_viva() -> TestResult {
+        let body = earth()?;
         let e = Eccentricity::new(0.3)?;
         let orbit = elliptic_orbit(e, Angle::new(0.0)?, OrbitDirection::Prograde)?;
-        let a = orbit.semi_major_axis().meters();
+        let a = orbit.semi_major_axis(&body).meters();
         let mu = MU_EARTH;
         let r_p = a * (1.0 - e.scalar());
         let expected = (mu * (2.0 / r_p - 1.0 / a)).sqrt();
 
-        assert_close(orbit.speed()?.meters_per_second(), expected, EPS);
+        assert_close(orbit.speed(&body)?.meters_per_second(), expected, EPS);
         Ok(())
     }
 
     #[test]
     fn elliptic_orbit_speed_at_apoapsis_matches_vis_viva() -> TestResult {
+        let body = earth()?;
         let e = Eccentricity::new(0.3)?;
         let orbit = elliptic_orbit(
             e,
             Angle::new(std::f64::consts::PI)?,
             OrbitDirection::Prograde,
         )?;
-        let a = orbit.semi_major_axis().meters();
+        let a = orbit.semi_major_axis(&body).meters();
         let mu = MU_EARTH;
         let r_a = a * (1.0 + e.scalar());
         let expected = (mu * (2.0 / r_a - 1.0 / a)).sqrt();
 
-        assert_close(orbit.speed()?.meters_per_second(), expected, EPS);
+        assert_close(orbit.speed(&body)?.meters_per_second(), expected, EPS);
         Ok(())
     }
 
     #[test]
     fn elliptic_orbit_period_matches_kepler_third_law() -> TestResult {
+        let body = earth()?;
         let e = Eccentricity::new(0.4)?;
         let orbit = elliptic_orbit(e, Angle::new(1.0)?, OrbitDirection::Prograde)?;
         let expected = 2.0
             * std::f64::consts::PI
-            * (orbit.semi_major_axis().meters().powi(3) / MU_EARTH).sqrt();
+            * (orbit.semi_major_axis(&body).meters().powi(3) / MU_EARTH).sqrt();
 
-        assert_close(orbit.period()?.seconds(), expected, EPS);
+        assert_close(orbit.period(&body)?.seconds(), expected, EPS);
         Ok(())
     }
 
     #[test]
     fn zero_eccentricity_orbit_produces_circular_cartesian_state() -> TestResult {
+        let body = earth()?;
         let radius_m = R_EARTH + 400_000.0;
         let true_anomaly = Angle::new(0.8)?;
-        let orbit = EllipticOrbit::new(
+        let orbit = Orbit::elliptic(
             Distance::new(radius_m)?,
             Eccentricity::new(0.0)?,
-            GravitationalParameter::new(MU_EARTH)?,
             Angle::ZERO,
             Angle::ZERO,
             Angle::ZERO,
             true_anomaly,
             OrbitDirection::Prograde,
-        )?;
+        );
 
-        let state = orbit.to_cartesian_state()?;
+        let state = orbit.to_cartesian_state(&body)?;
         let speed = (MU_EARTH / radius_m).sqrt();
 
         assert_close(state.position.vector().norm(), radius_m, EPS);
@@ -441,9 +380,10 @@ mod tests {
 
     #[test]
     fn elliptic_orbit_periapsis_velocity_is_perpendicular_to_position() -> TestResult {
+        let body = earth()?;
         let e = Eccentricity::new(0.5)?;
         let orbit = elliptic_orbit(e, Angle::new(0.0)?, OrbitDirection::Prograde)?;
-        let state = orbit.to_cartesian_state()?;
+        let state = orbit.to_cartesian_state(&body)?;
 
         assert_close(
             state.position.vector().dot(&state.velocity.vector()),
@@ -455,11 +395,12 @@ mod tests {
 
     #[test]
     fn elliptic_orbit_retrograde_reverses_velocity() -> TestResult {
+        let body = earth()?;
         let e = Eccentricity::new(0.3)?;
-        let prograde =
-            elliptic_orbit(e, Angle::new(0.7)?, OrbitDirection::Prograde)?.to_cartesian_state()?;
+        let prograde = elliptic_orbit(e, Angle::new(0.7)?, OrbitDirection::Prograde)?
+            .to_cartesian_state(&body)?;
         let retrograde = elliptic_orbit(e, Angle::new(0.7)?, OrbitDirection::Retrograde)?
-            .to_cartesian_state()?;
+            .to_cartesian_state(&body)?;
 
         assert_close(
             retrograde.velocity.vector().x,
@@ -481,39 +422,47 @@ mod tests {
 
     #[test]
     fn elliptic_orbit_rejects_eccentricity_at_or_above_one() -> TestResult {
+        let body = earth()?;
         let e = Eccentricity::new(1.0)?;
 
-        assert!(elliptic_orbit(e, Angle::new(0.0)?, OrbitDirection::Prograde).is_err());
+        assert!(
+            elliptic_orbit(e, Angle::new(0.0)?, OrbitDirection::Prograde)
+                .is_ok_and(|o| o.to_cartesian_state(&body).is_err())
+        );
         Ok(())
     }
 
     #[test]
     fn elliptic_orbit_rejects_parabolic_eccentricity() -> TestResult {
+        let body = earth()?;
         let e = Eccentricity::new(2.0)?;
 
-        assert!(elliptic_orbit(e, Angle::new(0.0)?, OrbitDirection::Prograde).is_err());
+        assert!(
+            elliptic_orbit(e, Angle::new(0.0)?, OrbitDirection::Prograde)
+                .is_ok_and(|o| o.to_cartesian_state(&body).is_err())
+        );
         Ok(())
     }
 
     #[test]
     fn elliptic_orbit_nonzero_inclination_raan_and_argp() -> TestResult {
+        let body = earth()?;
         let e = Eccentricity::new(0.2)?;
-        let orbit = EllipticOrbit::new(
+        let orbit = Orbit::elliptic(
             Distance::new(R_EARTH + 1_000_000.0)?,
             e,
-            GravitationalParameter::new(MU_EARTH)?,
             Angle::new(0.6)?,
             Angle::new(0.9)?,
             Angle::new(1.2)?,
             Angle::new(0.4)?,
             OrbitDirection::Prograde,
-        )?;
-        let state = orbit.to_cartesian_state()?;
+        );
+        let state = orbit.to_cartesian_state(&body)?;
 
         assert_close(
             state.position.vector().norm(),
-            orbit.semi_major_axis().meters() * (1.0 - e.scalar() * e.scalar())
-                / (1.0 + e.scalar() * orbit.true_anomaly().radians().cos()),
+            orbit.semi_major_axis(&body).meters() * (1.0 - e.scalar() * e.scalar())
+                / (1.0 + e.scalar() * orbit.true_anomaly(&body).radians().cos()),
             EPS,
         );
         assert!(
@@ -525,13 +474,14 @@ mod tests {
 
     #[test]
     fn elliptic_orbit_to_cartesian_state_has_correct_radius() -> TestResult {
+        let body = earth()?;
         let e = Eccentricity::new(0.2)?;
         let elliptic = elliptic_orbit(e, Angle::new(0.7)?, OrbitDirection::Prograde)?;
 
-        let state = elliptic.to_cartesian_state()?;
+        let state = elliptic.to_cartesian_state(&body)?;
 
-        let radius = elliptic.semi_major_axis().meters() * (1.0 - e.scalar() * e.scalar())
-            / (1.0 + e.scalar() * elliptic.true_anomaly().radians().cos());
+        let radius = elliptic.semi_major_axis(&body).meters() * (1.0 - e.scalar() * e.scalar())
+            / (1.0 + e.scalar() * elliptic.true_anomaly(&body).radians().cos());
         assert_close(state.position.vector().norm(), radius, EPS);
         Ok(())
     }

@@ -374,26 +374,26 @@ fn bound_semi_major_axis(
 mod tests {
     use super::*;
     use crate::{
-        Angle, CartesianStateBuffer, Eccentricity, EllipticOrbit, MU_EARTH, OrbitDirection,
-        Position, R_EARTH, Velocity,
+        Angle, CartesianStateBuffer, ClassicalOrbitalElements, Eccentricity, MU_EARTH, Position,
+        R_EARTH, Velocity,
     };
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
 
     const ALTITUDE_M: f64 = 400_000.0;
+    const RADIUS_M: f64 = R_EARTH + ALTITUDE_M;
     const EPS: f64 = 1.0e-6;
 
-    fn circular_orbit() -> Result<EllipticOrbit, Box<dyn std::error::Error>> {
-        Ok(EllipticOrbit::new(
-            Distance::new(R_EARTH + ALTITUDE_M)?,
+    fn circular_orbit() -> Result<CartesianState, Box<dyn std::error::Error>> {
+        let elements = ClassicalOrbitalElements::new(
+            Distance::new(RADIUS_M)?,
             Eccentricity::new(0.0)?,
-            earth_mu()?,
             Angle::ZERO,
             Angle::ZERO,
             Angle::ZERO,
-            Angle::new(0.0)?,
-            OrbitDirection::Prograde,
-        )?)
+            Angle::ZERO,
+        );
+        Ok(elements.to_cartesian_state(earth_mu()?)?)
     }
 
     fn earth_mu() -> Result<GravitationalParameter, Box<dyn std::error::Error>> {
@@ -409,15 +409,14 @@ mod tests {
 
     #[test]
     fn circular_orbit_diagnostics_match_two_body_invariants() -> TestResult {
-        let orbit = circular_orbit()?;
-        let state = orbit.to_cartesian_state()?;
+        let state = circular_orbit()?;
         let mut states = CartesianStateBuffer::<1>::with_len(1)?;
         states.write_from_state(0, &state)?;
 
-        let diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, orbit.mu())?;
+        let diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, earth_mu()?)?;
 
-        let radius = orbit.semi_major_axis().meters();
-        let speed = orbit.speed()?.meters_per_second();
+        let radius = RADIUS_M;
+        let speed = (MU_EARTH / radius).sqrt();
 
         assert_close(diagnostics.radius.meters(), radius, EPS);
         assert_close(diagnostics.speed.meters_per_second(), speed, EPS);

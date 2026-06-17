@@ -92,7 +92,7 @@ The physics layer is re-exported from the crate root:
   `ExponentialAtmosphere`, `AtmosphericDrag`, `CompositeDynamics<A, B>`.
 - Integrators: `Integrator`, `EulerIntegrator`, `VelocityVerletIntegrator`,
   `LeapfrogIntegrator`, `RungeKutta4Integrator`.
-- Orbits and elements: `EllipticOrbit`, `Orbit`, `OrbitDirection`,
+- Orbits and elements: `Orbit`, `OrbitDirection`,
   `OrbitalElements`, `OrbitalElementClassification`,
   `ClassicalOrbitalElements`, `CircularInclinedElements`,
   `CircularEquatorialElements`, `EquatorialEllipticElements`.
@@ -329,29 +329,26 @@ adaptive step-size control.
 `orbits.rs` and `elements.rs` handle forward and inverse two-body orbit
 representations.
 
-`EllipticOrbit` is the forward initial-condition builder:
-
-- Represents bound ellipses only: eccentricity must satisfy `0 <= e < 1`.
-- `e = 0` is the circular convention; argument of periapsis is conventional in
-  that case.
-- Stores semi-major axis, eccentricity, gravitational parameter, inclination,
-  RAAN, argument of periapsis, true anomaly, and `OrbitDirection`.
-- Computes instantaneous speed and period.
-- Converts to inertial `CartesianState` through the shared internal element-set
-  conversion.
-
-`Orbit` is a companion specification enum that expresses orbital regimes
-without exposing the full 8-argument `EllipticOrbit::new` constructor.
-Convenience factory constructors (`circular_equatorial`, `circular_inclined`,
-`elliptic`) create a spec, and `Orbit::to_elliptic(&CentralBody)` resolves it
-into a validated `EllipticOrbit` using the supplied body's gravitational
-parameter and equatorial radius. Missing circular angles are filled by
-convention (zero, prograde).
+`Orbit` is the forward initial-condition specification. It stores geometric
+orbit elements per orbital regime, and validation and derived quantities require
+a `CentralBody` to supply the gravitational parameter and equatorial radius.
 
 - `Orbit::circular_equatorial(altitude)` — circular equatorial orbit.
 - `Orbit::circular_inclined(altitude, inclination, raan)` — circular inclined
   orbit.
 - `Orbit::elliptic(...)` — all classical elements.
+
+`Orbit` methods:
+
+- `to_cartesian_state(&CentralBody)` — converts the spec to an inertial
+  `CartesianState`.
+- `speed(&CentralBody)` — instantaneous orbital speed via the vis-viva equation.
+- `period(&CentralBody)` — orbital period from Kepler's third law.
+- Geometric getters (`semi_major_axis`, `eccentricity`, `inclination`, `raan`,
+  `argument_of_periapsis`, `true_anomaly`, `direction`) return conventional
+  values for circular variants where an angle is undefined.
+- All variants represent bound orbits; eccentricity in `[0, 1)` is validated
+  during conversion.
 
 `OrbitalElements` is the inverse and round-trip representation for bound states.
 It is an enum because classical elements are singular for circular and
@@ -548,8 +545,8 @@ Validation and conversion performed here:
 - Missions must have at least one segment.
 - `dt_s` becomes `TimeStep`.
 - `duration_s` becomes `Duration`.
-- circular altitudes become `Distance(R_EARTH + altitude_m)` and an
-  `EllipticOrbit` with `e = 0`.
+- circular altitudes become `Orbit::circular_equatorial(altitude_m)`, which
+  resolves against the chosen `CentralBody`.
 - classical initial orbit fields become typed `Distance`, `Eccentricity`, and
   `Angle`s, then `ClassicalOrbitalElements::to_cartesian_state`.
 - burn DTOs become `BurnCommand`s.

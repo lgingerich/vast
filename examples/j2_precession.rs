@@ -1,8 +1,8 @@
 #![allow(missing_docs)]
 
 use vast::{
-    Angle, CentralBody, Distance, Duration, EllipticOrbit, J2_EARTH, MU_EARTH, OblateBodyGravity,
-    Orbit, R_EARTH, SimBuilder, TimeStep, TwoBodyGravity, VelocityVerletIntegrator,
+    Angle, CentralBody, Distance, Duration, J2_EARTH, MU_EARTH, OblateBodyGravity, Orbit, R_EARTH,
+    SimBuilder, TimeStep, TwoBodyGravity, VelocityVerletIntegrator,
 };
 
 const ALTITUDE_KM: f64 = 600.0;
@@ -19,14 +19,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Angle::from_degrees(INCLINATION_DEG)?,
         Angle::from_degrees(RAAN_DEG)?,
     );
-    let elliptic: EllipticOrbit = orbit_spec.to_elliptic(&body)?;
     let initial_raan_deg = RAAN_DEG;
     let duration = Duration::new(PROPAGATION_DAYS * 86_400.0)?;
     let dt = TimeStep::new(STEP_SECONDS)?;
 
     // --- analytical prediction ---
-    let mean_motion = (MU_EARTH / elliptic.semi_major_axis().meters().powi(3)).sqrt();
-    let radius_ratio = R_EARTH / elliptic.semi_major_axis().meters();
+    let mean_motion = (MU_EARTH / orbit_spec.semi_major_axis(&body).meters().powi(3)).sqrt();
+    let radius_ratio = R_EARTH / orbit_spec.semi_major_axis(&body).meters();
     let analytical_drift_rad_per_sec = -1.5
         * J2_EARTH
         * mean_motion
@@ -71,7 +70,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- print report ---
     println!(
         "J2 precession demo: altitude {:.0} km | inclination {:.1}°",
-        elliptic.semi_major_axis().meters() / 1000.0 - R_EARTH / 1000.0,
+        orbit_spec.semi_major_axis(&body).meters() / 1000.0 - R_EARTH / 1000.0,
         INCLINATION_DEG,
     );
     println!(

@@ -342,10 +342,11 @@ impl IntegratorKind {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::physics::constants::{MU_EARTH, R_EARTH};
+    use crate::CentralBody;
+    use crate::physics::constants::MU_EARTH;
     use crate::physics::dynamics::TwoBodyGravity;
-    use crate::physics::orbits::{EllipticOrbit, OrbitDirection};
-    use crate::physics::types::{Angle, Distance, Duration, Eccentricity, GravitationalParameter};
+    use crate::physics::orbits::Orbit;
+    use crate::physics::types::{Distance, Duration, GravitationalParameter};
 
     fn propagation_plan(sample_every_steps: usize) -> PropagationPlan {
         PropagationPlan {
@@ -361,19 +362,10 @@ mod tests {
     }
 
     fn initial_state() -> CartesianState {
-        EllipticOrbit::new(
-            Distance::new(R_EARTH + 400_000.0).expect("radius"),
-            Eccentricity::new(0.0).expect("eccentricity"),
-            mu(),
-            Angle::ZERO,
-            Angle::ZERO,
-            Angle::ZERO,
-            Angle::ZERO,
-            OrbitDirection::Prograde,
-        )
-        .expect("orbit")
-        .to_cartesian_state()
-        .expect("state")
+        let body = CentralBody::earth().expect("body");
+        Orbit::circular_equatorial(Distance::new(400_000.0).expect("altitude"))
+            .to_cartesian_state(&body)
+            .expect("state")
     }
 
     #[test]

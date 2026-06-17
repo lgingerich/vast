@@ -10,7 +10,7 @@ use crate::physics::dynamics::{
     AtmosphericDrag, CompositeDynamics, ExponentialAtmosphere, OblateBodyGravity, TwoBodyGravity,
 };
 use crate::physics::elements::ClassicalOrbitalElements;
-use crate::physics::orbits::{EllipticOrbit, OrbitDirection};
+use crate::physics::orbits::Orbit;
 use crate::physics::state::CartesianState;
 use crate::physics::types::{
     Angle, AreaPerMass, Distance, Duration, Eccentricity, GravitationalParameter, TimeStep,
@@ -262,18 +262,8 @@ fn circular_initial_state(
     altitude_m: f64,
     body: &CentralBody,
 ) -> Result<CartesianState, MissionError> {
-    let radius = Distance::new(body.equatorial_radius().meters() + altitude_m)?;
-    let orbit = EllipticOrbit::new(
-        radius,
-        Eccentricity::new(0.0)?,
-        body.mu(),
-        Angle::ZERO,
-        Angle::ZERO,
-        Angle::ZERO,
-        Angle::ZERO,
-        OrbitDirection::Prograde,
-    )?;
-    Ok(orbit.to_cartesian_state()?)
+    let orbit = Orbit::circular_equatorial(Distance::new(altitude_m)?);
+    Ok(orbit.to_cartesian_state(body)?)
 }
 
 fn termination(

@@ -1,9 +1,8 @@
 #![allow(missing_docs)]
 
 use vast::{
-    CentralBody, Column, Distance, Duration, EllipticOrbit, EulerIntegrator, LeapfrogIntegrator,
-    Orbit, Position, RungeKutta4Integrator, SimBuilder, Speed, TimeStep, TwoBodyGravity,
-    VelocityVerletIntegrator,
+    CentralBody, Column, Distance, Duration, EulerIntegrator, LeapfrogIntegrator, Orbit, Position,
+    RungeKutta4Integrator, SimBuilder, Speed, TimeStep, TwoBodyGravity, VelocityVerletIntegrator,
 };
 
 const ALTITUDE_KM: f64 = 400.0;
@@ -26,19 +25,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- configure simulation ---
     let body = CentralBody::earth()?;
     let orbit_spec = Orbit::circular_equatorial(Distance::new(ALTITUDE_KM * 1000.0)?);
-    let elliptic: EllipticOrbit = orbit_spec.to_elliptic(&body)?;
-    let speed = elliptic.speed()?;
-    let period = elliptic.period()?;
-    let initial_position = elliptic.to_cartesian_state()?.position;
+    let speed = orbit_spec.speed(&body)?;
+    let period = orbit_spec.period(&body)?;
+    let initial_position = orbit_spec.to_cartesian_state(&body)?.position;
 
     // --- print header ---
     println!(
         "Circular Earth orbit at {:.0} km altitude",
-        (elliptic.semi_major_axis().meters() - vast::R_EARTH) / 1000.0,
+        orbit_spec.semi_major_axis(&body).meters() / 1000.0 - vast::R_EARTH / 1000.0,
     );
     println!(
         "radius: {:.3} km | speed: {:.3} km/s | period: {:.3} min",
-        elliptic.semi_major_axis().meters() / 1000.0,
+        orbit_spec.semi_major_axis(&body).meters() / 1000.0,
         speed.meters_per_second() / 1000.0,
         period.seconds() / 60.0,
     );

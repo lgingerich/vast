@@ -7,8 +7,9 @@ body owns `mu`, equatorial radius, rotation rate, optional `J2Coefficient`, and
 optional atmosphere parameters. `ForceModelKind` in TOML now selects which
 perturbations to compose (`two_body`, `j2`, `j2_drag { area_per_mass_m2_kg }`);
 physical constants come from the scenario's chosen `body`. Bare
-`TryFrom<Orbit> for EllipticOrbit` and `SimBuilder::new()` are removed — orbit
-specs and the builder require an explicit `CentralBody`.
+`EllipticOrbit`, `TryFrom<Orbit> for EllipticOrbit`, and `SimBuilder::new()`
+are removed — `Orbit` is the single public orbit specification type and it
+requires an explicit `CentralBody` to resolve geometry into physical state.
 
 **Why:** Scenarios previously restated Earth constants in every force model, and
 J2+drag configs could specify inconsistent radii. Centralizing constants in a

@@ -269,10 +269,7 @@ fn crossed_angle(previous_rad: f64, current_rad: f64, target_rad: f64) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        Angle, Distance, Eccentricity, EllipticOrbit, GravitationalParameter, MU_EARTH,
-        OrbitDirection, R_EARTH,
-    };
+    use crate::{CentralBody, Distance, MU_EARTH, Orbit};
 
     #[test]
     fn duration_met_when_elapsed_reaches_target() {
@@ -371,19 +368,9 @@ mod tests {
     }
 
     fn sample_state() -> crate::CartesianState {
-        let mu = GravitationalParameter::new(MU_EARTH).expect("mu");
-        EllipticOrbit::new(
-            Distance::new(R_EARTH + 400_000.0).expect("radius"),
-            Eccentricity::new(0.0).expect("eccentricity"),
-            mu,
-            Angle::ZERO,
-            Angle::ZERO,
-            Angle::ZERO,
-            Angle::new(0.0).expect("phase"),
-            OrbitDirection::Prograde,
-        )
-        .expect("orbit")
-        .to_cartesian_state()
-        .expect("state")
+        let body = CentralBody::earth().expect("body");
+        Orbit::circular_equatorial(Distance::new(400_000.0).expect("altitude"))
+            .to_cartesian_state(&body)
+            .expect("state")
     }
 }
