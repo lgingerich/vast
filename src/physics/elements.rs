@@ -178,7 +178,7 @@ impl OrbitalElements {
 
         let h_hat = h / h_norm;
         let node = Vector3::new(-h.y, h.x, 0.0);
-        let inclination = Angle::new((h.z / h_norm).clamp(-1.0, 1.0).acos())?;
+        let inclination = Angle::new((h.z / h_norm).clamp(-1.0, 1.0).acos());
 
         let is_circular =
             eccentricity_scalar <= classification.circular_eccentricity_tolerance.scalar();
@@ -190,29 +190,29 @@ impl OrbitalElements {
                 semi_major_axis,
                 eccentricity,
                 inclination,
-                Angle::new(node.y.atan2(node.x))?,
-                angle_between_in_plane(node, eccentricity_vector, h_hat)?,
-                angle_between_in_plane(eccentricity_vector, position, h_hat)?,
+                Angle::new(node.y.atan2(node.x)),
+                angle_between_in_plane(node, eccentricity_vector, h_hat),
+                angle_between_in_plane(eccentricity_vector, position, h_hat),
             ))),
             (true, false) => Ok(Self::CircularInclined(CircularInclinedElements::new(
                 semi_major_axis,
                 eccentricity,
                 inclination,
-                Angle::new(node.y.atan2(node.x))?,
-                angle_between_in_plane(node, position, h_hat)?,
+                Angle::new(node.y.atan2(node.x)),
+                angle_between_in_plane(node, position, h_hat),
             ))),
             (true, true) => Ok(Self::CircularEquatorial(CircularEquatorialElements::new(
                 semi_major_axis,
                 eccentricity,
                 inclination,
-                Angle::new(position.y.atan2(position.x))?,
+                Angle::new(position.y.atan2(position.x)),
             ))),
             (false, true) => Ok(Self::EquatorialElliptic(EquatorialEllipticElements::new(
                 semi_major_axis,
                 eccentricity,
                 inclination,
-                Angle::new(eccentricity_vector.y.atan2(eccentricity_vector.x))?,
-                angle_between_in_plane(eccentricity_vector, position, h_hat)?,
+                Angle::new(eccentricity_vector.y.atan2(eccentricity_vector.x)),
+                angle_between_in_plane(eccentricity_vector, position, h_hat),
             ))),
         }
     }
@@ -726,8 +726,8 @@ impl EllipticElementSet {
         let velocity = rotation * velocity_pqw;
 
         Ok(CartesianState::new(
-            Position::from_vector(position)?,
-            Velocity::from_vector(velocity)?,
+            Position::from_vector(position),
+            Velocity::from_vector(velocity),
         ))
     }
 }
@@ -767,7 +767,7 @@ fn angle_between_in_plane(
     from: Vector3<f64>,
     to: Vector3<f64>,
     plane_normal: Vector3<f64>,
-) -> Result<Angle, NumericalError> {
+) -> Angle {
     let x = from.dot(&to);
     let y = from.cross(&to).dot(&plane_normal);
     // `Angle::new` wraps the signed `atan2` result into `[0, 2π)`.
@@ -795,7 +795,7 @@ mod tests {
     const EPS: f64 = 1.0e-9;
 
     fn earth_mu() -> Result<GravitationalParameter, Box<dyn std::error::Error>> {
-        Ok(GravitationalParameter::new(MU_EARTH)?)
+        Ok(GravitationalParameter::new(MU_EARTH))
     }
 
     fn circular_orbit(
@@ -803,12 +803,12 @@ mod tests {
         raan: Angle,
     ) -> Result<Orbit, Box<dyn std::error::Error>> {
         Ok(Orbit::elliptic(
-            Distance::new(R_EARTH + 600_000.0)?,
-            Eccentricity::new(0.0)?,
+            Distance::new(R_EARTH + 600_000.0),
+            Eccentricity::new(0.0),
             inclination,
             raan,
             Angle::ZERO,
-            Angle::new(0.4)?,
+            Angle::new(0.4),
             crate::physics::orbits::OrbitDirection::Prograde,
         ))
     }
@@ -818,8 +818,8 @@ mod tests {
         velocity: Vector3<f64>,
     ) -> Result<CartesianState, Box<dyn std::error::Error>> {
         Ok(CartesianState::new(
-            Position::from_vector(position)?,
-            Velocity::from_vector(velocity)?,
+            Position::from_vector(position),
+            Velocity::from_vector(velocity),
         ))
     }
 
@@ -862,16 +862,16 @@ mod tests {
         let equatorial_radius = body.equatorial_radius();
         let altitude_m = 600_000.0;
         let orbit = Orbit::circular_inclined(
-            Distance::new(altitude_m)?,
-            Angle::new(inclination)?,
-            Angle::new(32.0_f64.to_radians())?,
+            Distance::new(altitude_m),
+            Angle::new(inclination),
+            Angle::new(32.0_f64.to_radians()),
         );
         let mut states = CartesianStateBuffer::<1>::with_len(1)?;
         states.write_from_state(0, &orbit.to_cartesian_state(&body)?)?;
-        let gravity = OblateBodyGravity::new(mu, equatorial_radius, J2Coefficient::new(j2)?);
+        let gravity = OblateBodyGravity::new(mu, equatorial_radius, J2Coefficient::new(j2));
         let integrator = VelocityVerletIntegrator;
-        let dt = TimeStep::new(30.0)?;
-        let duration = Duration::new(3.0 * 86_400.0)?;
+        let dt = TimeStep::new(30.0);
+        let duration = Duration::new(3.0 * 86_400.0);
         let initial_state = states.view().read_state(0)?;
         let initial_raan = raan_degrees(&OrbitalElements::from_state(
             &initial_state,
@@ -883,7 +883,7 @@ mod tests {
 
         while epoch.seconds() < duration.seconds() {
             let remaining_seconds = duration.seconds() - epoch.seconds();
-            let step = TimeStep::new(dt.seconds().min(remaining_seconds))?;
+            let step = TimeStep::new(dt.seconds().min(remaining_seconds));
             integrator.step(&gravity, &mut states.view_mut(), 0, epoch, step)?;
             epoch = epoch.advance_by(step);
         }
@@ -917,8 +917,8 @@ mod tests {
     #[test]
     fn inclined_circular_state_maps_to_circular_inclined_elements() -> TestResult {
         let body = CentralBody::earth()?;
-        let inclination = Angle::new(0.9)?;
-        let raan = Angle::new(1.1)?;
+        let inclination = Angle::new(0.9);
+        let raan = Angle::new(1.1);
         let orbit = circular_orbit(inclination, raan)?;
         let state = orbit.to_cartesian_state(&body)?;
 
@@ -972,20 +972,20 @@ mod tests {
     #[test]
     fn propagated_inclined_circular_state_stays_circular_in_elements() -> TestResult {
         let body = CentralBody::earth()?;
-        let inclination = Angle::new(0.9)?;
-        let raan = Angle::new(1.1)?;
+        let inclination = Angle::new(0.9);
+        let raan = Angle::new(1.1);
         let orbit = circular_orbit(inclination, raan)?;
         let mut states = CartesianStateBuffer::<1>::with_len(1)?;
         states.write_from_state(0, &orbit.to_cartesian_state(&body)?)?;
         let gravity = TwoBodyGravity::new(body.mu());
         let integrator = VelocityVerletIntegrator;
-        let dt = TimeStep::new(10.0)?;
+        let dt = TimeStep::new(10.0);
         let target_seconds = orbit.period(&body)?.seconds() * 3.0;
         let mut epoch = Epoch::ZERO;
 
         while epoch.seconds() < target_seconds {
             let remaining_seconds = target_seconds - epoch.seconds();
-            let step = TimeStep::new(dt.seconds().min(remaining_seconds))?;
+            let step = TimeStep::new(dt.seconds().min(remaining_seconds));
             integrator.step(&gravity, &mut states.view_mut(), 0, epoch, step)?;
             epoch = epoch.advance_by(step);
         }
@@ -1022,27 +1022,27 @@ mod tests {
     #[test]
     fn strict_classification_can_keep_near_circular_state_classical() -> TestResult {
         let body = CentralBody::earth()?;
-        let inclination = Angle::new(0.9)?;
-        let raan = Angle::new(1.1)?;
+        let inclination = Angle::new(0.9);
+        let raan = Angle::new(1.1);
         let orbit = circular_orbit(inclination, raan)?;
         let mut states = CartesianStateBuffer::<1>::with_len(1)?;
         states.write_from_state(0, &orbit.to_cartesian_state(&body)?)?;
         let gravity = TwoBodyGravity::new(body.mu());
         let integrator = VelocityVerletIntegrator;
-        let dt = TimeStep::new(10.0)?;
+        let dt = TimeStep::new(10.0);
         let target_seconds = orbit.period(&body)?.seconds() * 3.0;
         let mut epoch = Epoch::ZERO;
 
         while epoch.seconds() < target_seconds {
             let remaining_seconds = target_seconds - epoch.seconds();
-            let step = TimeStep::new(dt.seconds().min(remaining_seconds))?;
+            let step = TimeStep::new(dt.seconds().min(remaining_seconds));
             integrator.step(&gravity, &mut states.view_mut(), 0, epoch, step)?;
             epoch = epoch.advance_by(step);
         }
 
         let strict_classification = OrbitalElementClassification::new(
-            Eccentricity::new(1.0e-10)?,
-            Angle::new(DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE_RAD)?,
+            Eccentricity::new(1.0e-10),
+            Angle::new(DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE_RAD),
         );
         let state = states.view().read_state(0)?;
         let elements = OrbitalElements::from_state(&state, body.mu(), strict_classification)?;
@@ -1120,22 +1120,15 @@ mod tests {
     }
 
     #[test]
-    fn classification_policy_rejects_invalid_tolerances() {
-        assert!(Eccentricity::new(f64::NAN).is_err());
-        assert!(Eccentricity::new(-1.0).is_err());
-        assert!(Angle::new(f64::NAN).is_err());
-    }
-
-    #[test]
     fn classical_elements_round_trip_cartesian_state() -> TestResult {
         let mu = earth_mu()?;
         let elements = ClassicalOrbitalElements::new(
-            Distance::new(8_000_000.0)?,
-            Eccentricity::new(0.2)?,
-            Angle::new(0.4)?,
-            Angle::new(1.0)?,
-            Angle::new(0.7)?,
-            Angle::new(1.2)?,
+            Distance::new(8_000_000.0),
+            Eccentricity::new(0.2),
+            Angle::new(0.4),
+            Angle::new(1.0),
+            Angle::new(0.7),
+            Angle::new(1.2),
         );
 
         let state = elements.to_cartesian_state(mu)?;
@@ -1172,11 +1165,11 @@ mod tests {
     fn circular_inclined_elements_convert_to_cartesian_state() -> TestResult {
         let mu = earth_mu()?;
         let elements = CircularInclinedElements::new(
-            Distance::new(8_000_000.0)?,
-            Eccentricity::new(0.0)?,
-            Angle::new(0.4)?,
-            Angle::new(1.0)?,
-            Angle::new(1.2)?,
+            Distance::new(8_000_000.0),
+            Eccentricity::new(0.0),
+            Angle::new(0.4),
+            Angle::new(1.0),
+            Angle::new(1.2),
         );
 
         let state = elements.to_cartesian_state(mu)?;
@@ -1203,10 +1196,10 @@ mod tests {
     fn circular_equatorial_elements_convert_to_cartesian_state() -> TestResult {
         let mu = earth_mu()?;
         let elements = CircularEquatorialElements::new(
-            Distance::new(8_000_000.0)?,
-            Eccentricity::new(0.0)?,
+            Distance::new(8_000_000.0),
+            Eccentricity::new(0.0),
             Angle::ZERO,
-            Angle::new(1.2)?,
+            Angle::new(1.2),
         );
 
         let state = elements.to_cartesian_state(mu)?;
@@ -1233,11 +1226,11 @@ mod tests {
     fn equatorial_elliptic_elements_convert_to_cartesian_state() -> TestResult {
         let mu = earth_mu()?;
         let elements = EquatorialEllipticElements::new(
-            Distance::new(8_000_000.0)?,
-            Eccentricity::new(0.2)?,
+            Distance::new(8_000_000.0),
+            Eccentricity::new(0.2),
             Angle::ZERO,
-            Angle::new(0.7)?,
-            Angle::new(1.2)?,
+            Angle::new(0.7),
+            Angle::new(1.2),
         );
 
         let state = elements.to_cartesian_state(mu)?;
@@ -1300,7 +1293,7 @@ mod tests {
 
     #[test]
     fn angles_are_normalized_to_positive_turn() -> TestResult {
-        let angle = Angle::new(-0.25)?;
+        let angle = Angle::new(-0.25);
 
         assert_close(angle.radians(), 2.0 * std::f64::consts::PI - 0.25, EPS);
         Ok(())
@@ -1308,11 +1301,11 @@ mod tests {
 
     #[test]
     fn orbital_phase_angle_returns_correct_angle_per_variant() -> TestResult {
-        let sma = Distance::new(8_000_000.0)?;
-        let ecc = Eccentricity::new(0.1)?;
-        let inc = Angle::new(0.4)?;
-        let raan = Angle::new(1.0)?;
-        let aop = Angle::new(0.7)?;
+        let sma = Distance::new(8_000_000.0);
+        let ecc = Eccentricity::new(0.1);
+        let inc = Angle::new(0.4);
+        let raan = Angle::new(1.0);
+        let aop = Angle::new(0.7);
 
         let test_cases: [(&str, OrbitalElements, f64); 4] = [
             (
@@ -1323,7 +1316,7 @@ mod tests {
                     inc,
                     raan,
                     aop,
-                    Angle::new(1.2)?,
+                    Angle::new(1.2),
                 )),
                 1.2,
             ),
@@ -1331,10 +1324,10 @@ mod tests {
                 "CircularInclined → argument of latitude",
                 OrbitalElements::CircularInclined(CircularInclinedElements::new(
                     sma,
-                    Eccentricity::new(0.0)?,
+                    Eccentricity::new(0.0),
                     inc,
                     raan,
-                    Angle::new(2.3)?,
+                    Angle::new(2.3),
                 )),
                 2.3,
             ),
@@ -1342,9 +1335,9 @@ mod tests {
                 "CircularEquatorial → true longitude",
                 OrbitalElements::CircularEquatorial(CircularEquatorialElements::new(
                     sma,
-                    Eccentricity::new(0.0)?,
+                    Eccentricity::new(0.0),
                     Angle::ZERO,
-                    Angle::new(3.4)?,
+                    Angle::new(3.4),
                 )),
                 3.4,
             ),
@@ -1355,7 +1348,7 @@ mod tests {
                     ecc,
                     Angle::ZERO,
                     aop,
-                    Angle::new(4.5)?,
+                    Angle::new(4.5),
                 )),
                 4.5,
             ),

@@ -45,7 +45,7 @@ impl BurnCommand {
     ) -> Result<CartesianState, MissionError> {
         let delta_v = match self {
             Self::Inertial(delta_v_mps) => {
-                Velocity::from_vector(Vector3::new(delta_v_mps[0], delta_v_mps[1], delta_v_mps[2]))?
+                Velocity::from_vector(Vector3::new(delta_v_mps[0], delta_v_mps[1], delta_v_mps[2]))
             }
             Self::Prograde(delta_v_mps) => prograde_delta_v(delta_v_mps, &state)?,
             Self::Circularize => circularize_delta_v(&state, mu)?,
@@ -64,7 +64,7 @@ fn apply_delta_v(
         velocity.x + delta_v.x,
         velocity.y + delta_v.y,
         velocity.z + delta_v.z,
-    ))?;
+    ));
     Ok(CartesianState::new(state.position, updated))
 }
 
@@ -75,13 +75,13 @@ mod tests {
     use crate::physics::types::{Position, Velocity};
 
     fn mu() -> GravitationalParameter {
-        GravitationalParameter::new(MU_EARTH).expect("mu")
+        GravitationalParameter::new(MU_EARTH)
     }
 
     fn state(position: Vector3<f64>, velocity: Vector3<f64>) -> CartesianState {
         CartesianState::new(
-            Position::from_vector(position).expect("position"),
-            Velocity::from_vector(velocity).expect("velocity"),
+            Position::from_vector(position),
+            Velocity::from_vector(velocity),
         )
     }
 

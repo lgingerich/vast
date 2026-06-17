@@ -81,13 +81,13 @@ impl CentralBody {
         Ok(Self::new(
             "earth",
             GravitationalParameter::earth(),
-            Distance::new(R_EARTH)?,
-            AngularRate::new(EARTH_ANGULAR_RATE_RAD_S)?,
-            Some(J2Coefficient::new(J2_EARTH)?),
+            Distance::new(R_EARTH),
+            AngularRate::new(EARTH_ANGULAR_RATE_RAD_S),
+            Some(J2Coefficient::new(J2_EARTH)),
             Some(AtmosphereModel::new(
-                Distance::new(EARTH_ATMOSPHERE_REFERENCE_ALTITUDE_M)?,
-                MassDensity::new(EARTH_ATMOSPHERE_REFERENCE_DENSITY_KG_M3)?,
-                Distance::new(EARTH_ATMOSPHERE_SCALE_HEIGHT_M)?,
+                Distance::new(EARTH_ATMOSPHERE_REFERENCE_ALTITUDE_M),
+                MassDensity::new(EARTH_ATMOSPHERE_REFERENCE_DENSITY_KG_M3),
+                Distance::new(EARTH_ATMOSPHERE_SCALE_HEIGHT_M),
             )),
         ))
     }
@@ -209,8 +209,8 @@ mod tests {
         let body = CentralBody::new(
             "point",
             GravitationalParameter::earth(),
-            Distance::new(R_EARTH).expect("R_EARTH valid"),
-            AngularRate::new(0.0).expect("zero angular rate valid"),
+            Distance::new(R_EARTH),
+            AngularRate::new(0.0),
             None,
             None,
         );

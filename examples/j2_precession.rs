@@ -15,13 +15,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- configure simulation ---
     let body = CentralBody::earth()?;
     let orbit_spec = Orbit::circular_inclined(
-        Distance::new(ALTITUDE_KM * 1000.0)?,
-        Angle::from_degrees(INCLINATION_DEG)?,
-        Angle::from_degrees(RAAN_DEG)?,
+        Distance::new(ALTITUDE_KM * 1000.0),
+        Angle::from_degrees(INCLINATION_DEG),
+        Angle::from_degrees(RAAN_DEG),
     );
     let initial_raan_deg = RAAN_DEG;
-    let duration = Duration::new(PROPAGATION_DAYS * 86_400.0)?;
-    let dt = TimeStep::new(STEP_SECONDS)?;
+    let duration = Duration::new(PROPAGATION_DAYS * 86_400.0);
+    let dt = TimeStep::new(STEP_SECONDS);
 
     // --- analytical prediction ---
     let mean_motion = (MU_EARTH / orbit_spec.semi_major_axis(&body).meters().powi(3)).sqrt();

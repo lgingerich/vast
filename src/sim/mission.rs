@@ -115,9 +115,9 @@ mod tests {
         let arrival_altitude_m = 35_786_000.0;
         let departure_radius_m = R_EARTH + departure_altitude_m;
         let arrival_radius_m = R_EARTH + arrival_altitude_m;
-        let mu = GravitationalParameter::new(MU_EARTH).expect("mu");
-        let departure = Distance::new(departure_radius_m).expect("distance");
-        let arrival = Distance::new(arrival_radius_m).expect("distance");
+        let mu = GravitationalParameter::new(MU_EARTH);
+        let departure = Distance::new(departure_radius_m);
+        let arrival = Distance::new(arrival_radius_m);
         let (dv1, _dv2) = crate::physics::maneuvers::hohmann_delta_v(mu, departure, arrival)
             .expect("hohmann delta-v");
 

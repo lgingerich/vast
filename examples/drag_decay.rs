@@ -16,18 +16,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let atmosphere = ExponentialAtmosphere::from_body(&body)?;
     let dynamics = CompositeDynamics::new(
         TwoBodyGravity::from_body(&body),
-        AtmosphericDrag::new(atmosphere, AreaPerMass::new(0.02)?),
+        AtmosphericDrag::new(atmosphere, AreaPerMass::new(0.02)),
     );
-    let total_duration = Duration::new(PROPAGATION_HOURS * 3_600.0).unwrap();
+    let total_duration = Duration::new(PROPAGATION_HOURS * 3_600.0);
 
     // --- run simulation ---
     let result = SimBuilder::new(body)
         .orbit(Orbit::circular_equatorial(Distance::new(
             ALTITUDE_KM * 1000.0,
-        )?))?
+        )))?
         .dynamics(dynamics)
         .integrator(RungeKutta4Integrator)
-        .timestep(TimeStep::new(STEP_SECONDS)?)
+        .timestep(TimeStep::new(STEP_SECONDS))
         .duration(total_duration)?;
 
     // --- inspect results ---

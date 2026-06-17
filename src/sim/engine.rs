@@ -318,7 +318,7 @@ impl<D: Dynamics + ?Sized> Dynamics for ControlledDynamics<'_, D> {
             base.y + self.command.acceleration_mps2[1],
             base.z + self.command.acceleration_mps2[2],
         );
-        Ok(Acceleration::from_vector(total)?)
+        Ok(Acceleration::from_vector(total))
     }
 }
 
@@ -350,7 +350,7 @@ mod tests {
 
     fn propagation_plan(sample_every_steps: usize) -> PropagationPlan {
         PropagationPlan {
-            dt: TimeStep::new(10.0).expect("dt"),
+            dt: TimeStep::new(10.0),
             integrator: IntegratorKind::Leapfrog,
             dynamics: RuntimeDynamics::TwoBody(TwoBodyGravity::new(mu())),
             sample_every_steps,
@@ -358,12 +358,12 @@ mod tests {
     }
 
     fn mu() -> GravitationalParameter {
-        GravitationalParameter::new(MU_EARTH).expect("mu")
+        GravitationalParameter::new(MU_EARTH)
     }
 
     fn initial_state() -> CartesianState {
         let body = CentralBody::earth().expect("body");
-        Orbit::circular_equatorial(Distance::new(400_000.0).expect("altitude"))
+        Orbit::circular_equatorial(Distance::new(400_000.0))
             .to_cartesian_state(&body)
             .expect("state")
     }
@@ -396,10 +396,7 @@ mod tests {
             Propagator::new(initial_state(), Epoch::ZERO, plan).expect("propagator");
 
         let result = propagator
-            .run_segment(
-                &TerminationCondition::Duration(Duration::new(25.0).expect("duration")),
-                None,
-            )
+            .run_segment(&TerminationCondition::Duration(Duration::new(25.0)), None)
             .expect("segment");
 
         assert_eq!(result.steps, 3);
@@ -415,7 +412,7 @@ mod tests {
 
         let result = propagator
             .advance_steps(
-                &TerminationCondition::Duration(Duration::new(100.0).expect("duration")),
+                &TerminationCondition::Duration(Duration::new(100.0)),
                 2,
                 AccelerationCommand::default(),
             )

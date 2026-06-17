@@ -41,7 +41,7 @@ struct OrbitVizScenario {
 impl OrbitVizScenario {
     fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let body = CentralBody::earth()?;
-        let altitude = Distance::new(400.0 * 1000.0)?;
+        let altitude = Distance::new(400.0 * 1000.0);
         let orbit = Orbit::circular_equatorial(altitude);
         let earth_radius_km = R_EARTH / 1000.0;
 
@@ -49,7 +49,7 @@ impl OrbitVizScenario {
             .orbit(Orbit::circular_equatorial(altitude))?
             .dynamics(TwoBodyGravity::from_body(&body))
             .integrator(LeapfrogIntegrator)
-            .timestep(TimeStep::new(1.0)?)
+            .timestep(TimeStep::new(1.0))
             .build()?;
 
         Ok(Self {

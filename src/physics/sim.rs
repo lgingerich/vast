@@ -40,21 +40,21 @@ pub struct Sim<D: Dynamics, I: Integrator> {
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let body = CentralBody::earth()?;
 /// let orbit = Orbit::circular_inclined(
-///     Distance::new((6678.0) * 1000.0)?,
-///     Angle::from_degrees(51.6)?,
-///     Angle::from_degrees(32.0)?,
+///     Distance::new((6678.0) * 1000.0),
+///     Angle::from_degrees(51.6),
+///     Angle::from_degrees(32.0),
 /// );
 /// let period = orbit.period(&body)?;
 /// let result = SimBuilder::new(body)
 ///     .orbit(Orbit::circular_inclined(
-///         Distance::new((6678.0) * 1000.0)?,
-///         Angle::from_degrees(51.6)?,
-///         Angle::from_degrees(32.0)?,
+///         Distance::new((6678.0) * 1000.0),
+///         Angle::from_degrees(51.6),
+///         Angle::from_degrees(32.0),
 ///     ))?
 ///     .dynamics(TwoBodyGravity::from_body(&body))
 ///     .integrator(VelocityVerletIntegrator)
-///     .timestep(TimeStep::new(10.0)?)
-///     .duration(Duration::new(period.seconds() * 3.0).unwrap())?;
+///     .timestep(TimeStep::new(10.0))
+///     .duration(Duration::new(period.seconds() * 3.0))?;
 /// # Ok(())
 /// # }
 /// ```
@@ -203,7 +203,7 @@ impl<D: Dynamics, I: Integrator> Sim<D, I> {
         while self.epoch.seconds() < target {
             let remaining = target - self.epoch.seconds();
             let step_s = self.dt.seconds().min(remaining);
-            let step = TimeStep::new(step_s)?;
+            let step = TimeStep::new(step_s);
             self.integrator.step(
                 &self.dynamics,
                 &mut self.states.view_mut(),

@@ -108,14 +108,12 @@ impl From<(Position, Velocity)> for CartesianStateComponents {
     }
 }
 
-impl TryFrom<CartesianStateComponents> for CartesianState {
-    type Error = StateError;
-
-    fn try_from(components: CartesianStateComponents) -> Result<Self, Self::Error> {
-        Ok(Self::new(
-            Position::from_vector(components.position_vector())?,
-            Velocity::from_vector(components.velocity_vector())?,
-        ))
+impl From<CartesianStateComponents> for CartesianState {
+    fn from(components: CartesianStateComponents) -> Self {
+        Self::new(
+            Position::from_vector(components.position_vector()),
+            Velocity::from_vector(components.velocity_vector()),
+        )
     }
 }
 
@@ -255,7 +253,7 @@ impl<'a> CartesianStates<'a> {
 
     /// Reads the active body at `index` into a typed Cartesian state.
     pub fn read_state(&self, index: usize) -> Result<CartesianState, StateError> {
-        CartesianState::try_from(self.components(index)?)
+        Ok(CartesianState::from(self.components(index)?))
     }
 
     pub(crate) fn components(&self, index: usize) -> Result<CartesianStateComponents, StateError> {
@@ -346,8 +344,8 @@ mod tests {
 
     fn state() -> Result<CartesianState, Box<dyn std::error::Error>> {
         Ok(CartesianState::new(
-            Position::from_vector(Vector3::new(1.0, 2.0, 3.0))?,
-            Velocity::from_vector(Vector3::new(4.0, 5.0, 6.0))?,
+            Position::from_vector(Vector3::new(1.0, 2.0, 3.0)),
+            Velocity::from_vector(Vector3::new(4.0, 5.0, 6.0)),
         ))
     }
 
@@ -401,8 +399,8 @@ mod tests {
     #[test]
     fn cartesian_state_new_holds_values() -> TestResult {
         let state = CartesianState::new(
-            Position::from_vector(Vector3::new(1.0, 2.0, 3.0))?,
-            Velocity::from_vector(Vector3::new(4.0, 5.0, 6.0))?,
+            Position::from_vector(Vector3::new(1.0, 2.0, 3.0)),
+            Velocity::from_vector(Vector3::new(4.0, 5.0, 6.0)),
         );
 
         assert_close(state.position.vector().x, 1.0);
@@ -412,11 +410,5 @@ mod tests {
         assert_close(state.velocity.vector().y, 5.0);
         assert_close(state.velocity.vector().z, 6.0);
         Ok(())
-    }
-
-    #[test]
-    fn position_and_velocity_reject_non_finite() {
-        assert!(Position::from_vector(Vector3::new(f64::NAN, 0.0, 0.0)).is_err());
-        assert!(Velocity::from_vector(Vector3::new(0.0, f64::INFINITY, 0.0)).is_err());
     }
 }

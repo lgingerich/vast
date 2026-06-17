@@ -24,7 +24,7 @@ struct Summary {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- configure simulation ---
     let body = CentralBody::earth()?;
-    let orbit_spec = Orbit::circular_equatorial(Distance::new(ALTITUDE_KM * 1000.0)?);
+    let orbit_spec = Orbit::circular_equatorial(Distance::new(ALTITUDE_KM * 1000.0));
     let speed = orbit_spec.speed(&body)?;
     let period = orbit_spec.period(&body)?;
     let initial_position = orbit_spec.to_cartesian_state(&body)?.position;
@@ -57,7 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // --- sweep timesteps ---
     for step_s in STEP_SECONDS {
-        let dt = TimeStep::new(step_s)?;
+        let dt = TimeStep::new(step_s);
 
         let euler = run(
             "Euler",

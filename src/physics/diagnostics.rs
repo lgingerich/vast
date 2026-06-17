@@ -12,15 +12,10 @@ pub struct SpecificEnergy(f64);
 impl SpecificEnergy {
     /// Creates a specific energy from square meters per square second.
     ///
-    /// Returns an error if the value is not finite.
-    pub fn new(value: f64) -> Result<Self, NumericalError> {
-        if value.is_finite() {
-            Ok(Self(value))
-        } else {
-            Err(NumericalError::NotFinite {
-                field: "specific energy",
-            })
-        }
+    /// Panics in debug builds if the input is not finite.
+    pub fn new(value: f64) -> Self {
+        debug_assert!(value.is_finite(), "specific energy must be finite");
+        Self(value)
     }
 
     /// Returns this specific energy in square meters per square second.
@@ -48,19 +43,17 @@ pub struct SpecificAngularMomentum(f64);
 impl SpecificAngularMomentum {
     /// Creates a specific angular momentum from square meters per second.
     ///
-    /// Returns an error if the value is not finite or negative.
-    pub fn new(value: f64) -> Result<Self, NumericalError> {
-        if !value.is_finite() {
-            return Err(NumericalError::NotFinite {
-                field: "specific angular momentum",
-            });
-        }
-        if value < 0.0 {
-            return Err(NumericalError::Negative {
-                field: "specific angular momentum",
-            });
-        }
-        Ok(Self(value))
+    /// Panics in debug builds if the input is not finite or negative.
+    pub fn new(value: f64) -> Self {
+        debug_assert!(
+            value.is_finite(),
+            "specific angular momentum must be finite"
+        );
+        debug_assert!(
+            value >= 0.0,
+            "specific angular momentum must be non-negative"
+        );
+        Self(value)
     }
 
     /// Returns this specific angular momentum in square meters per second.
@@ -125,8 +118,8 @@ impl OrbitalDiagnostics {
     ) -> Result<Self, crate::errors::StateError> {
         let components = states.components(index)?;
         Ok(Self::from_components(
-            Position::from_vector(components.position_vector())?,
-            Velocity::from_vector(components.velocity_vector())?,
+            Position::from_vector(components.position_vector()),
+            Velocity::from_vector(components.velocity_vector()),
             mu,
         )?)
     }
@@ -147,37 +140,37 @@ impl OrbitalDiagnostics {
         }
 
         let specific_energy_f64 = 0.5 * speed * speed - mu_f64 / radius;
-        let specific_energy = SpecificEnergy::new(specific_energy_f64)?;
+        let specific_energy = SpecificEnergy::new(specific_energy_f64);
         let specific_angular_momentum_vector = position.cross(&velocity);
         let specific_angular_momentum = specific_angular_momentum_vector.norm();
         let eccentricity_vector =
             velocity.cross(&specific_angular_momentum_vector) / mu_f64 - position / radius;
         let eccentricity = eccentricity_vector.norm();
 
-        let semi_major_axis = bound_semi_major_axis(mu, specific_energy)?;
+        let semi_major_axis = bound_semi_major_axis(mu, specific_energy);
         let periapsis_radius = match semi_major_axis {
             Some(axis) => {
                 let axis_m = axis.meters();
-                Some(Distance::new(axis_m * (1.0 - eccentricity))?)
+                Some(Distance::new(axis_m * (1.0 - eccentricity)))
             }
             None => None,
         };
         let apoapsis_radius = match semi_major_axis {
             Some(axis) => {
                 let axis_m = axis.meters();
-                Some(Distance::new(axis_m * (1.0 + eccentricity))?)
+                Some(Distance::new(axis_m * (1.0 + eccentricity)))
             }
             None => None,
         };
 
         Ok(Self {
-            radius: Distance::new(radius)?,
-            speed: Speed::new(speed)?,
+            radius: Distance::new(radius),
+            speed: Speed::new(speed),
             specific_energy,
             specific_angular_momentum_vector,
-            specific_angular_momentum: SpecificAngularMomentum::new(specific_angular_momentum)?,
+            specific_angular_momentum: SpecificAngularMomentum::new(specific_angular_momentum),
             eccentricity_vector,
-            eccentricity: Eccentricity::new(eccentricity)?,
+            eccentricity: Eccentricity::new(eccentricity),
             semi_major_axis,
             periapsis_radius,
             apoapsis_radius,
@@ -331,14 +324,14 @@ impl DiagnosticSeries {
     /// # let body = CentralBody::earth()?;
     /// # let result = SimBuilder::new(body)
     /// #     .orbit(Orbit::circular_inclined(
-    /// #         Distance::new((6678.0) * 1000.0)?,
-    /// #         Angle::from_degrees(51.6)?,
-    /// #         Angle::from_degrees(32.0)?,
+    /// #         Distance::new((6678.0) * 1000.0),
+    /// #         Angle::from_degrees(51.6),
+    /// #         Angle::from_degrees(32.0),
     /// #     ))?
     /// #     .dynamics(TwoBodyGravity::from_body(&body))
     /// #     .integrator(VelocityVerletIntegrator)
-    /// #     .timestep(TimeStep::new(10.0)?)
-    /// #     .duration(Duration::new(5_330.0).unwrap())?;
+    /// #     .timestep(TimeStep::new(10.0))
+    /// #     .duration(Duration::new(5_330.0))?;
     /// let s = &result.series;
     /// let radius = s.column(Column::Radius);
     /// let drift = (radius[1] - radius[0]).abs();
@@ -360,14 +353,14 @@ impl DiagnosticSeries {
 fn bound_semi_major_axis(
     mu: GravitationalParameter,
     specific_energy: SpecificEnergy,
-) -> Result<Option<Distance>, NumericalError> {
+) -> Option<Distance> {
     let specific_energy = specific_energy.square_meters_per_square_second();
     if specific_energy >= 0.0 {
-        return Ok(None);
+        return None;
     }
 
     let mu_f64 = mu.meters_cubed_per_second_squared();
-    Ok(Some(Distance::new(-mu_f64 / (2.0 * specific_energy))?))
+    Some(Distance::new(-mu_f64 / (2.0 * specific_energy)))
 }
 
 #[cfg(test)]
@@ -386,8 +379,8 @@ mod tests {
 
     fn circular_orbit() -> Result<CartesianState, Box<dyn std::error::Error>> {
         let elements = ClassicalOrbitalElements::new(
-            Distance::new(RADIUS_M)?,
-            Eccentricity::new(0.0)?,
+            Distance::new(RADIUS_M),
+            Eccentricity::new(0.0),
             Angle::ZERO,
             Angle::ZERO,
             Angle::ZERO,
@@ -397,7 +390,7 @@ mod tests {
     }
 
     fn earth_mu() -> Result<GravitationalParameter, Box<dyn std::error::Error>> {
-        Ok(GravitationalParameter::new(MU_EARTH)?)
+        Ok(GravitationalParameter::new(MU_EARTH))
     }
 
     fn assert_close(actual: f64, expected: f64, tolerance: f64) {
@@ -465,8 +458,8 @@ mod tests {
     #[test]
     fn diagnostics_reject_zero_radius() -> TestResult {
         let state = CartesianState::new(
-            Position::from_vector(Vector3::zeros())?,
-            Velocity::from_vector(Vector3::zeros())?,
+            Position::from_vector(Vector3::zeros()),
+            Velocity::from_vector(Vector3::zeros()),
         );
         let mut states = CartesianStateBuffer::<1>::with_len(1)?;
         states.write_from_state(0, &state)?;
@@ -479,8 +472,8 @@ mod tests {
     fn hyperbolic_state_has_no_bound_orbit_radii() -> TestResult {
         let radius = R_EARTH + ALTITUDE_M;
         let state = CartesianState::new(
-            Position::from_vector(Vector3::new(radius, 0.0, 0.0))?,
-            Velocity::from_vector(Vector3::new(0.0, 20_000.0, 0.0))?,
+            Position::from_vector(Vector3::new(radius, 0.0, 0.0)),
+            Velocity::from_vector(Vector3::new(0.0, 20_000.0, 0.0)),
         );
 
         let diagnostics = OrbitalDiagnostics::from_state(&state, earth_mu()?)?;

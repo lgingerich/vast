@@ -85,7 +85,7 @@ impl TerminationCondition {
                     return None;
                 }
                 let remaining = duration.checked_sub(elapsed).ok()?;
-                TimeStep::new(remaining.seconds()).ok()
+                Some(TimeStep::new(remaining.seconds()))
             }
             Self::StepCount(_) | Self::Apoapsis { .. } | Self::Periapsis { .. } => None,
         }
@@ -274,8 +274,8 @@ mod tests {
     #[test]
     fn duration_met_when_elapsed_reaches_target() {
         let start = Epoch::ZERO;
-        let current = Epoch::new(100.0).expect("epoch");
-        let condition = TerminationCondition::Duration(Duration::new(100.0).expect("duration"));
+        let current = Epoch::new(100.0);
+        let condition = TerminationCondition::Duration(Duration::new(100.0));
         let state = sample_state();
 
         assert_eq!(
@@ -295,7 +295,7 @@ mod tests {
     #[test]
     fn step_count_met_after_limit() {
         let start = Epoch::ZERO;
-        let current = Epoch::new(1.0).expect("epoch");
+        let current = Epoch::new(1.0);
         let condition = TerminationCondition::StepCount(5);
         let state = sample_state();
 
@@ -327,10 +327,10 @@ mod tests {
 
     #[test]
     fn apoapsis_met_on_radial_velocity_sign_crossing() {
-        let mu = GravitationalParameter::new(MU_EARTH).expect("mu");
+        let mu = GravitationalParameter::new(MU_EARTH);
         let state = sample_state();
         let condition = TerminationCondition::apoapsis(mu);
-        let epoch = Epoch::new(10.0).expect("epoch");
+        let epoch = Epoch::new(10.0);
 
         assert_eq!(
             condition.stop_reason(TerminationContext {
@@ -348,10 +348,10 @@ mod tests {
 
     #[test]
     fn periapsis_met_on_radial_velocity_sign_crossing() {
-        let mu = GravitationalParameter::new(MU_EARTH).expect("mu");
+        let mu = GravitationalParameter::new(MU_EARTH);
         let state = sample_state();
         let condition = TerminationCondition::periapsis(mu);
-        let epoch = Epoch::new(10.0).expect("epoch");
+        let epoch = Epoch::new(10.0);
 
         assert_eq!(
             condition.stop_reason(TerminationContext {
@@ -369,7 +369,7 @@ mod tests {
 
     fn sample_state() -> crate::CartesianState {
         let body = CentralBody::earth().expect("body");
-        Orbit::circular_equatorial(Distance::new(400_000.0).expect("altitude"))
+        Orbit::circular_equatorial(Distance::new(400_000.0))
             .to_cartesian_state(&body)
             .expect("state")
     }

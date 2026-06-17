@@ -15,19 +15,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- configure simulation ---
     let body = CentralBody::earth()?;
     let spec = Orbit::circular_inclined(
-        Distance::new(ALTITUDE_KM * 1000.0)?,
-        Angle::from_degrees(INCLINATION_DEG)?,
-        Angle::from_degrees(RAAN_DEG)?,
+        Distance::new(ALTITUDE_KM * 1000.0),
+        Angle::from_degrees(INCLINATION_DEG),
+        Angle::from_degrees(RAAN_DEG),
     );
     let period = spec.period(&body)?;
-    let num_periods = Duration::new(period.seconds() * PERIODS).unwrap();
+    let num_periods = Duration::new(period.seconds() * PERIODS);
 
     // --- run simulation ---
     let result = SimBuilder::new(body)
         .orbit(spec)?
         .dynamics(TwoBodyGravity::from_body(&body))
         .integrator(VelocityVerletIntegrator)
-        .timestep(TimeStep::new(STEP_SECONDS)?)
+        .timestep(TimeStep::new(STEP_SECONDS))
         .duration(num_periods)?;
 
     // --- inspect results ---

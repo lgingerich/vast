@@ -18,7 +18,7 @@ pub fn prograde_delta_v(
         return Err(NumericalError::ZeroNorm { field: "velocity" });
     }
 
-    Velocity::from_vector(velocity / speed * delta_v_mps)
+    Ok(Velocity::from_vector(velocity / speed * delta_v_mps))
 }
 
 /// Inertial delta-v vector that removes radial velocity and matches circular speed.
@@ -47,7 +47,9 @@ pub fn circularize_delta_v(
     let tangential_hat = tangential_velocity / tangential_speed_mps;
     let delta_v = tangential_hat * (target_tangential_speed_mps - tangential_speed_mps)
         - radial_hat * radial_speed_mps;
-    Velocity::from_vector(Vector3::new(delta_v.x, delta_v.y, delta_v.z))
+    Ok(Velocity::from_vector(Vector3::new(
+        delta_v.x, delta_v.y, delta_v.z,
+    )))
 }
 
 /// Analytical two-body bi-elliptic transfer delta-vs between circular orbits.
@@ -143,17 +145,17 @@ mod tests {
 
     fn state(position: Vector3<f64>, velocity: Vector3<f64>) -> CartesianState {
         CartesianState::new(
-            Position::from_vector(position).expect("position"),
-            Velocity::from_vector(velocity).expect("velocity"),
+            Position::from_vector(position),
+            Velocity::from_vector(velocity),
         )
     }
 
     #[test]
     fn bielliptic_rejects_invalid_intermediate_radius() {
-        let mu = GravitationalParameter::new(3.986e14).expect("mu");
-        let departure = Distance::new(R_EARTH + 400_000.0).expect("distance");
-        let arrival = Distance::new(R_EARTH + 35_786_000.0).expect("distance");
-        let intermediate = Distance::new(R_EARTH + 400_000.0).expect("distance");
+        let mu = GravitationalParameter::new(3.986e14);
+        let departure = Distance::new(R_EARTH + 400_000.0);
+        let arrival = Distance::new(R_EARTH + 35_786_000.0);
+        let intermediate = Distance::new(R_EARTH + 400_000.0);
         assert!(bielliptic_delta_v(mu, departure, arrival, intermediate).is_none());
     }
 
@@ -172,7 +174,7 @@ mod tests {
 
     #[test]
     fn circularize_delta_v_removes_radial_velocity() {
-        let mu = GravitationalParameter::new(3.986e14).expect("mu");
+        let mu = GravitationalParameter::new(3.986e14);
         let radius_m = R_EARTH + 400_000.0;
         let state = state(
             Vector3::new(radius_m, 0.0, 0.0),

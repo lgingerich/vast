@@ -148,7 +148,7 @@ impl Integrator for RungeKutta4Integrator {
         let state = states.as_view().components(index)?;
         let dt_s = dt.seconds();
         let half_dt_s = 0.5 * dt_s;
-        let half_t = t.advance_by(TimeStep::new(half_dt_s)?);
+        let half_t = t.advance_by(TimeStep::new(half_dt_s));
         let full_t = t.advance_by(dt);
         let position = state.position_vector();
         let velocity = state.velocity_vector();
@@ -189,8 +189,8 @@ fn write_integrated_vectors(
     position: Vector3<f64>,
     velocity: Vector3<f64>,
 ) -> Result<(), PropagationError> {
-    let position = Position::from_vector(position)?;
-    let velocity = Velocity::from_vector(velocity)?;
+    let position = Position::from_vector(position);
+    let velocity = Velocity::from_vector(velocity);
     let components = CartesianStateComponents::from((position, velocity));
     states.write_components(index, components)?;
     Ok(())
@@ -200,7 +200,7 @@ fn write_integrated_vectors(
 mod tests {
     use super::*;
     use crate::CentralBody;
-    use crate::errors::{DynamicsError, NumericalError, StateError};
+    use crate::errors::{DynamicsError, StateError};
     use crate::physics::constants::R_EARTH;
     use crate::physics::diagnostics::OrbitalDiagnostics;
     use crate::physics::dynamics::TwoBodyGravity;
@@ -246,8 +246,8 @@ mod tests {
         velocity: Vector3<f64>,
     ) -> Result<CartesianState, Box<dyn std::error::Error>> {
         Ok(CartesianState::new(
-            Position::from_vector(position)?,
-            Velocity::from_vector(velocity)?,
+            Position::from_vector(position),
+            Velocity::from_vector(velocity),
         ))
     }
 
@@ -262,7 +262,7 @@ mod tests {
     fn euler_matches_constant_acceleration_solution() -> TestResult {
         let integrator = EulerIntegrator;
         let dynamics = ConstantAcceleration {
-            acceleration: Acceleration::from_vector(Vector3::new(0.0, 2.0, 0.0))?,
+            acceleration: Acceleration::from_vector(Vector3::new(0.0, 2.0, 0.0)),
         };
         let state = state_at(Vector3::new(10.0, 20.0, 30.0), Vector3::new(1.0, 2.0, 3.0))?;
         let mut states = CartesianStateBuffer::<1>::with_len(1)?;
@@ -273,7 +273,7 @@ mod tests {
             &mut states.view_mut(),
             0,
             Epoch::ZERO,
-            TimeStep::new(5.0)?,
+            TimeStep::new(5.0),
         )?;
         let next = states.read_state(0)?;
 
@@ -302,7 +302,7 @@ mod tests {
                 &mut states.view_mut(),
                 0,
                 Epoch::ZERO,
-                TimeStep::new(1.0)?,
+                TimeStep::new(1.0),
             ),
             Err(PropagationError::Dynamics(
                 DynamicsError::PositionAtGravityCenter
@@ -331,104 +331,13 @@ mod tests {
         assert_integrator_propagates_dynamics_errors(RungeKutta4Integrator)
     }
 
-    // ── non-finite rejection ────────────────────────────────────
-
-    fn assert_integrator_rejects_nonfinite_velocity<I: Integrator>(integrator: I) -> TestResult {
-        let dynamics = ConstantAcceleration {
-            acceleration: Acceleration::from_vector(Vector3::new(f64::MAX, 0.0, 0.0))?,
-        };
-        let state = state_at(Vector3::zeros(), Vector3::zeros())?;
-        let mut states = CartesianStateBuffer::<1>::with_len(1)?;
-        states.write_from_state(0, &state)?;
-
-        assert!(matches!(
-            integrator.step(
-                &dynamics,
-                &mut states.view_mut(),
-                0,
-                Epoch::ZERO,
-                TimeStep::new(2.0)?,
-            ),
-            Err(PropagationError::Numerical(
-                NumericalError::NotFinite { .. }
-            )),
-        ));
-        Ok(())
-    }
-
-    fn assert_integrator_rejects_nonfinite_position<I: Integrator>(integrator: I) -> TestResult {
-        let dynamics = ConstantAcceleration {
-            acceleration: Acceleration::from_vector(Vector3::zeros())?,
-        };
-        let state = state_at(
-            Vector3::new(f64::MAX, 0.0, 0.0),
-            Vector3::new(f64::MAX, 0.0, 0.0),
-        )?;
-        let mut states = CartesianStateBuffer::<1>::with_len(1)?;
-        states.write_from_state(0, &state)?;
-
-        assert!(matches!(
-            integrator.step(
-                &dynamics,
-                &mut states.view_mut(),
-                0,
-                Epoch::ZERO,
-                TimeStep::new(2.0)?,
-            ),
-            Err(PropagationError::Numerical(
-                NumericalError::NotFinite { .. }
-            )),
-        ));
-        Ok(())
-    }
-
-    #[test]
-    fn euler_rejects_nonfinite_velocity_update() -> TestResult {
-        assert_integrator_rejects_nonfinite_velocity(EulerIntegrator)
-    }
-
-    #[test]
-    fn euler_rejects_nonfinite_position_update() -> TestResult {
-        assert_integrator_rejects_nonfinite_position(EulerIntegrator)
-    }
-
-    #[test]
-    fn velocity_verlet_rejects_nonfinite_velocity_update() -> TestResult {
-        assert_integrator_rejects_nonfinite_velocity(VelocityVerletIntegrator)
-    }
-
-    #[test]
-    fn velocity_verlet_rejects_nonfinite_position_update() -> TestResult {
-        assert_integrator_rejects_nonfinite_position(VelocityVerletIntegrator)
-    }
-
-    #[test]
-    fn leapfrog_rejects_nonfinite_velocity_update() -> TestResult {
-        assert_integrator_rejects_nonfinite_velocity(LeapfrogIntegrator)
-    }
-
-    #[test]
-    fn leapfrog_rejects_nonfinite_position_update() -> TestResult {
-        assert_integrator_rejects_nonfinite_position(LeapfrogIntegrator)
-    }
-
-    #[test]
-    fn rk4_rejects_nonfinite_velocity_update() -> TestResult {
-        assert_integrator_rejects_nonfinite_velocity(RungeKutta4Integrator)
-    }
-
-    #[test]
-    fn rk4_rejects_nonfinite_position_update() -> TestResult {
-        assert_integrator_rejects_nonfinite_position(RungeKutta4Integrator)
-    }
-
     // ── constant acceleration solutions ─────────────────────────
 
     #[test]
     fn rk4_matches_constant_acceleration_solution() -> TestResult {
         let integrator = RungeKutta4Integrator;
         let dynamics = ConstantAcceleration {
-            acceleration: Acceleration::from_vector(Vector3::new(0.0, 2.0, 0.0))?,
+            acceleration: Acceleration::from_vector(Vector3::new(0.0, 2.0, 0.0)),
         };
         let state = state_at(Vector3::new(10.0, 20.0, 30.0), Vector3::new(1.0, 2.0, 3.0))?;
         let mut states = CartesianStateBuffer::<1>::with_len(1)?;
@@ -439,7 +348,7 @@ mod tests {
             &mut states.view_mut(),
             0,
             Epoch::ZERO,
-            TimeStep::new(5.0)?,
+            TimeStep::new(5.0),
         )?;
         let next = states.read_state(0)?;
 
@@ -456,7 +365,7 @@ mod tests {
     fn velocity_verlet_matches_constant_acceleration_solution() -> TestResult {
         let integrator = VelocityVerletIntegrator;
         let dynamics = ConstantAcceleration {
-            acceleration: Acceleration::from_vector(Vector3::new(0.0, 2.0, 0.0))?,
+            acceleration: Acceleration::from_vector(Vector3::new(0.0, 2.0, 0.0)),
         };
         let state = state_at(Vector3::new(10.0, 20.0, 30.0), Vector3::new(1.0, 2.0, 3.0))?;
         let mut states = CartesianStateBuffer::<1>::with_len(1)?;
@@ -467,7 +376,7 @@ mod tests {
             &mut states.view_mut(),
             0,
             Epoch::ZERO,
-            TimeStep::new(5.0)?,
+            TimeStep::new(5.0),
         )?;
         let next = states.read_state(0)?;
 
@@ -484,7 +393,7 @@ mod tests {
     fn leapfrog_matches_constant_acceleration_solution() -> TestResult {
         let integrator = LeapfrogIntegrator;
         let dynamics = ConstantAcceleration {
-            acceleration: Acceleration::from_vector(Vector3::new(0.0, 2.0, 0.0))?,
+            acceleration: Acceleration::from_vector(Vector3::new(0.0, 2.0, 0.0)),
         };
         let state = state_at(Vector3::new(10.0, 20.0, 30.0), Vector3::new(1.0, 2.0, 3.0))?;
         let mut states = CartesianStateBuffer::<1>::with_len(1)?;
@@ -495,7 +404,7 @@ mod tests {
             &mut states.view_mut(),
             0,
             Epoch::ZERO,
-            TimeStep::new(5.0)?,
+            TimeStep::new(5.0),
         )?;
         let next = states.read_state(0)?;
 
@@ -512,7 +421,7 @@ mod tests {
     fn integrator_rejects_invalid_body_index() -> TestResult {
         let integrator = EulerIntegrator;
         let dynamics = ConstantAcceleration {
-            acceleration: Acceleration::from_vector(Vector3::zeros())?,
+            acceleration: Acceleration::from_vector(Vector3::zeros()),
         };
         let mut states = CartesianStateBuffer::<1>::with_len(1)?;
 
@@ -522,7 +431,7 @@ mod tests {
                 &mut states.view_mut(),
                 1,
                 Epoch::ZERO,
-                TimeStep::new(1.0)?,
+                TimeStep::new(1.0),
             ),
             Err(PropagationError::State(StateError::InvalidBodyIndex)),
         ));
@@ -533,7 +442,7 @@ mod tests {
     fn stepping_one_body_does_not_mutate_another_body() -> TestResult {
         let integrator = EulerIntegrator;
         let dynamics = ConstantAcceleration {
-            acceleration: Acceleration::from_vector(Vector3::new(0.0, 1.0, 0.0))?,
+            acceleration: Acceleration::from_vector(Vector3::new(0.0, 1.0, 0.0)),
         };
         let mut states = CartesianStateBuffer::<2>::with_len(2)?;
         let body_zero = state_at(Vector3::new(1.0, 2.0, 3.0), Vector3::new(4.0, 5.0, 6.0))?;
@@ -549,7 +458,7 @@ mod tests {
             &mut states.view_mut(),
             0,
             Epoch::ZERO,
-            TimeStep::new(1.0)?,
+            TimeStep::new(1.0),
         )?;
 
         let unchanged = states.read_state(1)?;
@@ -683,7 +592,7 @@ mod tests {
 
     fn circular_orbit(radius_m: f64) -> Result<Orbit, Box<dyn std::error::Error>> {
         let altitude_m = radius_m - R_EARTH;
-        Ok(Orbit::circular_equatorial(Distance::new(altitude_m)?))
+        Ok(Orbit::circular_equatorial(Distance::new(altitude_m)))
     }
 
     fn propagate_one_period<I: Integrator, const N: usize>(
@@ -694,26 +603,16 @@ mod tests {
         period_s: f64,
     ) -> TestResult {
         let mut epoch = Epoch::ZERO;
-        let base_step = TimeStep::new(30.0)?;
+        let base_step = TimeStep::new(30.0);
 
         while epoch.seconds() < period_s {
             let remaining_s = period_s - epoch.seconds();
-            let step = TimeStep::new(base_step.seconds().min(remaining_s))?;
+            let step = TimeStep::new(base_step.seconds().min(remaining_s));
             integrator.step(gravity, &mut states.view_mut(), index, epoch, step)?;
             epoch = epoch.advance_by(step);
         }
 
         Ok(())
-    }
-
-    #[test]
-    fn time_step_rejects_zero() {
-        assert!(TimeStep::new(0.0).is_err());
-    }
-
-    #[test]
-    fn time_step_rejects_nan() {
-        assert!(TimeStep::new(f64::NAN).is_err());
     }
 
     // ── angular momentum conservation ──────────────────────────────

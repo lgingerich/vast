@@ -335,7 +335,7 @@ mod tests {
 
     fn sample_state() -> CartesianState {
         let body = CentralBody::earth().expect("body");
-        Orbit::circular_equatorial(Distance::new(400_000.0).expect("altitude"))
+        Orbit::circular_equatorial(Distance::new(400_000.0))
             .to_cartesian_state(&body)
             .expect("state")
     }

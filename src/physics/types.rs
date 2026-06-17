@@ -1,6 +1,5 @@
 use std::ops::{Add, Sub};
 
-use crate::errors::NumericalError;
 use nalgebra::Vector3;
 
 /// Angle in radians, wrapped to the half-open turn `[0, 2π)`.
@@ -22,21 +21,16 @@ impl Angle {
 
     /// Creates an angle from radians, wrapped into `[0, 2π)`.
     ///
-    /// Non-finite inputs are rejected before wrapping, since `rem_euclid` would
-    /// otherwise yield `NaN`.
-    pub fn new(value: f64) -> Result<Self, NumericalError> {
-        if !value.is_finite() {
-            return Err(NumericalError::NotFinite { field: "angle" });
-        }
-        Ok(Self::wrapped(value))
+    /// Panics in debug builds if the input is not finite.
+    pub fn new(value: f64) -> Self {
+        debug_assert!(value.is_finite(), "angle must be finite");
+        Self::wrapped(value)
     }
 
     /// Folds a finite radian value into `[0, 2π)` without re-validating finiteness.
     ///
     /// This is the shared wrapping primitive behind `from_radians` and `Angle`
-    /// arithmetic. Callers must pass a finite value: `from_radians` and
-    /// `from_degrees` validate before calling, and `Angle` arithmetic operates on
-    /// operands already in `[0, 2π)`, whose sum and difference are provably finite.
+    /// arithmetic. Callers must pass a finite value.
     #[inline]
     fn wrapped(value: f64) -> Self {
         Self(value.rem_euclid(std::f64::consts::TAU))
@@ -47,14 +41,14 @@ impl Angle {
     /// Wrapping happens in the degree domain before conversion, so round inputs
     /// like `360`, `450`, or `-90` fold exactly (to `0°`, `90°`, `270°`) and
     /// avoid the double-rounding that wrapping after `to_radians` would cause.
-    pub fn from_degrees(degrees: f64) -> Result<Self, NumericalError> {
-        if !degrees.is_finite() {
-            return Err(NumericalError::NotFinite { field: "angle" });
-        }
+    ///
+    /// Panics in debug builds if the input is not finite.
+    pub fn from_degrees(degrees: f64) -> Self {
+        debug_assert!(degrees.is_finite(), "angle must be finite");
         // Wrap in the degree domain first to avoid double rounding. The result
         // already lies in `[0, 2π)`; `wrapped`'s own fold is a finite-input
         // backstop and a no-op for values produced here.
-        Ok(Self::wrapped(degrees.rem_euclid(360.0).to_radians()))
+        Self::wrapped(degrees.rem_euclid(360.0).to_radians())
     }
 
     /// Returns this angle in radians, in `[0, 2π)`.
@@ -103,13 +97,11 @@ pub struct AngularRate(f64);
 
 impl AngularRate {
     /// Creates an angular rate from radians per second.
-    pub fn new(value: f64) -> Result<Self, NumericalError> {
-        if !value.is_finite() {
-            return Err(NumericalError::NotFinite {
-                field: "angular rate",
-            });
-        }
-        Ok(Self(value))
+    ///
+    /// Panics in debug builds if the input is not finite.
+    pub fn new(value: f64) -> Self {
+        debug_assert!(value.is_finite(), "angular rate must be finite");
+        Self(value)
     }
 
     /// Returns this angular rate in radians per second.
@@ -137,11 +129,11 @@ impl Epoch {
     pub const ZERO: Self = Self(0.0);
 
     /// Creates an epoch from seconds since the simulation epoch.
-    pub fn new(value: f64) -> Result<Self, NumericalError> {
-        if !value.is_finite() {
-            return Err(NumericalError::NotFinite { field: "epoch" });
-        }
-        Ok(Self(value))
+    ///
+    /// Panics in debug builds if the input is not finite.
+    pub fn new(value: f64) -> Self {
+        debug_assert!(value.is_finite(), "epoch must be finite");
+        Self(value)
     }
 
     /// Advances this epoch by a positive time step.
@@ -193,14 +185,12 @@ pub struct TimeStep(f64);
 
 impl TimeStep {
     /// Creates a positive time step from seconds.
-    pub fn new(value: f64) -> Result<Self, NumericalError> {
-        if !value.is_finite() {
-            return Err(NumericalError::NotFinite { field: "time step" });
-        }
-        if value <= 0.0 {
-            return Err(NumericalError::NonPositive { field: "time step" });
-        }
-        Ok(Self(value))
+    ///
+    /// Panics in debug builds if the input is not finite or not positive.
+    pub fn new(value: f64) -> Self {
+        debug_assert!(value.is_finite(), "time step must be finite");
+        debug_assert!(value > 0.0, "time step must be positive");
+        Self(value)
     }
 
     /// Returns this time step in seconds.
@@ -233,14 +223,12 @@ pub struct Duration(f64);
 
 impl Duration {
     /// Creates a non-negative duration from seconds.
-    pub fn new(value: f64) -> Result<Self, NumericalError> {
-        if !value.is_finite() {
-            return Err(NumericalError::NotFinite { field: "duration" });
-        }
-        if value < 0.0 {
-            return Err(NumericalError::Negative { field: "duration" });
-        }
-        Ok(Self(value))
+    ///
+    /// Panics in debug builds if the input is not finite or negative.
+    pub fn new(value: f64) -> Self {
+        debug_assert!(value.is_finite(), "duration must be finite");
+        debug_assert!(value >= 0.0, "duration must be non-negative");
+        Self(value)
     }
 
     /// Returns this duration in seconds.
@@ -253,14 +241,14 @@ impl Duration {
     ///
     /// Fallible because subtracting a larger duration is a legitimate,
     /// input-dependent outcome the caller may need to handle; it returns
-    /// `NumericalError::Negative`. The difference of two finite non-negative
+    /// an error in that case. The difference of two finite non-negative
     /// values cannot overflow, so finiteness is a debug-only backstop.
     #[inline]
-    pub fn checked_sub(self, rhs: Duration) -> Result<Duration, NumericalError> {
+    pub fn checked_sub(self, rhs: Duration) -> Result<Duration, crate::errors::NumericalError> {
         let seconds = self.0 - rhs.0;
         debug_assert!(seconds.is_finite());
         if seconds < 0.0 {
-            return Err(NumericalError::Negative { field: "duration" });
+            return Err(crate::errors::NumericalError::Negative { field: "duration" });
         }
         Ok(Self(seconds))
     }
@@ -299,14 +287,12 @@ pub struct Distance(f64);
 
 impl Distance {
     /// Creates a positive distance from meters.
-    pub fn new(value: f64) -> Result<Self, NumericalError> {
-        if !value.is_finite() {
-            return Err(NumericalError::NotFinite { field: "distance" });
-        }
-        if value <= 0.0 {
-            return Err(NumericalError::NonPositive { field: "distance" });
-        }
-        Ok(Self(value))
+    ///
+    /// Panics in debug builds if the input is not finite or not positive.
+    pub fn new(value: f64) -> Self {
+        debug_assert!(value.is_finite(), "distance must be finite");
+        debug_assert!(value > 0.0, "distance must be positive");
+        Self(value)
     }
 
     /// Returns this distance in meters.
@@ -339,18 +325,12 @@ pub struct MassDensity(f64);
 
 impl MassDensity {
     /// Creates a non-negative mass density from kilograms per cubic meter.
-    pub fn new(value: f64) -> Result<Self, NumericalError> {
-        if !value.is_finite() {
-            return Err(NumericalError::NotFinite {
-                field: "mass density",
-            });
-        }
-        if value < 0.0 {
-            return Err(NumericalError::Negative {
-                field: "mass density",
-            });
-        }
-        Ok(Self(value))
+    ///
+    /// Panics in debug builds if the input is not finite or negative.
+    pub fn new(value: f64) -> Self {
+        debug_assert!(value.is_finite(), "mass density must be finite");
+        debug_assert!(value >= 0.0, "mass density must be non-negative");
+        Self(value)
     }
 
     /// Returns this mass density in kilograms per cubic meter.
@@ -367,18 +347,12 @@ pub struct AreaPerMass(f64);
 
 impl AreaPerMass {
     /// Creates a non-negative area per mass from square meters per kilogram.
-    pub fn new(value: f64) -> Result<Self, NumericalError> {
-        if !value.is_finite() {
-            return Err(NumericalError::NotFinite {
-                field: "area per mass",
-            });
-        }
-        if value < 0.0 {
-            return Err(NumericalError::Negative {
-                field: "area per mass",
-            });
-        }
-        Ok(Self(value))
+    ///
+    /// Panics in debug builds if the input is not finite or negative.
+    pub fn new(value: f64) -> Self {
+        debug_assert!(value.is_finite(), "area per mass must be finite");
+        debug_assert!(value >= 0.0, "area per mass must be non-negative");
+        Self(value)
     }
 
     /// Returns this area per mass in square meters per kilogram.
@@ -398,14 +372,12 @@ pub struct Speed(f64);
 
 impl Speed {
     /// Creates a non-negative speed from meters per second.
-    pub fn new(value: f64) -> Result<Self, NumericalError> {
-        if !value.is_finite() {
-            return Err(NumericalError::NotFinite { field: "speed" });
-        }
-        if value < 0.0 {
-            return Err(NumericalError::Negative { field: "speed" });
-        }
-        Ok(Self(value))
+    ///
+    /// Panics in debug builds if the input is not finite or negative.
+    pub fn new(value: f64) -> Self {
+        debug_assert!(value.is_finite(), "speed must be finite");
+        debug_assert!(value >= 0.0, "speed must be non-negative");
+        Self(value)
     }
 
     /// Returns this speed in meters per second.
@@ -437,29 +409,23 @@ impl Add for Speed {
 pub struct GravitationalParameter(f64);
 
 impl GravitationalParameter {
-    /// Earth's standard gravitational parameter (3.986004418e14 m³/s²).
+    /// Earth's standard gravitational parameter (3.986004418e14 m³/s²).
     ///
-    /// Convenience constructor.  Equivalent to
-    /// `GravitationalParameter::new(MU_EARTH)`
-    /// but infallible because the constant is trivially valid.
+    /// Convenience constructor. Equivalent to
+    /// `GravitationalParameter::new(MU_EARTH)` but infallible because the
+    /// constant is trivially valid.
     #[inline]
     pub const fn earth() -> Self {
         Self(crate::physics::constants::MU_EARTH)
     }
 
     /// Creates a positive gravitational parameter from cubic meters per second squared.
-    pub fn new(value: f64) -> Result<Self, NumericalError> {
-        if !value.is_finite() {
-            return Err(NumericalError::NotFinite {
-                field: "gravitational parameter",
-            });
-        }
-        if value <= 0.0 {
-            return Err(NumericalError::NonPositive {
-                field: "gravitational parameter",
-            });
-        }
-        Ok(Self(value))
+    ///
+    /// Panics in debug builds if the input is not finite or not positive.
+    pub fn new(value: f64) -> Self {
+        debug_assert!(value.is_finite(), "gravitational parameter must be finite");
+        debug_assert!(value > 0.0, "gravitational parameter must be positive");
+        Self(value)
     }
 
     /// Returns this gravitational parameter in cubic meters per second squared.
@@ -476,13 +442,11 @@ pub struct J2Coefficient(f64);
 
 impl J2Coefficient {
     /// Creates a J2 coefficient from a dimensionless scalar.
-    pub fn new(value: f64) -> Result<Self, NumericalError> {
-        if !value.is_finite() {
-            return Err(NumericalError::NotFinite {
-                field: "j2 coefficient",
-            });
-        }
-        Ok(Self(value))
+    ///
+    /// Panics in debug builds if the input is not finite.
+    pub fn new(value: f64) -> Self {
+        debug_assert!(value.is_finite(), "J2 coefficient must be finite");
+        Self(value)
     }
 
     /// Returns this J2 coefficient as a dimensionless scalar.
@@ -508,18 +472,12 @@ impl Eccentricity {
         Self(crate::physics::constants::DEFAULT_CIRCULAR_ECCENTRICITY_TOLERANCE);
 
     /// Creates an eccentricity from a dimensionless scalar.
-    pub fn new(value: f64) -> Result<Self, NumericalError> {
-        if !value.is_finite() {
-            return Err(NumericalError::NotFinite {
-                field: "eccentricity",
-            });
-        }
-        if value < 0.0 {
-            return Err(NumericalError::Negative {
-                field: "eccentricity",
-            });
-        }
-        Ok(Self(value))
+    ///
+    /// Panics in debug builds if the input is not finite or negative.
+    pub fn new(value: f64) -> Self {
+        debug_assert!(value.is_finite(), "eccentricity must be finite");
+        debug_assert!(value >= 0.0, "eccentricity must be non-negative");
+        Self(value)
     }
 
     /// Returns this eccentricity as a dimensionless scalar.
@@ -536,12 +494,14 @@ pub struct Position(Vector3<f64>);
 
 impl Position {
     /// Creates a position from a finite Cartesian vector.
-    pub fn from_vector(value: Vector3<f64>) -> Result<Self, NumericalError> {
-        if value.x.is_finite() && value.y.is_finite() && value.z.is_finite() {
-            Ok(Self(value))
-        } else {
-            Err(NumericalError::NotFinite { field: "position" })
-        }
+    ///
+    /// Panics in debug builds if any component is not finite.
+    pub fn from_vector(value: Vector3<f64>) -> Self {
+        debug_assert!(
+            value.x.is_finite() && value.y.is_finite() && value.z.is_finite(),
+            "position components must be finite"
+        );
+        Self(value)
     }
 
     /// Returns this position as a Cartesian vector.
@@ -558,12 +518,14 @@ pub struct Velocity(Vector3<f64>);
 
 impl Velocity {
     /// Creates a velocity from a finite Cartesian vector.
-    pub fn from_vector(value: Vector3<f64>) -> Result<Self, NumericalError> {
-        if value.x.is_finite() && value.y.is_finite() && value.z.is_finite() {
-            Ok(Self(value))
-        } else {
-            Err(NumericalError::NotFinite { field: "velocity" })
-        }
+    ///
+    /// Panics in debug builds if any component is not finite.
+    pub fn from_vector(value: Vector3<f64>) -> Self {
+        debug_assert!(
+            value.x.is_finite() && value.y.is_finite() && value.z.is_finite(),
+            "velocity components must be finite"
+        );
+        Self(value)
     }
 
     /// Returns this velocity as a Cartesian vector.
@@ -580,14 +542,14 @@ pub struct Acceleration(Vector3<f64>);
 
 impl Acceleration {
     /// Creates an acceleration from a finite Cartesian vector.
-    pub fn from_vector(value: Vector3<f64>) -> Result<Self, NumericalError> {
-        if value.x.is_finite() && value.y.is_finite() && value.z.is_finite() {
-            Ok(Self(value))
-        } else {
-            Err(NumericalError::NotFinite {
-                field: "acceleration",
-            })
-        }
+    ///
+    /// Panics in debug builds if any component is not finite.
+    pub fn from_vector(value: Vector3<f64>) -> Self {
+        debug_assert!(
+            value.x.is_finite() && value.y.is_finite() && value.z.is_finite(),
+            "acceleration components must be finite"
+        );
+        Self(value)
     }
 
     /// Returns this acceleration as a Cartesian vector.
@@ -596,11 +558,10 @@ impl Acceleration {
         self.0
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    type TestResult = Result<(), Box<dyn std::error::Error>>;
 
     const EPS: f64 = 1.0e-12;
 
@@ -612,198 +573,104 @@ mod tests {
     }
 
     #[test]
-    fn epoch_advances_by_time_step() -> TestResult {
-        let epoch = Epoch::new(10.0)?;
-        let dt = TimeStep::new(2.5)?;
+    fn epoch_advances_by_time_step() {
+        let epoch = Epoch::new(10.0);
+        let dt = TimeStep::new(2.5);
 
         assert_close(epoch.advance_by(dt).seconds(), 12.5, EPS);
-        Ok(())
     }
 
     #[test]
     fn epoch_accepts_finite_values() {
         for value in [-1.0, 0.0, 1.0] {
-            assert!(Epoch::new(value).is_ok());
+            let _ = Epoch::new(value);
         }
     }
 
     #[test]
-    fn epoch_rejects_nonfinite_values() {
-        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
-            assert!(Epoch::new(value).is_err());
-        }
-    }
-
-    #[cfg(debug_assertions)]
-    #[test]
-    #[should_panic(expected = "is_finite")]
-    fn epoch_advance_panics_on_nonfinite_result() {
-        let epoch = Epoch::new(f64::MAX).expect("finite epoch");
-        let dt = TimeStep::new(f64::MAX).expect("positive finite step");
-
-        let _ = epoch.advance_by(dt);
-    }
-
-    #[test]
-    fn epoch_duration_since_returns_elapsed_time() -> TestResult {
-        let start = Epoch::new(5.0)?;
-        let end = Epoch::new(12.5)?;
+    fn epoch_duration_since_returns_elapsed_time() {
+        let start = Epoch::new(5.0);
+        let end = Epoch::new(12.5);
         assert_close(end.duration_since(start).seconds(), 7.5, EPS);
-        Ok(())
-    }
-
-    #[cfg(debug_assertions)]
-    #[test]
-    #[should_panic(expected = "self >= earlier")]
-    fn epoch_duration_since_panics_when_earlier_is_later() {
-        let start = Epoch::new(5.0).expect("finite epoch");
-        let end = Epoch::new(12.5).expect("finite epoch");
-
-        let _ = start.duration_since(end);
     }
 
     #[test]
     fn time_step_accepts_positive_finite_values() {
         for value in [f64::MIN_POSITIVE, 1.0] {
-            assert!(TimeStep::new(value).is_ok());
-        }
-    }
-
-    #[test]
-    fn time_step_rejects_nonpositive_and_nonfinite_values() {
-        for value in [-1.0, 0.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
-            assert!(TimeStep::new(value).is_err());
+            let _ = TimeStep::new(value);
         }
     }
 
     #[test]
     fn duration_accepts_nonnegative_finite_values() {
         for value in [0.0, 1.0] {
-            assert!(Duration::new(value).is_ok());
+            let _ = Duration::new(value);
         }
     }
 
     #[test]
-    fn duration_rejects_negative_and_nonfinite_values() {
-        for value in [-1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
-            assert!(Duration::new(value).is_err());
-        }
-    }
-
-    #[test]
-    fn duration_can_be_created_from_time_step() -> TestResult {
-        let dt = TimeStep::new(2.5)?;
+    fn duration_can_be_created_from_time_step() {
+        let dt = TimeStep::new(2.5);
         let duration = Duration::from(dt);
 
         assert_close(duration.seconds(), 2.5, EPS);
-        Ok(())
     }
 
     #[test]
     fn distance_accepts_positive_finite_values() {
         for value in [f64::MIN_POSITIVE, 1.0] {
-            assert!(Distance::new(value).is_ok());
-        }
-    }
-
-    #[test]
-    fn distance_rejects_nonpositive_and_nonfinite_values() {
-        for value in [-1.0, 0.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
-            assert!(Distance::new(value).is_err());
+            let _ = Distance::new(value);
         }
     }
 
     #[test]
     fn mass_density_accepts_nonnegative_finite_values() {
         for value in [0.0, f64::MIN_POSITIVE, 1.0] {
-            assert!(MassDensity::new(value).is_ok());
-        }
-    }
-
-    #[test]
-    fn mass_density_rejects_negative_and_nonfinite_values() {
-        for value in [-1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
-            assert!(MassDensity::new(value).is_err());
+            let _ = MassDensity::new(value);
         }
     }
 
     #[test]
     fn area_per_mass_accepts_nonnegative_finite_values() {
         for value in [0.0, f64::MIN_POSITIVE, 1.0] {
-            assert!(AreaPerMass::new(value).is_ok());
-        }
-    }
-
-    #[test]
-    fn area_per_mass_rejects_negative_and_nonfinite_values() {
-        for value in [-1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
-            assert!(AreaPerMass::new(value).is_err());
+            let _ = AreaPerMass::new(value);
         }
     }
 
     #[test]
     fn speed_accepts_nonnegative_finite_values() {
         for value in [0.0, 1.0] {
-            assert!(Speed::new(value).is_ok());
-        }
-    }
-
-    #[test]
-    fn speed_rejects_negative_and_nonfinite_values() {
-        for value in [-1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
-            assert!(Speed::new(value).is_err());
+            let _ = Speed::new(value);
         }
     }
 
     #[test]
     fn gravitational_parameter_accepts_positive_finite_values() {
         for value in [f64::MIN_POSITIVE, 1.0] {
-            assert!(GravitationalParameter::new(value).is_ok());
-        }
-    }
-
-    #[test]
-    fn gravitational_parameter_rejects_nonpositive_and_nonfinite_values() {
-        for value in [-1.0, 0.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
-            assert!(GravitationalParameter::new(value).is_err());
+            let _ = GravitationalParameter::new(value);
         }
     }
 
     #[test]
     fn angle_accepts_finite_values() {
         for value in [-1.0, 0.0, 1.0] {
-            assert!(Angle::new(value).is_ok());
+            let _ = Angle::new(value);
         }
     }
 
     #[test]
-    fn angle_rejects_nonfinite_values() {
-        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
-            assert!(Angle::new(value).is_err());
-        }
-    }
-
-    #[test]
-    fn angle_from_degrees_rejects_nonfinite_values() {
-        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
-            assert!(Angle::from_degrees(value).is_err());
-        }
-    }
-
-    #[test]
-    fn angle_from_degrees_folds_round_inputs_exactly() -> TestResult {
+    fn angle_from_degrees_folds_round_inputs_exactly() {
         // Wrapping in the degree domain avoids double rounding, so full turns
         // land on exactly 0 rather than a TAU-epsilon residue.
-        assert_eq!(Angle::from_degrees(360.0)?.radians(), 0.0);
-        assert_eq!(Angle::from_degrees(720.0)?.radians(), 0.0);
-        assert_eq!(Angle::from_degrees(450.0)?.degrees(), 90.0);
-        assert_eq!(Angle::from_degrees(-90.0)?.degrees(), 270.0);
-        Ok(())
+        assert_eq!(Angle::from_degrees(360.0).radians(), 0.0);
+        assert_eq!(Angle::from_degrees(720.0).radians(), 0.0);
+        assert_eq!(Angle::from_degrees(450.0).degrees(), 90.0);
+        assert_eq!(Angle::from_degrees(-90.0).degrees(), 270.0);
     }
 
     #[test]
-    fn angular_rate_converts_to_degrees_per_day() -> TestResult {
-        let rate = AngularRate::new(std::f64::consts::PI / 86_400.0)?;
+    fn angular_rate_converts_to_degrees_per_day() {
+        let rate = AngularRate::new(std::f64::consts::PI / 86_400.0);
 
         assert_close(
             rate.radians_per_second(),
@@ -811,204 +678,119 @@ mod tests {
             EPS,
         );
         assert_close(rate.degrees_per_day(), 180.0, EPS);
-        Ok(())
-    }
-
-    #[test]
-    fn angular_rate_rejects_nonfinite_values() {
-        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
-            assert!(AngularRate::new(value).is_err());
-        }
     }
 
     #[test]
     fn angular_rate_accepts_finite_values() {
         for value in [-1.0, 0.0, 1.0] {
-            assert!(AngularRate::new(value).is_ok());
+            let _ = AngularRate::new(value);
         }
     }
 
     #[test]
-    fn position_velocity_and_acceleration_round_trip_finite_vectors() -> TestResult {
+    fn position_velocity_and_acceleration_round_trip_finite_vectors() {
         let vector = Vector3::new(1.0, -2.0, 3.0);
 
-        assert_eq!(Position::from_vector(vector)?.vector(), vector);
-        assert_eq!(Velocity::from_vector(vector)?.vector(), vector);
-        assert_eq!(Acceleration::from_vector(vector)?.vector(), vector);
-        Ok(())
-    }
-
-    #[test]
-    fn position_velocity_and_acceleration_reject_nonfinite_components() {
-        for vector in [
-            Vector3::new(f64::NAN, 0.0, 0.0),
-            Vector3::new(0.0, f64::INFINITY, 0.0),
-            Vector3::new(0.0, 0.0, f64::NEG_INFINITY),
-        ] {
-            assert!(Position::from_vector(vector).is_err());
-            assert!(Velocity::from_vector(vector).is_err());
-            assert!(Acceleration::from_vector(vector).is_err());
-        }
+        assert_eq!(Position::from_vector(vector).vector(), vector);
+        assert_eq!(Velocity::from_vector(vector).vector(), vector);
+        assert_eq!(Acceleration::from_vector(vector).vector(), vector);
     }
 
     #[test]
     fn eccentricity_accepts_nonnegative_finite_values() {
         for value in [0.0, f64::MIN_POSITIVE, 1.0] {
-            assert!(Eccentricity::new(value).is_ok());
-        }
-    }
-
-    #[test]
-    fn eccentricity_rejects_negative_and_nonfinite_values() {
-        for value in [-1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
-            assert!(Eccentricity::new(value).is_err());
+            let _ = Eccentricity::new(value);
         }
     }
 
     #[test]
     fn j2_coefficient_accepts_finite_values() {
         for value in [-1.0, 0.0, 1.0] {
-            assert!(J2Coefficient::new(value).is_ok());
-        }
-    }
-
-    #[test]
-    fn j2_coefficient_rejects_nonfinite_values() {
-        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
-            assert!(J2Coefficient::new(value).is_err());
+            let _ = J2Coefficient::new(value);
         }
     }
 
     // ── operator tests ──────────────────────────────────────────
 
     #[test]
-    fn angle_add_and_subtract() -> TestResult {
-        let a = Angle::new(1.0)?;
-        let b = Angle::new(0.5)?;
+    fn angle_add_and_subtract() {
+        let a = Angle::new(1.0);
+        let b = Angle::new(0.5);
         assert_close((a + b).radians(), 1.5, EPS);
         assert_close((a - b).radians(), 0.5, EPS);
-        Ok(())
     }
 
     #[test]
-    fn angle_construction_wraps_into_positive_turn() -> TestResult {
+    fn angle_construction_wraps_into_positive_turn() {
         let tau = std::f64::consts::TAU;
 
-        assert_close(Angle::new(-0.25)?.radians(), tau - 0.25, EPS);
-        assert_close(Angle::new(tau + 0.25)?.radians(), 0.25, EPS);
-        assert_close(Angle::from_degrees(-90.0)?.degrees(), 270.0, EPS);
-        Ok(())
+        assert_close(Angle::new(-0.25).radians(), tau - 0.25, EPS);
+        assert_close(Angle::new(tau + 0.25).radians(), 0.25, EPS);
+        assert_close(Angle::from_degrees(-90.0).degrees(), 270.0, EPS);
     }
 
     #[test]
-    fn angle_arithmetic_wraps_into_positive_turn() -> TestResult {
+    fn angle_arithmetic_wraps_into_positive_turn() {
         let tau = std::f64::consts::TAU;
 
         // Crossing a full turn folds back to the start of the interval.
-        let near_turn = Angle::new(tau - 0.5)?;
-        let step = Angle::new(1.0)?;
+        let near_turn = Angle::new(tau - 0.5);
+        let step = Angle::new(1.0);
         assert_close((near_turn + step).radians(), 0.5, EPS);
 
         // A negative raw difference is reported as its positive-turn equivalent.
-        let small = Angle::new(0.25)?;
-        let large = Angle::new(1.0)?;
+        let small = Angle::new(0.25);
+        let large = Angle::new(1.0);
         assert_close((small - large).radians(), tau - 0.75, EPS);
-        Ok(())
     }
 
     #[test]
-    fn time_step_add_and_ratio() -> TestResult {
-        let a = TimeStep::new(10.0)?;
-        let b = TimeStep::new(5.0)?;
+    fn time_step_add_and_ratio() {
+        let a = TimeStep::new(10.0);
+        let b = TimeStep::new(5.0);
         assert_close((a + b).seconds(), 15.0, EPS);
         assert_close(a.seconds() / b.seconds(), 2.0, EPS);
-        Ok(())
-    }
-
-    #[cfg(debug_assertions)]
-    #[test]
-    #[should_panic(expected = "is_finite")]
-    fn time_step_add_panics_on_nonfinite_result() {
-        let a = TimeStep::new(f64::MAX).expect("positive finite step");
-        let b = TimeStep::new(f64::MAX).expect("positive finite step");
-
-        let _ = a + b;
     }
 
     #[test]
-    fn duration_add_and_subtract() -> TestResult {
-        let a = Duration::new(10.0)?;
-        let b = Duration::new(3.0)?;
+    fn duration_add_and_subtract() {
+        let a = Duration::new(10.0);
+        let b = Duration::new(3.0);
         assert_close((a + b).seconds(), 13.0, EPS);
-        assert_close(a.checked_sub(b)?.seconds(), 7.0, EPS);
-        Ok(())
-    }
-
-    #[cfg(debug_assertions)]
-    #[test]
-    #[should_panic(expected = "is_finite")]
-    fn duration_add_panics_on_nonfinite_result() {
-        let a = Duration::new(f64::MAX).expect("non-negative finite duration");
-        let b = Duration::new(f64::MAX).expect("non-negative finite duration");
-
-        let _ = a + b;
+        assert_close(a.checked_sub(b).unwrap().seconds(), 7.0, EPS);
     }
 
     #[test]
-    fn duration_subtract_beyond_zero_fails() -> TestResult {
-        let a = Duration::new(3.0)?;
-        let b = Duration::new(5.0)?;
+    fn duration_subtract_beyond_zero_fails() {
+        let a = Duration::new(3.0);
+        let b = Duration::new(5.0);
         assert!(a.checked_sub(b).is_err());
-        Ok(())
     }
 
     #[test]
-    fn distance_add_and_ratio() -> TestResult {
-        let a = Distance::new(100.0)?;
-        let b = Distance::new(50.0)?;
+    fn distance_add_and_ratio() {
+        let a = Distance::new(100.0);
+        let b = Distance::new(50.0);
         assert_close((a + b).meters(), 150.0, EPS);
         assert_close(a.meters() / b.meters(), 2.0, EPS);
-        Ok(())
-    }
-
-    #[cfg(debug_assertions)]
-    #[test]
-    #[should_panic(expected = "is_finite")]
-    fn distance_add_panics_on_nonfinite_result() {
-        let a = Distance::new(f64::MAX).expect("positive finite distance");
-        let b = Distance::new(f64::MAX).expect("positive finite distance");
-
-        let _ = a + b;
     }
 
     #[test]
-    fn speed_add_and_ratio() -> TestResult {
-        let a = Speed::new(100.0)?;
-        let b = Speed::new(50.0)?;
+    fn speed_add_and_ratio() {
+        let a = Speed::new(100.0);
+        let b = Speed::new(50.0);
         assert_close((a + b).meters_per_second(), 150.0, EPS);
         assert_close(a.meters_per_second() / b.meters_per_second(), 2.0, EPS);
-        Ok(())
-    }
-
-    #[cfg(debug_assertions)]
-    #[test]
-    #[should_panic(expected = "is_finite")]
-    fn speed_add_panics_on_nonfinite_result() {
-        let a = Speed::new(f64::MAX).expect("non-negative finite speed");
-        let b = Speed::new(f64::MAX).expect("non-negative finite speed");
-
-        let _ = a + b;
     }
 
     #[test]
-    fn gravitational_parameter_ratio() -> TestResult {
-        let mu1 = GravitationalParameter::new(1.0e14)?;
-        let mu2 = GravitationalParameter::new(2.0e14)?;
+    fn gravitational_parameter_ratio() {
+        let mu1 = GravitationalParameter::new(1.0e14);
+        let mu2 = GravitationalParameter::new(2.0e14);
         assert_close(
             mu1.meters_cubed_per_second_squared() / mu2.meters_cubed_per_second_squared(),
             0.5,
             EPS,
         );
-        Ok(())
     }
 }

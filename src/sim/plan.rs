@@ -109,7 +109,7 @@ impl ScenarioConfig {
             self.sample_every_steps,
         )?;
         let initial_state = circular_initial_state(self.altitude_m, &body)?;
-        let duration = Duration::new(self.duration_s)?;
+        let duration = Duration::new(self.duration_s);
 
         Ok(RolloutPlan {
             initial_state,
@@ -202,7 +202,7 @@ fn propagation_plan(
         });
     }
     Ok(PropagationPlan {
-        dt: TimeStep::new(dt_s)?,
+        dt: TimeStep::new(dt_s),
         integrator,
         dynamics: runtime_dynamics(force_model, body)?,
         sample_every_steps,
@@ -222,7 +222,7 @@ fn runtime_dynamics(
             area_per_mass_m2_kg,
         } => {
             let atmosphere = ExponentialAtmosphere::from_body(body)?;
-            let drag = AtmosphericDrag::new(atmosphere, AreaPerMass::new(*area_per_mass_m2_kg)?);
+            let drag = AtmosphericDrag::new(atmosphere, AreaPerMass::new(*area_per_mass_m2_kg));
             let gravity = OblateBodyGravity::from_body(body)?;
             Ok(RuntimeDynamics::J2Drag(CompositeDynamics::new(
                 gravity, drag,
@@ -246,12 +246,12 @@ fn initial_state(
             true_anomaly_deg,
         } => {
             let elements = ClassicalOrbitalElements::new(
-                Distance::new(*semi_major_axis_m)?,
-                Eccentricity::new(*eccentricity)?,
-                Angle::from_degrees(*inclination_deg)?,
-                Angle::from_degrees(*raan_deg)?,
-                Angle::from_degrees(*arg_periapsis_deg)?,
-                Angle::from_degrees(*true_anomaly_deg)?,
+                Distance::new(*semi_major_axis_m),
+                Eccentricity::new(*eccentricity),
+                Angle::from_degrees(*inclination_deg),
+                Angle::from_degrees(*raan_deg),
+                Angle::from_degrees(*arg_periapsis_deg),
+                Angle::from_degrees(*true_anomaly_deg),
             );
             Ok(elements.to_cartesian_state(body.mu())?)
         }
@@ -262,7 +262,7 @@ fn circular_initial_state(
     altitude_m: f64,
     body: &CentralBody,
 ) -> Result<CartesianState, MissionError> {
-    let orbit = Orbit::circular_equatorial(Distance::new(altitude_m)?);
+    let orbit = Orbit::circular_equatorial(Distance::new(altitude_m));
     Ok(orbit.to_cartesian_state(body)?)
 }
 
@@ -274,7 +274,7 @@ fn termination(
         StopConfig::Apoapsis => Ok(TerminationCondition::apoapsis(mu)),
         StopConfig::Periapsis => Ok(TerminationCondition::periapsis(mu)),
         StopConfig::Duration { duration_s } => {
-            Ok(TerminationCondition::Duration(Duration::new(*duration_s)?))
+            Ok(TerminationCondition::Duration(Duration::new(*duration_s)))
         }
         StopConfig::StepCount { steps } => Ok(TerminationCondition::StepCount(*steps)),
     }
