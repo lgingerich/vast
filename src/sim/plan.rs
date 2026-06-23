@@ -8,7 +8,7 @@ use crate::errors::MissionError;
 use crate::physics::dynamics::{
     AtmosphericDrag, CompositeDynamics, ExponentialAtmosphere, J2Gravity, TwoBodyGravity,
 };
-use crate::physics::elements::ClassicalOrbitalElements;
+use crate::physics::elements::{ClassicalOrbitalElements, OrbitalElements};
 use crate::physics::frame::Frame;
 use crate::physics::orbits::Orbit;
 use crate::physics::state::CartesianState;
@@ -256,7 +256,7 @@ fn initial_state(
                 Angle::from_degrees(*arg_periapsis_deg),
                 Angle::from_degrees(*true_anomaly_deg),
             );
-            Ok(elements.to_cartesian_state(frame)?)
+            Ok(OrbitalElements::Classical(elements).to_cartesian_state(frame)?)
         }
     }
 }

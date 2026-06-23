@@ -231,6 +231,8 @@ impl<D: Dynamics, I: Integrator> SimBuilder<D, I> {
 }
 
 impl<D: Dynamics, I: Integrator> Sim<D, I> {
+    // ---------------- Stepping ----------------
+
     /// Advances the simulation forward by `duration`.
     ///
     /// The final step may be shorter than the configured time step
@@ -270,6 +272,8 @@ impl<D: Dynamics, I: Integrator> Sim<D, I> {
         self.state()
     }
 
+    // ---------------- Queries ----------------
+
     /// Computes and returns the orbital diagnostics for the current state.
     pub fn diagnostics(&self) -> Result<OrbitalDiagnostics, PropagationError> {
         Ok(OrbitalDiagnostics::from_state(&self.state()?, self.mu)?)
@@ -294,6 +298,8 @@ impl<D: Dynamics, I: Integrator> Sim<D, I> {
     pub const fn steps(&self) -> usize {
         self.steps
     }
+
+    // ---------------- Snapshot ----------------
 
     /// Snapshot of the current state, diagnostics, and orbital elements.
     pub fn snapshot(&self) -> Result<SimResult, PropagationError> {

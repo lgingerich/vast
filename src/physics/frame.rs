@@ -81,6 +81,8 @@ impl Frame {
         Self { origin, axes }
     }
 
+    // ---------------- Accessors ----------------
+
     /// Returns the frame's origin.
     pub const fn origin(&self) -> Origin {
         self.origin
@@ -118,6 +120,8 @@ impl Frame {
         }
     }
 
+    // ---------------- Body-Constant Resolution ----------------
+
     /// Returns the central body's gravitational parameter.
     pub fn mu(&self) -> Result<GravitationalParameter, StateError> {
         Ok(self.central_body().ok_or(StateError::InvalidFrame)?.mu())
@@ -144,6 +148,8 @@ impl Frame {
         Ok(self.central_body().ok_or(StateError::InvalidFrame)?.j2())
     }
 
+    // ---------------- Validation ----------------
+
     /// Returns `Ok` when this frame has inertial axes.
     pub fn require_inertial_axes(&self) -> Result<(), StateError> {
         match self.axes {
@@ -151,6 +157,8 @@ impl Frame {
             Axes::BodyFixed(_) => Err(StateError::InvalidAxes),
         }
     }
+
+    // ---------------- Named Frames ----------------
 
     /// The Earth-centered inertial frame: origin at Earth's center of mass with
     /// J2000 mean equator and equinox axes.

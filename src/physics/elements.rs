@@ -1,5 +1,3 @@
-use std::fmt;
-
 use nalgebra::Vector3;
 
 use super::frame::Frame;
@@ -30,6 +28,20 @@ impl OrbitalElementClassification {
             circular_eccentricity_tolerance,
             equatorial_inclination_tolerance,
         }
+    }
+
+    /// Eccentricities at or below this value are treated as circular.
+    #[inline]
+    #[must_use]
+    pub const fn circular_eccentricity_tolerance(self) -> Eccentricity {
+        self.circular_eccentricity_tolerance
+    }
+
+    /// Inclinations within this angle of 0 or pi are treated as equatorial.
+    #[inline]
+    #[must_use]
+    pub const fn equatorial_inclination_tolerance(self) -> Angle {
+        self.equatorial_inclination_tolerance
     }
 }
 
@@ -121,6 +133,8 @@ pub struct EquatorialEllipticElements {
 }
 
 impl OrbitalElements {
+    // ---------------- Construction ----------------
+
     /// Computes bound two-body orbital elements from an inertial Cartesian state.
     ///
     /// `classification` controls when singular-safe variants are used instead
@@ -218,6 +232,8 @@ impl OrbitalElements {
         }
     }
 
+    // ---------------- Queries ----------------
+
     /// Returns the orbital phase angle used for apoapsis and periapsis detection.
     #[must_use]
     pub fn orbital_phase_angle(&self) -> Angle {
@@ -231,18 +247,51 @@ impl OrbitalElements {
 
     /// Builds an inertial Cartesian state from any bound orbital-element variant.
     ///
-    /// Singular-safe variants are converted using the same conventional angles
-    /// used when classifying them: circular inclined uses argument of latitude,
-    /// circular equatorial uses true longitude, and eccentric equatorial uses
-    /// longitude of periapsis.
+    /// Each variant maps onto the canonical `(RAAN, argument of periapsis, true
+    /// anomaly)` triple used by the perifocal-to-inertial transform: angles that
+    /// are undefined for a singular variant are set to zero, and the variant's
+    /// defined in-plane angle (argument of latitude, true longitude, or longitude
+    /// of periapsis) takes the corresponding slot.
     pub fn to_cartesian_state(self, frame: &Frame) -> Result<CartesianState, StateError> {
+        frame.require_inertial_axes()?;
+        let (raan, argument_of_periapsis, true_anomaly) = self.canonical_angles();
+        EllipticElementSet::new(
+            self.semi_major_axis(),
+            self.eccentricity(),
+            frame.mu()?,
+            self.inclination(),
+            raan,
+            argument_of_periapsis,
+            true_anomaly,
+        )?
+        .to_cartesian_state()
+    }
+
+    /// Maps a variant onto the `(RAAN, argument of periapsis, true anomaly)` triple
+    /// expected by [`EllipticElementSet`].
+    ///
+    /// Undefined angles are zeroed by convention; the variant's defined in-plane
+    /// angle fills the true-anomaly slot (or, for `EquatorialElliptic`, the
+    /// argument-of-periapsis slot with true anomaly kept separate).
+    #[inline]
+    const fn canonical_angles(self) -> (Angle, Angle, Angle) {
         match self {
-            Self::Classical(elements) => elements.to_cartesian_state(frame),
-            Self::CircularInclined(elements) => elements.to_cartesian_state(frame),
-            Self::CircularEquatorial(elements) => elements.to_cartesian_state(frame),
-            Self::EquatorialElliptic(elements) => elements.to_cartesian_state(frame),
+            Self::Classical(e) => (
+                e.right_ascension_of_ascending_node,
+                e.argument_of_periapsis,
+                e.true_anomaly,
+            ),
+            Self::CircularInclined(e) => (
+                e.right_ascension_of_ascending_node,
+                Angle::ZERO,
+                e.argument_of_latitude,
+            ),
+            Self::CircularEquatorial(e) => (Angle::ZERO, Angle::ZERO, e.true_longitude),
+            Self::EquatorialElliptic(e) => (Angle::ZERO, e.longitude_of_periapsis, e.true_anomaly),
         }
     }
+
+    // ---------------- Common Accessors ----------------
 
     /// Semi-major axis (common to all bound-element variants).
     #[inline]
@@ -290,64 +339,6 @@ impl OrbitalElements {
     }
 }
 
-impl fmt::Display for OrbitalElements {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let a_km = self.semi_major_axis().meters() / 1000.0;
-        let e = self.eccentricity().scalar();
-        let i_deg = self.inclination().degrees();
-        match self {
-            Self::Classical(el) => {
-                write!(
-                    f,
-                    "classical: a = {:.3} km | e = {:.9} | i = {:.3}° | RAAN = {:.3}° | \
-                     arg periapsis = {:.3}° | true anomaly = {:.3}°",
-                    a_km,
-                    e,
-                    i_deg,
-                    el.right_ascension_of_ascending_node().degrees(),
-                    el.argument_of_periapsis().degrees(),
-                    el.true_anomaly().degrees(),
-                )
-            }
-            Self::CircularInclined(el) => {
-                write!(
-                    f,
-                    "circular inclined: a = {:.3} km | e = {:.9} | i = {:.3}° | \
-                     RAAN = {:.3}° | argument of latitude = {:.3}°",
-                    a_km,
-                    e,
-                    i_deg,
-                    el.right_ascension_of_ascending_node().degrees(),
-                    el.argument_of_latitude().degrees(),
-                )
-            }
-            Self::CircularEquatorial(el) => {
-                write!(
-                    f,
-                    "circular equatorial: a = {:.3} km | e = {:.9} | i = {:.3}° | \
-                     true longitude = {:.3}°",
-                    a_km,
-                    e,
-                    i_deg,
-                    el.true_longitude().degrees(),
-                )
-            }
-            Self::EquatorialElliptic(el) => {
-                write!(
-                    f,
-                    "equatorial elliptic: a = {:.3} km | e = {:.9} | i = {:.3}° | \
-                     longitude of periapsis = {:.3}° | true anomaly = {:.3}°",
-                    a_km,
-                    e,
-                    i_deg,
-                    el.longitude_of_periapsis().degrees(),
-                    el.true_anomaly().degrees(),
-                )
-            }
-        }
-    }
-}
-
 impl ClassicalOrbitalElements {
     /// Creates a classical orbital-element set from domain quantities.
     #[inline]
@@ -367,24 +358,6 @@ impl ClassicalOrbitalElements {
             argument_of_periapsis,
             true_anomaly,
         }
-    }
-
-    /// Builds an inertial Cartesian state from classical Keplerian elements.
-    ///
-    /// Returns an error if the orbital parameters are physically invalid or
-    /// a computed quantity is non-finite.
-    pub fn to_cartesian_state(self, frame: &Frame) -> Result<CartesianState, StateError> {
-        frame.require_inertial_axes()?;
-        EllipticElementSet::new(
-            self.semi_major_axis,
-            self.eccentricity,
-            frame.mu()?,
-            self.inclination,
-            self.right_ascension_of_ascending_node,
-            self.argument_of_periapsis,
-            self.true_anomaly,
-        )?
-        .to_cartesian_state()
     }
 
     /// Returns the semi-major axis.
@@ -443,27 +416,6 @@ impl CircularInclinedElements {
         }
     }
 
-    /// Builds an inertial Cartesian state from circular inclined elements.
-    ///
-    /// Argument of latitude is used as the in-plane angle; argument of
-    /// periapsis is set to zero by convention.
-    ///
-    /// Returns an error if the orbital parameters are physically invalid or
-    /// a computed quantity is non-finite.
-    pub fn to_cartesian_state(self, frame: &Frame) -> Result<CartesianState, StateError> {
-        frame.require_inertial_axes()?;
-        EllipticElementSet::new(
-            self.semi_major_axis,
-            self.eccentricity,
-            frame.mu()?,
-            self.inclination,
-            self.right_ascension_of_ascending_node,
-            Angle::ZERO,
-            self.argument_of_latitude,
-        )?
-        .to_cartesian_state()
-    }
-
     /// Returns the semi-major axis.
     #[inline]
     pub const fn semi_major_axis(&self) -> Distance {
@@ -512,27 +464,6 @@ impl CircularEquatorialElements {
         }
     }
 
-    /// Builds an inertial Cartesian state from circular equatorial elements.
-    ///
-    /// True longitude is used as the in-plane angle; both RAAN and argument
-    /// of periapsis are set to zero by convention.
-    ///
-    /// Returns an error if the orbital parameters are physically invalid or
-    /// a computed quantity is non-finite.
-    pub fn to_cartesian_state(self, frame: &Frame) -> Result<CartesianState, StateError> {
-        frame.require_inertial_axes()?;
-        EllipticElementSet::new(
-            self.semi_major_axis,
-            self.eccentricity,
-            frame.mu()?,
-            self.inclination,
-            Angle::ZERO,
-            Angle::ZERO,
-            self.true_longitude,
-        )?
-        .to_cartesian_state()
-    }
-
     /// Returns the semi-major axis.
     #[inline]
     pub const fn semi_major_axis(&self) -> Distance {
@@ -575,27 +506,6 @@ impl EquatorialEllipticElements {
             longitude_of_periapsis,
             true_anomaly,
         }
-    }
-
-    /// Builds an inertial Cartesian state from eccentric equatorial elements.
-    ///
-    /// Longitude of periapsis is used as the argument of periapsis; RAAN is
-    /// set to zero by convention.
-    ///
-    /// Returns an error if the orbital parameters are physically invalid or
-    /// a computed quantity is non-finite.
-    pub fn to_cartesian_state(self, frame: &Frame) -> Result<CartesianState, StateError> {
-        frame.require_inertial_axes()?;
-        EllipticElementSet::new(
-            self.semi_major_axis,
-            self.eccentricity,
-            frame.mu()?,
-            self.inclination,
-            Angle::ZERO,
-            self.longitude_of_periapsis,
-            self.true_anomaly,
-        )?
-        .to_cartesian_state()
     }
 
     /// Returns the semi-major axis.
@@ -1107,7 +1017,7 @@ mod tests {
             Angle::new(1.2),
         );
 
-        let state = elements.to_cartesian_state(&frame())?;
+        let state = OrbitalElements::Classical(elements).to_cartesian_state(&frame())?;
         let recovered =
             OrbitalElements::from_state(&state, mu, OrbitalElementClassification::default())?;
         let OrbitalElements::Classical(recovered) = recovered else {
@@ -1148,7 +1058,7 @@ mod tests {
             Angle::new(1.2),
         );
 
-        let state = elements.to_cartesian_state(&frame())?;
+        let state = OrbitalElements::CircularInclined(elements).to_cartesian_state(&frame())?;
         let recovered =
             OrbitalElements::from_state(&state, mu, OrbitalElementClassification::default())?;
         let OrbitalElements::CircularInclined(recovered) = recovered else {
@@ -1178,7 +1088,7 @@ mod tests {
             Angle::new(1.2),
         );
 
-        let state = elements.to_cartesian_state(&frame())?;
+        let state = OrbitalElements::CircularEquatorial(elements).to_cartesian_state(&frame())?;
         let recovered =
             OrbitalElements::from_state(&state, mu, OrbitalElementClassification::default())?;
         let OrbitalElements::CircularEquatorial(recovered) = recovered else {
@@ -1209,7 +1119,7 @@ mod tests {
             Angle::new(1.2),
         );
 
-        let state = elements.to_cartesian_state(&frame())?;
+        let state = OrbitalElements::EquatorialElliptic(elements).to_cartesian_state(&frame())?;
         let recovered =
             OrbitalElements::from_state(&state, mu, OrbitalElementClassification::default())?;
         let OrbitalElements::EquatorialElliptic(recovered) = recovered else {

@@ -26,7 +26,6 @@ impl TwoBodyGravity {
     }
 
     /// Creates a point-mass gravity model from a frame's central body.
-    #[inline]
     pub fn from_frame(frame: &Frame) -> Result<Self, StateError> {
         frame.require_inertial_axes()?;
         Ok(Self { mu: frame.mu()? })
@@ -69,7 +68,6 @@ impl J2Gravity {
     ///
     /// Returns [`NumericalError::ConstraintViolation`] if the frame's body has no J2
     /// coefficient (point-mass only).
-    #[inline]
     pub fn from_frame(frame: &Frame) -> Result<Self, StateError> {
         frame.require_inertial_axes()?;
         let Some(j2) = frame.j2()? else {
@@ -142,7 +140,6 @@ impl ExponentialAtmosphere {
     ///
     /// Returns [`NumericalError::ConstraintViolation`] if the frame's body has no
     /// atmosphere.
-    #[inline]
     pub fn from_frame(frame: &Frame) -> Result<Self, StateError> {
         frame.require_inertial_axes()?;
         let Some(body) = frame.central_body() else {
@@ -214,7 +211,6 @@ impl AtmosphericDrag {
     }
 
     /// Returns the atmosphere model.
-    #[inline]
     pub const fn atmosphere(&self) -> &ExponentialAtmosphere {
         &self.atmosphere
     }
@@ -244,13 +240,11 @@ impl<A, B> CompositeDynamics<A, B> {
     }
 
     /// Returns a reference to the first dynamics model.
-    #[inline]
     pub const fn first(&self) -> &A {
         &self.first
     }
 
     /// Returns a reference to the second dynamics model.
-    #[inline]
     pub const fn second(&self) -> &B {
         &self.second
     }
@@ -332,6 +326,7 @@ impl ExponentialAtmosphere {
     /// Computes atmospheric density at `radius`.
     ///
     /// Returns an error if the computed density is non-finite.
+    #[inline]
     pub fn density_at_radius(&self, radius: Distance) -> Result<MassDensity, NumericalError> {
         let radius_m = radius.meters();
         let altitude_m = radius_m - self.reference_radius.meters();

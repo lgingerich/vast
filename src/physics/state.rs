@@ -133,6 +133,8 @@ pub struct CartesianStateBuffer<const N: usize> {
 }
 
 impl<const N: usize> CartesianStateBuffer<N> {
+    // ---------------- Construction & Capacity ----------------
+
     /// Creates a buffer with no active bodies.
     #[inline]
     pub const fn new() -> Self {
@@ -182,6 +184,8 @@ impl<const N: usize> CartesianStateBuffer<N> {
         Ok(())
     }
 
+    // ---------------- Views ----------------
+
     /// Returns an immutable borrowed state view.
     pub fn view(&self) -> CartesianStates<'_> {
         CartesianStates {
@@ -205,6 +209,8 @@ impl<const N: usize> CartesianStateBuffer<N> {
             vel_z: &mut self.vel_z[..self.len],
         }
     }
+
+    // ---------------- Typed I/O ----------------
 
     /// Writes a typed Cartesian state into the active body at `index`.
     pub fn write_from_state(

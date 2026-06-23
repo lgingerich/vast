@@ -67,7 +67,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "h direction: [{:.6}, {:.6}, {:.6}]",
         h_hat.x, h_hat.y, h_hat.z,
     );
-    println!("{}", result.elements);
+    println!("{:?}", result.elements);
 
     Ok(())
 }

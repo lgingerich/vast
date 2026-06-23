@@ -99,6 +99,8 @@ pub struct OrbitalDiagnostics {
 }
 
 impl OrbitalDiagnostics {
+    // ---------------- Construction ----------------
+
     /// Computes two-body diagnostics from an inertial Cartesian state.
     ///
     /// Returns an error if the position is at the origin or a computed
@@ -176,6 +178,8 @@ impl OrbitalDiagnostics {
             apoapsis_radius,
         })
     }
+
+    // ---------------- Getters ----------------
 
     /// Returns the current radius from the central body's center of mass.
     #[inline]
@@ -368,8 +372,8 @@ mod tests {
     use super::*;
     use crate::physics::frame::Frame;
     use crate::{
-        Angle, CartesianStateBuffer, ClassicalOrbitalElements, Eccentricity, MU_EARTH, Position,
-        R_EARTH, Velocity,
+        Angle, CartesianStateBuffer, ClassicalOrbitalElements, Eccentricity, MU_EARTH,
+        OrbitalElements, Position, R_EARTH, Velocity,
     };
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -387,7 +391,7 @@ mod tests {
             Angle::ZERO,
             Angle::ZERO,
         );
-        Ok(elements.to_cartesian_state(&Frame::earth_inertial())?)
+        Ok(OrbitalElements::Classical(elements).to_cartesian_state(&Frame::earth_inertial())?)
     }
 
     fn earth_mu() -> Result<GravitationalParameter, Box<dyn std::error::Error>> {
