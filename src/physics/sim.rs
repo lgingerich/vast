@@ -3,10 +3,39 @@ use crate::physics::body::CentralBody;
 use crate::physics::diagnostics::{DiagnosticSeries, OrbitalDiagnostics};
 use crate::physics::dynamics::Dynamics;
 use crate::physics::elements::{OrbitalElementClassification, OrbitalElements};
+use crate::physics::frame::Frame;
 use crate::physics::integrators::Integrator;
 use crate::physics::orbits::Orbit;
 use crate::physics::state::{CartesianState, CartesianStateBuffer};
 use crate::physics::types::{Duration, Epoch, GravitationalParameter, TimeStep};
+
+// new
+#[expect(
+    dead_code,
+    reason = "Simulation is being staged; not yet wired to public builders."
+)]
+pub struct Simulation<D: Dynamics, I: Integrator> {
+    states: CartesianStateBuffer<1>,
+    frame: Frame,
+    dynamics: D,
+    integrator: I,
+    epoch: Epoch,
+    steps: usize,
+}
+
+/*
+
+Orbit + Frame  --(Orbit::to_cartesian_state)-->  CartesianState  --(builder)-->  CartesianStateBuffer<1>  -->  Simulation
+
+Simulation
+ ├── Initial State
+ ├── Frame
+ |   ├── Origin
+ |   └── Axes
+ ├── Force Models 
+ └── Integrator
+
+ */
 
 /// Propagates a single-body state for a fixed duration with a given
 /// dynamics/integrator pair.

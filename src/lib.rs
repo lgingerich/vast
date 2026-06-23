@@ -19,12 +19,12 @@ pub use physics::{
         CircularEquatorialElements, CircularInclinedElements, ClassicalOrbitalElements,
         EquatorialEllipticElements, OrbitalElementClassification, OrbitalElements,
     },
+    frame::{Axes, BodyId, Frame, Origin},
     integrators::{
         EulerIntegrator, Integrator, LeapfrogIntegrator, RungeKutta4Integrator,
         VelocityVerletIntegrator,
     },
     orbits::Orbit,
-    orbits::OrbitDirection,
     sim::{Sim, SimBuilder, SimResult},
     state::{
         CartesianState, CartesianStateBuffer, CartesianStateComponents, CartesianStates,
@@ -32,7 +32,8 @@ pub use physics::{
     },
     types::{
         Acceleration, Angle, AngularRate, AreaPerMass, Distance, Duration, Eccentricity, Epoch,
-        GravitationalParameter, J2Coefficient, MassDensity, Position, Speed, TimeStep, Velocity,
+        EquatorialRadius, GravitationalParameter, J2Coefficient, MassDensity, Position,
+        RotationRate, Speed, TimeStep, Velocity,
     },
 };
 

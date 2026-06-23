@@ -44,12 +44,10 @@ not copy TigerBeetle-specific constraints blindly.
 - Stay in scope. Only modify files and code directly related to the current task.
 - Do not refactor, rename, reformat, or reorganize unrelated code. Mention worthwhile follow-ups instead of making them.
 - Ask before big changes that restructure existing code, remove behavior, change public APIs, or alter project conventions.
-- Do not preserve backwards compatibility for internal Rust APIs unless the user
-  explicitly asks. When an internal API needs different semantics, update the
-  existing method/type directly and migrate call sites.
-- Do not add parallel helper methods such as `*_trusted`, `*_unchecked`, or
-  alternate constructors merely to avoid changing existing internal callers.
-  Prefer one clear method with the correct invariant boundary.
+- Do not preserve backwards compatibility for internal Rust APIs unless the user explicitly asks. When an internal API needs
+  different semantics, update the existing method/type directly and migrate call sites.
+- Do not add parallel helper methods such as `*_trusted`, `*_unchecked`, or alternate constructors merely to avoid changing 
+  existing internal callers. Prefer one clear method with the correct invariant boundary.
 - Admit uncertainty before it costs the user. If a fact, version, API, or approach is uncertain, say so before relying on it.
 - Before destructive or irreversible actions, explain the impact and wait for explicit confirmation.
 
@@ -100,9 +98,6 @@ not copy TigerBeetle-specific constraints blindly.
 
 - Enforce invariants at boundaries: public constructors, domain-type arithmetic,
   and before returning new simulation state.
-- Prefer `Result`-returning constructors with typed errors (`NumericalError`)
-  over panics. Use `debug_assert!` for debug-only backstops, not as the primary
-  enforcement mechanism.
 - Internal physics values should be valid by construction. Do not introduce
   extra "trusted" or "unchecked" method variants to route around validation.
   Instead, move the invariant boundary into the existing constructor/accessor or
@@ -122,15 +117,6 @@ not copy TigerBeetle-specific constraints blindly.
     Add a shortcut only when the existing method cannot own the invariant
     cleanly, and document why a second method is unavoidable. This should be
     rare; replacing the existing method is usually preferred.
-- Split unrelated assertions over compound assertions:
-
-  ```rust
-  debug_assert!(x_m.is_finite());
-  debug_assert!(x_m >= 0.0);
-  ```
-
-- Assert positive space directly when possible. Prefer `radius_m > 0.0` over
-  `!(radius_m <= 0.0)`.
 - Do not use `unwrap()`, `expect()`, `panic!()`, or `assert!()` in library code.
   `debug_assert!` in conjunction with `_unchecked` constructors is the only
   exception.
@@ -148,11 +134,6 @@ not copy TigerBeetle-specific constraints blindly.
   values inside an implementation where introducing a new domain type would not
   clarify ownership or invariants. Do not use unit suffixes for public fields,
   function parameters, or reusable domain APIs.
-- Keep coordinate systems explicit in type names and docs. Today the core uses
-  `CartesianState`; related representations such as Keplerian elements,
-  circular orbits, geodetic coordinates, body-fixed frames, or inertial frames
-  should own their own invariants and conversions when they become active
-  concepts.
 - Do not hide coordinate conversions inside unrelated algorithms. Make frame and
   unit changes visible at the call site or in clearly named conversion methods.
 
@@ -173,18 +154,11 @@ not copy TigerBeetle-specific constraints blindly.
 - Use `CartesianStateBuffer`, `CartesianStates`, and `CartesianStatesMut` as the
   core dense Cartesian state storage path. The internal layout is SoA for batched
   stepping, but public names should remain domain-oriented.
-- Keep `CartesianState` as a boundary type for orbit construction, tests,
-  diagnostics, and readable single-body setup. Do not use it as the core hot-loop
-  storage path when stepping simulations.
 - Integrators should implement indexed stepping over `CartesianStatesMut` and
   remain allocation-free.
 - State storage should enforce validity when data enters the buffer, then expose
   one internal read path that trusts stored values. Do not stack read-time
   validation, "trusted" variants, and scalar bypass methods for the same data.
-- Prefer `VelocityVerletIntegrator` or `LeapfrogIntegrator` for long orbital
-  rollouts with position-dependent conservative dynamics. Use RK4 for
-  comparison, controls, thrust, drag, or other dissipative/non-conservative
-  effects.
 - Do not claim mutual N-body or coupled dynamics readiness until stepping uses a
   read-old/write-new state split or another deterministic update strategy.
 

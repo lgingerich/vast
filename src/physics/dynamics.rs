@@ -756,12 +756,13 @@ mod tests {
 
     #[test]
     fn drag_decay_energy_loss_matches_physical_expectation() -> TestResult {
-        let body = CentralBody::earth()?;
+        // let body = CentralBody::earth()?;
+        let frame = Frame::earth_inertial();
         let mu = body.mu();
         let altitude_m = 250_000.0;
         let orbit = Orbit::circular_equatorial(Distance::new(altitude_m));
         let mut states = CartesianStateBuffer::<1>::with_len(1)?;
-        states.write_from_state(0, &orbit.to_cartesian_state(&body)?)?;
+        states.write_from_state(0, &orbit.to_cartesian_state(&frame)?)?;
         let initial_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
             .specific_energy()
             .square_meters_per_square_second();

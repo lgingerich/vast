@@ -21,6 +21,31 @@ pub const R_EARTH: f64 = 6378137.0;
 /// <https://earth-info.nga.mil/index.php?dir=wgs84&action=wgs84#egm2008>
 pub const J2_EARTH: f64 = 1.08262668e-3;
 
+/// Moon's standard gravitational parameter in cubic meters per second squared.
+///
+/// DE440 planetary ephemeris value.
+pub const MU_MOON: f64 = 4.902800236e12;
+
+/// Moon's mean equatorial radius in meters.
+///
+/// IAU 2015 mean lunar radius.
+pub const R_MOON: f64 = 1737.4e3;
+
+/// Moon's second zonal harmonic coefficient, dimensionless.
+///
+/// LP150Q gravity-field value, fully normalized.
+pub const J2_MOON: f64 = 2.03215648e-4;
+
+/// Earth's sidereal rotation rate in radians per second.
+///
+/// WGS 84 value: 2π / 86_164.0905 s.
+pub const EARTH_ANGULAR_RATE_RAD_S: f64 = 7.292_115_146_706_979e-5;
+
+/// Moon's sidereal rotation rate in radians per second.
+///
+/// Equal to the Moon's mean orbital motion: 2π / 27.321661 sidereal days.
+pub const MOON_ANGULAR_RATE_RAD_S: f64 = 2.661_743_784_033_667e-6;
+
 /// Default tolerance for classifying an orbit as circular, dimensionless.
 ///
 /// Chosen an order of magnitude above the cancellation floor of the
@@ -37,7 +62,7 @@ pub const DEFAULT_CIRCULAR_ECCENTRICITY_TOLERANCE: f64 = 1.0e-6;
 /// The unit angular-momentum vector `ĥ = (r × v) / ‖r × v‖` is computed from
 /// a ratio of similar-magnitude quantities, so `acos(ĥ_z)` retains
 /// near-full precision without the cancellation loss that eccentricity
-/// suffers.  At 1e-10 rad the node-line direction is still numerically
+/// suffers.  At 1e-10 rad the node-line direction is still numerically
 /// stable; tolerances larger than this would unnecessarily discard RAAN for
 /// orbits that the arithmetic resolves.
 pub const DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE_RAD: f64 = 1.0e-10;

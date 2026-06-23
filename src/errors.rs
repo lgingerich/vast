@@ -48,6 +48,12 @@ pub enum StateError {
     /// A requested active length exceeded the storage capacity.
     #[error("active state length exceeds storage capacity")]
     InvalidLength,
+    /// The frame is invalid.
+    #[error("frame is invalid")]
+    InvalidFrame,
+    /// The frame axes are invalid.
+    #[error("frame axes are invalid")]
+    InvalidAxes,
 }
 
 /// Errors produced during propagation.

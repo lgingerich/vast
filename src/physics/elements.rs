@@ -4,7 +4,7 @@ use nalgebra::Vector3;
 
 use super::state::CartesianState;
 use super::types::{Angle, Distance, Eccentricity, GravitationalParameter, Position, Velocity};
-use crate::errors::NumericalError;
+use crate::errors::{NumericalError, StateError};
 
 /// Policy for classifying singular orbital-element cases.
 ///
@@ -377,17 +377,15 @@ impl ClassicalOrbitalElements {
     /// a computed quantity is non-finite.
     pub fn to_cartesian_state(
         self,
-        mu: GravitationalParameter,
     ) -> Result<CartesianState, NumericalError> {
         EllipticElementSet::new(
             self.semi_major_axis,
             self.eccentricity,
-            mu,
+            self.mu,
             self.inclination,
             self.right_ascension_of_ascending_node,
             self.argument_of_periapsis,
             self.true_anomaly,
-            1.0,
         )?
         .to_cartesian_state()
     }
@@ -467,7 +465,6 @@ impl CircularInclinedElements {
             self.right_ascension_of_ascending_node,
             Angle::ZERO,
             self.argument_of_latitude,
-            1.0,
         )?
         .to_cartesian_state()
     }
@@ -539,7 +536,6 @@ impl CircularEquatorialElements {
             Angle::ZERO,
             Angle::ZERO,
             self.true_longitude,
-            1.0,
         )?
         .to_cartesian_state()
     }
@@ -607,7 +603,6 @@ impl EquatorialEllipticElements {
             Angle::ZERO,
             self.longitude_of_periapsis,
             self.true_anomaly,
-            1.0,
         )?
         .to_cartesian_state()
     }
@@ -651,7 +646,6 @@ pub(super) struct EllipticElementSet {
     right_ascension_of_ascending_node: Angle,
     argument_of_periapsis: Angle,
     true_anomaly: Angle,
-    velocity_sign: f64,
 }
 
 impl EllipticElementSet {
@@ -664,7 +658,6 @@ impl EllipticElementSet {
         right_ascension_of_ascending_node: Angle,
         argument_of_periapsis: Angle,
         true_anomaly: Angle,
-        velocity_sign: f64,
     ) -> Result<Self, NumericalError> {
         if eccentricity.scalar() >= 1.0 {
             return Err(NumericalError::ConstraintViolation {
@@ -677,11 +670,6 @@ impl EllipticElementSet {
                 field: "semi-major axis",
             });
         }
-        if !velocity_sign.is_finite() {
-            return Err(NumericalError::NotFinite {
-                field: "velocity sign",
-            });
-        }
         Ok(Self {
             semi_major_axis,
             eccentricity,
@@ -690,18 +678,17 @@ impl EllipticElementSet {
             right_ascension_of_ascending_node,
             argument_of_periapsis,
             true_anomaly,
-            velocity_sign,
         })
     }
 
-    pub(crate) fn to_cartesian_state(&self) -> Result<CartesianState, NumericalError> {
+    pub(crate) fn to_cartesian_state(&self) -> Result<CartesianState, StateError>{
         let mu = self.mu.meters_cubed_per_second_squared();
         let semi_major_axis = self.semi_major_axis.meters();
         let eccentricity = self.eccentricity.scalar();
         let true_anomaly = self.true_anomaly.radians();
 
         // Invariants guaranteed by EllipticElementSet::new:
-        // eccentricity ∈ [0, 1), semi_major_axis > 0, velocity_sign is finite.
+        // eccentricity ∈ [0, 1), semi_major_axis > 0.
         // Together these imply semi_latus_rectum > 0 and radius > 0.
 
         let semi_latus_rectum = semi_major_axis * (1.0 - eccentricity * eccentricity);
@@ -712,8 +699,8 @@ impl EllipticElementSet {
         let position_pqw = Vector3::new(radius * cos_nu, radius * sin_nu, 0.0);
         let speed_factor = (mu / semi_latus_rectum).sqrt();
         let velocity_pqw = Vector3::new(
-            -speed_factor * sin_nu * self.velocity_sign,
-            speed_factor * (eccentricity + cos_nu) * self.velocity_sign,
+            -speed_factor * sin_nu,
+            speed_factor * (eccentricity + cos_nu),
             0.0,
         );
 
@@ -809,7 +796,6 @@ mod tests {
             raan,
             Angle::ZERO,
             Angle::new(0.4),
-            crate::physics::orbits::OrbitDirection::Prograde,
         ))
     }
 

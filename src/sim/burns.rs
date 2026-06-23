@@ -1,7 +1,6 @@
 use crate::errors::{MissionError, NumericalError, PropagationError};
-use crate::physics::maneuvers::{circularize_delta_v, prograde_delta_v};
 use crate::physics::state::CartesianState;
-use crate::physics::types::{GravitationalParameter, Velocity};
+use crate::physics::types::Velocity;
 use nalgebra::Vector3;
 
 /// Runtime impulsive burn command applied at a step boundary.
@@ -38,20 +37,7 @@ impl BurnCommand {
         Self::Circularize
     }
 
-    pub(crate) fn apply_to(
-        self,
-        state: CartesianState,
-        mu: GravitationalParameter,
-    ) -> Result<CartesianState, MissionError> {
-        let delta_v = match self {
-            Self::Inertial(delta_v_mps) => {
-                Velocity::from_vector(Vector3::new(delta_v_mps[0], delta_v_mps[1], delta_v_mps[2]))
-            }
-            Self::Prograde(delta_v_mps) => prograde_delta_v(delta_v_mps, &state)?,
-            Self::Circularize => circularize_delta_v(&state, mu)?,
-        };
-        apply_delta_v(state, delta_v).map_err(MissionError::from)
-    }
+
 }
 
 fn apply_delta_v(

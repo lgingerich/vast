@@ -117,6 +117,48 @@ impl AngularRate {
     }
 }
 
+/// Body rotation rate, measured in radians per second.
+///
+/// Positive values are prograde about the body's rotation axis; negative values
+/// represent retrograde rotation.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub struct RotationRate(f64);
+
+impl RotationRate {
+    /// Creates a rotation rate from radians per second.
+    ///
+    /// Panics in debug builds if the input is not finite.
+    pub fn new(value: f64) -> Self {
+        debug_assert!(value.is_finite(), "rotation rate must be finite");
+        Self(value)
+    }
+
+    /// Returns this rotation rate in radians per second.
+    #[inline]
+    pub const fn radians_per_second(self) -> f64 {
+        self.0
+    }
+
+    /// Returns this rotation rate in degrees per day.
+    #[inline]
+    pub const fn degrees_per_day(self) -> f64 {
+        self.0.to_degrees() * 86_400.0
+    }
+
+    /// Earth's sidereal rotation rate.
+    #[inline]
+    pub const fn earth() -> Self {
+        Self(crate::physics::constants::EARTH_ANGULAR_RATE_RAD_S)
+    }
+
+    /// Moon's sidereal rotation rate.
+    #[inline]
+    pub const fn moon() -> Self {
+        Self(crate::physics::constants::MOON_ANGULAR_RATE_RAD_S)
+    }
+}
+
 /// Instant in simulation time, measured in seconds from the simulation epoch.
 ///
 /// `Epoch` represents an absolute point on the simulation timeline.
@@ -318,6 +360,54 @@ impl Add for Distance {
     }
 }
 
+/// Equatorial radius of a body, measured in meters.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub struct EquatorialRadius(f64);
+
+impl EquatorialRadius {
+    /// Creates an equatorial radius from meters.
+    ///
+    /// Panics in debug builds if the input is not finite or not positive.
+    pub fn new(value: f64) -> Self {
+        debug_assert!(value.is_finite(), "equatorial radius must be finite");
+        debug_assert!(value > 0.0, "equatorial radius must be positive");
+        Self(value)
+    }
+
+    /// Returns this equatorial radius in meters.
+    #[inline]
+    pub const fn meters(self) -> f64 {
+        self.0
+    }
+
+    /// Earth's equatorial radius.
+    #[inline]
+    pub const fn earth() -> Self {
+        Self(crate::physics::constants::R_EARTH)
+    }
+
+    /// Moon's equatorial radius.
+    #[inline]
+    pub const fn moon() -> Self {
+        Self(crate::physics::constants::R_MOON)
+    }
+}
+
+impl Add<Distance> for EquatorialRadius {
+    type Output = Distance;
+    fn add(self, rhs: Distance) -> Distance {
+        Distance::new(self.meters() + rhs.meters())
+    }
+}
+
+impl Sub<Distance> for EquatorialRadius {
+    type Output = Distance;
+    fn sub(self, rhs: Distance) -> Distance {
+        Distance::new(self.meters() - rhs.meters())
+    }
+}
+
 /// Mass density, measured in kilograms per cubic meter.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
@@ -409,16 +499,6 @@ impl Add for Speed {
 pub struct GravitationalParameter(f64);
 
 impl GravitationalParameter {
-    /// Earth's standard gravitational parameter (3.986004418e14 m³/s²).
-    ///
-    /// Convenience constructor. Equivalent to
-    /// `GravitationalParameter::new(MU_EARTH)` but infallible because the
-    /// constant is trivially valid.
-    #[inline]
-    pub const fn earth() -> Self {
-        Self(crate::physics::constants::MU_EARTH)
-    }
-
     /// Creates a positive gravitational parameter from cubic meters per second squared.
     ///
     /// Panics in debug builds if the input is not finite or not positive.
@@ -432,6 +512,26 @@ impl GravitationalParameter {
     #[inline]
     pub const fn meters_cubed_per_second_squared(self) -> f64 {
         self.0
+    }
+
+    /// Earth's standard gravitational parameter.
+    ///
+    /// Convenience constructor. Equivalent to
+    /// `GravitationalParameter::new(MU_EARTH)` but infallible because the
+    /// constant is trivially valid.
+    #[inline]
+    pub const fn earth() -> Self {
+        Self(crate::physics::constants::MU_EARTH)
+    }
+
+    /// Moon's standard gravitational parameter.
+    ///
+    /// Convenience constructor. Equivalent to
+    /// `GravitationalParameter::new(MU_MOON)` but infallible because the
+    /// constant is trivially valid.
+    #[inline]
+    pub const fn moon() -> Self {
+        Self(crate::physics::constants::MU_MOON)
     }
 }
 
@@ -453,6 +553,26 @@ impl J2Coefficient {
     #[inline]
     pub const fn scalar(self) -> f64 {
         self.0
+    }
+
+    /// Earth's second zonal harmonic coefficient, dimensionless.
+    ///
+    /// Convenience constructor. Equivalent to
+    /// `J2Coefficient::new(J2_EARTH)` but infallible because the constant is
+    /// trivially valid.
+    #[inline]
+    pub const fn earth() -> Self {
+        Self(crate::physics::constants::J2_EARTH)
+    }
+
+    /// Moon's second zonal harmonic coefficient, dimensionless.
+    ///
+    /// Convenience constructor. Equivalent to
+    /// `J2Coefficient::new(J2_MOON)` but infallible because the constant is
+    /// trivially valid.
+    #[inline]
+    pub const fn moon() -> Self {
+        Self(crate::physics::constants::J2_MOON)
     }
 }
 
@@ -688,6 +808,25 @@ mod tests {
     }
 
     #[test]
+    fn rotation_rate_converts_to_degrees_per_day() {
+        let rate = RotationRate::new(std::f64::consts::PI / 86_400.0);
+
+        assert_close(
+            rate.radians_per_second(),
+            std::f64::consts::PI / 86_400.0,
+            EPS,
+        );
+        assert_close(rate.degrees_per_day(), 180.0, EPS);
+    }
+
+    #[test]
+    fn rotation_rate_accepts_finite_values() {
+        for value in [-1.0, 0.0, 1.0] {
+            let _ = RotationRate::new(value);
+        }
+    }
+
+    #[test]
     fn position_velocity_and_acceleration_round_trip_finite_vectors() {
         let vector = Vector3::new(1.0, -2.0, 3.0);
 
@@ -773,6 +912,14 @@ mod tests {
         let b = Distance::new(50.0);
         assert_close((a + b).meters(), 150.0, EPS);
         assert_close(a.meters() / b.meters(), 2.0, EPS);
+    }
+
+    #[test]
+    fn equatorial_radius_accepts_positive_finite_values() {
+        for value in [f64::MIN_POSITIVE, 6_378_137.0] {
+            let radius = EquatorialRadius::new(value);
+            assert_close(radius.meters(), value, EPS);
+        }
     }
 
     #[test]
