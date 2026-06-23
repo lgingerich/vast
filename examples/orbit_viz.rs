@@ -2,8 +2,8 @@
 
 use macroquad::prelude::*;
 use vast::{
-    Distance, Duration, Frame, LeapfrogIntegrator, Orbit, R_EARTH, Sim, SimBuilder, Speed,
-    TimeStep, TwoBodyGravity,
+    Distance, Duration, Frame, GravitationalParameter, LeapfrogIntegrator, Orbit,
+    OrbitalDiagnostics, R_EARTH, Sim, SimBuilder, Speed, TimeStep, TwoBodyGravity,
 };
 
 const TRAIL_POINTS_MAX: usize = 2_000;
@@ -28,6 +28,8 @@ async fn async_main() {
 
 struct OrbitVizScenario {
     sim: Sim<TwoBodyGravity, LeapfrogIntegrator>,
+    dt: TimeStep,
+    mu: GravitationalParameter,
     earth_radius_km: f64,
     ideal_orbital_radius: Distance,
     circular_speed: Speed,
@@ -49,11 +51,12 @@ impl OrbitVizScenario {
             .orbit(Orbit::circular_equatorial(altitude))?
             .dynamics(TwoBodyGravity::from_frame(&frame)?)
             .integrator(LeapfrogIntegrator)
-            .timestep(TimeStep::new(1.0))
             .build()?;
 
         Ok(Self {
             sim,
+            dt: TimeStep::new(1.0),
+            mu: frame.mu()?,
             earth_radius_km,
             ideal_orbital_radius: orbit.semi_major_axis(&frame)?,
             circular_speed: orbit.speed(&frame)?,
@@ -68,7 +71,11 @@ impl OrbitVizScenario {
     async fn run(&mut self) {
         loop {
             for _ in 0..20 {
-                let Ok(state) = self.sim.step() else {
+                if self.sim.step(self.dt).is_err() {
+                    eprintln!("simulation state became invalid");
+                    return;
+                }
+                let Ok(state) = self.sim.state() else {
                     eprintln!("simulation state became invalid");
                     return;
                 };
@@ -112,7 +119,11 @@ impl OrbitVizScenario {
     }
 
     fn draw_hud(&self) {
-        let Some(diagnostics) = self.sim.diagnostics().ok() else {
+        let Ok(state) = self.sim.state() else {
+            draw_text("orbital diagnostics unavailable", 20.0, 30.0, 24.0, RED);
+            return;
+        };
+        let Ok(diagnostics) = OrbitalDiagnostics::from_state(&state, self.mu) else {
             draw_text("orbital diagnostics unavailable", 20.0, 30.0, 24.0, RED);
             return;
         };

@@ -1,8 +1,9 @@
 #![allow(missing_docs)]
 
 use vast::{
-    Column, Distance, Duration, EulerIntegrator, Frame, LeapfrogIntegrator, Orbit, Position,
-    RungeKutta4Integrator, SimBuilder, Speed, TimeStep, TwoBodyGravity, VelocityVerletIntegrator,
+    Distance, Duration, EulerIntegrator, Frame, GravitationalParameter, LeapfrogIntegrator, Orbit,
+    OrbitalDiagnostics, Position, RungeKutta4Integrator, SimBuilder, Speed, TimeStep,
+    TwoBodyGravity, VelocityVerletIntegrator,
 };
 
 const ALTITUDE_KM: f64 = 400.0;
@@ -30,6 +31,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let speed = orbit_spec.speed(&frame)?;
     let period = orbit_spec.period(&frame)?;
     let initial_position = orbit_spec.to_cartesian_state(&frame)?.position;
+    let mu = frame.mu()?;
 
     // --- print header ---
     println!(
@@ -72,6 +74,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             period,
             &initial_position,
             speed,
+            mu,
         )?;
         let rk4 = run(
             "RK4",
@@ -82,6 +85,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             period,
             &initial_position,
             speed,
+            mu,
         )?;
         let verlet = run(
             "Verlet",
@@ -92,6 +96,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             period,
             &initial_position,
             speed,
+            mu,
         )?;
         let leapfrog = run(
             "Leapfrog",
@@ -102,6 +107,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             period,
             &initial_position,
             speed,
+            mu,
         )?;
 
         print_summary(&euler);
@@ -123,44 +129,65 @@ fn run<I: vast::Integrator>(
     period: Duration,
     initial_position: &Position,
     circular_speed: Speed,
+    mu: GravitationalParameter,
 ) -> Result<Summary, Box<dyn std::error::Error>> {
     // --- run simulation ---
-    let result = SimBuilder::new(frame)
+    let mut sim = SimBuilder::new(frame)
         .orbit(*orbit_spec)?
         .dynamics(TwoBodyGravity::from_frame(&frame)?)
         .integrator(integrator)
-        .timestep(dt)
-        .duration(period)?;
+        .build()?;
+    let initial_state = sim.state()?;
+    let initial_diag = OrbitalDiagnostics::from_state(&initial_state, mu)?;
+    sim.advance(period, dt)?;
 
     // --- inspect results ---
-    let pos_drift = (result.final_state.position.vector() - initial_position.vector())
+    let final_state = sim.state()?;
+    let final_diag = OrbitalDiagnostics::from_state(&final_state, mu)?;
+
+    let pos_drift = (final_state.position.vector() - initial_position.vector())
         .norm()
         .max(f64::EPSILON);
     let speed_error =
-        (result.series.column(Column::Speed)[1] - circular_speed.meters_per_second()).abs();
-    let energy_error = (result.series.column(Column::SpecificEnergy)[1]
-        - result.series.column(Column::SpecificEnergy)[0])
-        .abs();
-    let relative_energy_error =
-        energy_error / result.series.column(Column::SpecificEnergy)[0].abs();
-    let h_error = (result.series.column(Column::SpecificAngularMomentum)[1]
-        - result.series.column(Column::SpecificAngularMomentum)[0])
-        .abs();
-    let relative_h_error = h_error / result.series.column(Column::SpecificAngularMomentum)[0];
+        (final_diag.speed().meters_per_second() - circular_speed.meters_per_second()).abs();
+    let energy_error = (final_diag
+        .specific_energy()
+        .square_meters_per_square_second()
+        - initial_diag
+            .specific_energy()
+            .square_meters_per_square_second())
+    .abs();
+    let relative_energy_error = energy_error
+        / initial_diag
+            .specific_energy()
+            .square_meters_per_square_second()
+            .abs();
+    let h_error = (final_diag
+        .specific_angular_momentum()
+        .square_meters_per_second()
+        - initial_diag
+            .specific_angular_momentum()
+            .square_meters_per_second())
+    .abs();
+    let relative_h_error = h_error
+        / initial_diag
+            .specific_angular_momentum()
+            .square_meters_per_second();
 
+    let elapsed = Duration::new(sim.epoch().seconds());
     Ok(Summary {
         method,
         dt_s: dt.seconds(),
-        steps: result.steps,
-        elapsed_s: result.elapsed.seconds(),
-        overshoot_s: result.elapsed.seconds() - period.seconds(),
+        steps: sim.steps(),
+        elapsed_s: elapsed.seconds(),
+        overshoot_s: elapsed.seconds() - period.seconds(),
         position_drift_km: pos_drift / 1000.0,
         speed_error_mps: speed_error,
         energy_error,
         relative_energy_error,
         h_error,
         relative_h_error,
-        eccentricity: result.series.column(Column::Eccentricity)[1],
+        eccentricity: final_diag.eccentricity().scalar(),
     })
 }
 

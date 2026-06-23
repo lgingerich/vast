@@ -24,7 +24,7 @@ pub use physics::{
         VelocityVerletIntegrator,
     },
     orbits::Orbit,
-    sim::{Sim, SimBuilder, SimResult},
+    sim::{Sim, SimBuilder},
     state::{
         CartesianState, CartesianStateBuffer, CartesianStateComponents, CartesianStates,
         CartesianStatesMut,

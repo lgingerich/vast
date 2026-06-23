@@ -1,9 +1,9 @@
 #![allow(missing_docs)]
 
 use vast::{
-    Angle, AreaPerMass, AtmosphericDrag, Column, CompositeDynamics, Distance, Duration,
-    ExponentialAtmosphere, Frame, Orbit, R_EARTH, RungeKutta4Integrator, SimBuilder, TimeStep,
-    TwoBodyGravity,
+    Angle, AreaPerMass, AtmosphericDrag, CompositeDynamics, Distance, Duration,
+    ExponentialAtmosphere, Frame, Orbit, OrbitalDiagnostics, OrbitalElementClassification,
+    OrbitalElements, R_EARTH, RungeKutta4Integrator, SimBuilder, TimeStep, TwoBodyGravity,
 };
 
 const ALTITUDE_KM: f64 = 250.0;
@@ -99,31 +99,43 @@ fn run<D: vast::Dynamics>(
     orbit: Orbit,
     dynamics: D,
 ) -> Result<Summary, Box<dyn std::error::Error>> {
-    let result = SimBuilder::new(frame)
+    let mu = frame.mu()?;
+    let dt = TimeStep::new(STEP_SECONDS);
+
+    let mut sim = SimBuilder::new(frame)
         .orbit(orbit)?
         .dynamics(dynamics)
         .integrator(RungeKutta4Integrator)
-        .timestep(TimeStep::new(STEP_SECONDS))
-        .duration(Duration::new(PROPAGATION_HOURS * 3_600.0))?;
+        .build()?;
+    let initial_state = sim.state()?;
+    let initial_diag = OrbitalDiagnostics::from_state(&initial_state, mu)?;
+    sim.advance(Duration::new(PROPAGATION_HOURS * 3_600.0), dt)?;
 
-    let radius = result.series.column(Column::Radius);
-    let energy = result.series.column(Column::SpecificEnergy);
-    let final_raan = result
-        .elements
+    let final_state = sim.state()?;
+    let final_diag = OrbitalDiagnostics::from_state(&final_state, mu)?;
+    let elements =
+        OrbitalElements::from_state(&final_state, mu, OrbitalElementClassification::default())?;
+    let final_raan = elements
         .right_ascension_of_ascending_node()
         .map(|raan| raan.degrees())
         .ok_or("final RAAN is undefined")?;
 
-    let initial_altitude_km = (radius[0] - R_EARTH) / 1000.0;
-    let final_altitude_km = (radius[1] - R_EARTH) / 1000.0;
+    let initial_altitude_km = (initial_diag.radius().meters() - R_EARTH) / 1000.0;
+    let final_altitude_km = (final_diag.radius().meters() - R_EARTH) / 1000.0;
+    let energy_delta = final_diag
+        .specific_energy()
+        .square_meters_per_square_second()
+        - initial_diag
+            .specific_energy()
+            .square_meters_per_square_second();
 
     Ok(Summary {
         model,
         final_altitude_km,
         altitude_delta_km: final_altitude_km - initial_altitude_km,
         raan_drift_deg: angle_delta_degrees(final_raan, RAAN_DEG),
-        energy_delta: energy[1] - energy[0],
-        eccentricity: result.series.column(Column::Eccentricity)[1],
+        energy_delta,
+        eccentricity: final_diag.eccentricity().scalar(),
     })
 }
 

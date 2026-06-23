@@ -1,7 +1,8 @@
 #![allow(missing_docs)]
 
 use vast::{
-    Angle, Column, Distance, Duration, Frame, Orbit, SimBuilder, TimeStep, TwoBodyGravity,
+    Angle, Distance, Duration, Frame, GravitationalParameter, Orbit, OrbitalDiagnostics,
+    OrbitalElementClassification, OrbitalElements, SimBuilder, TimeStep, TwoBodyGravity,
     VelocityVerletIntegrator,
 };
 
@@ -21,28 +22,41 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let period = spec.period(&frame)?;
     let num_periods = Duration::new(period.seconds() * PERIODS);
+    let dt = TimeStep::new(STEP_SECONDS);
+    let mu: GravitationalParameter = frame.mu()?;
 
     // --- run simulation ---
-    let result = SimBuilder::new(frame)
+    let mut sim = SimBuilder::new(frame)
         .orbit(spec)?
         .dynamics(TwoBodyGravity::from_frame(&frame)?)
         .integrator(VelocityVerletIntegrator)
-        .timestep(TimeStep::new(STEP_SECONDS))
-        .duration(num_periods)?;
+        .build()?;
+    let initial_state = sim.state()?;
+    let initial_diag = OrbitalDiagnostics::from_state(&initial_state, mu)?;
+    sim.advance(num_periods, dt)?;
 
     // --- inspect results ---
-    let s = &result.series;
-    let radius_drift = (s.column(Column::Radius)[1] - s.column(Column::Radius)[0]).abs();
-    let energy_error =
-        (s.column(Column::SpecificEnergy)[1] - s.column(Column::SpecificEnergy)[0]).abs();
-    let h_error = (s.column(Column::SpecificAngularMomentum)[1]
-        - s.column(Column::SpecificAngularMomentum)[0])
-        .abs();
-    let h = result
-        .final_state
+    let final_state = sim.state()?;
+    let final_diag = OrbitalDiagnostics::from_state(&final_state, mu)?;
+    let radius_drift = (final_diag.radius().meters() - initial_diag.radius().meters()).abs();
+    let energy_error = (final_diag
+        .specific_energy()
+        .square_meters_per_square_second()
+        - initial_diag
+            .specific_energy()
+            .square_meters_per_square_second())
+    .abs();
+    let h_error = (final_diag
+        .specific_angular_momentum()
+        .square_meters_per_second()
+        - initial_diag
+            .specific_angular_momentum()
+            .square_meters_per_second())
+    .abs();
+    let h = final_state
         .position
         .vector()
-        .cross(&result.final_state.velocity.vector());
+        .cross(&final_state.velocity.vector());
     let h_hat = h.normalize();
 
     // --- print report ---
@@ -53,8 +67,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!(
         "propagated: {:.1} periods | elapsed: {:.1} s | steps: {}",
         PERIODS,
-        result.elapsed.seconds(),
-        result.steps,
+        sim.epoch().seconds(),
+        sim.steps(),
     );
     println!(
         "radius drift: {:.6} km | energy error: {:.6} m^2/s^2 | h error: {:.6} m^2/s",
@@ -62,12 +76,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         energy_error,
         h_error,
     );
-    println!("eccentricity: {:.9}", s.column(Column::Eccentricity)[1],);
+    println!("eccentricity: {:.9}", final_diag.eccentricity().scalar(),);
     println!(
         "h direction: [{:.6}, {:.6}, {:.6}]",
         h_hat.x, h_hat.y, h_hat.z,
     );
-    println!("{:?}", result.elements);
+    let elements =
+        OrbitalElements::from_state(&final_state, mu, OrbitalElementClassification::default())?;
+    println!("{:?}", elements);
 
     Ok(())
 }

@@ -263,8 +263,8 @@ pub enum Column {
 
 /// Per-step diagnostic scalars collected across a trajectory.
 ///
-/// Each column is a dense array with one entry per snapshot.
-/// For the initial+final snapshots from [`crate::SimResult`], `len()` is 2.
+/// Each column is a dense array with one entry per snapshot. For an
+/// initial+final pair built via [`DiagnosticSeries::from_pair`], `len()` is 2.
 /// Future per-step recording paths can produce series of arbitrary length.
 ///
 /// Values are stored in SI units so callers can compute differences,
@@ -325,18 +325,21 @@ impl DiagnosticSeries {
     /// ```
     /// # use vast::*;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let frame = Frame::earth_inertial();
-    /// # let result = SimBuilder::new(frame)
-    /// #     .orbit(Orbit::circular_inclined(
-    /// #         Distance::new((6678.0) * 1000.0),
-    /// #         Angle::from_degrees(51.6),
-    /// #         Angle::from_degrees(32.0),
-    /// #     ))?
-    /// #     .dynamics(TwoBodyGravity::from_frame(&frame)?)
-    /// #     .integrator(VelocityVerletIntegrator)
-    /// #     .timestep(TimeStep::new(10.0))
-    /// #     .duration(Duration::new(5_330.0))?;
-    /// let s = &result.series;
+    /// let frame = Frame::earth_inertial();
+    /// let mu = frame.mu()?;
+    /// let initial = Orbit::circular_inclined(
+    ///     Distance::new(6_678_000.0),
+    ///     Angle::from_degrees(51.6),
+    ///     Angle::from_degrees(32.0),
+    /// )
+    /// .to_cartesian_state(&frame)?;
+    /// let final_state = CartesianState::new(
+    ///     Position::from_vector(initial.position.vector() + nalgebra::Vector3::new(1.0e3, 0.0, 0.0)),
+    ///     initial.velocity,
+    /// );
+    /// let initial_diag = OrbitalDiagnostics::from_state(&initial, mu)?;
+    /// let final_diag = OrbitalDiagnostics::from_state(&final_state, mu)?;
+    /// let s = DiagnosticSeries::from_pair(&initial_diag, &final_diag);
     /// let radius = s.column(Column::Radius);
     /// let drift = (radius[1] - radius[0]).abs();
     /// # Ok(())

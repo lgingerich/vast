@@ -1,8 +1,9 @@
 #![allow(missing_docs)]
 
 use vast::{
-    Angle, Distance, Duration, Frame, J2_EARTH, J2Gravity, MU_EARTH, Orbit, R_EARTH, SimBuilder,
-    TimeStep, TwoBodyGravity, VelocityVerletIntegrator,
+    Angle, Distance, Duration, Frame, J2_EARTH, J2Gravity, MU_EARTH, Orbit,
+    OrbitalElementClassification, OrbitalElements, R_EARTH, SimBuilder, TimeStep, TwoBodyGravity,
+    VelocityVerletIntegrator,
 };
 
 const ALTITUDE_KM: f64 = 600.0;
@@ -22,6 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let initial_raan_deg = RAAN_DEG;
     let duration = Duration::new(PROPAGATION_DAYS * 86_400.0);
     let dt = TimeStep::new(STEP_SECONDS);
+    let mu = frame.mu()?;
 
     // --- analytical prediction ---
     let semi_major_axis = orbit_spec.semi_major_axis(&frame)?.meters();
@@ -36,29 +38,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let analytical_drift_deg_per_day = analytical_drift_rad_per_sec.to_degrees() * 86_400.0;
 
     // --- run two-body simulation ---
-    let two_body = SimBuilder::new(frame)
+    let mut two_body = SimBuilder::new(frame)
         .orbit(orbit_spec)?
         .dynamics(TwoBodyGravity::from_frame(&frame)?)
         .integrator(VelocityVerletIntegrator)
-        .timestep(dt)
-        .duration(duration)?;
+        .build()?;
+    two_body.advance(duration, dt)?;
+    let two_body_state = two_body.state()?;
+    let two_body_elements =
+        OrbitalElements::from_state(&two_body_state, mu, OrbitalElementClassification::default())?;
 
     // --- run J2 simulation ---
-    let j2 = SimBuilder::new(frame)
+    let mut j2 = SimBuilder::new(frame)
         .orbit(orbit_spec)?
         .dynamics(J2Gravity::from_frame(&frame)?)
         .integrator(VelocityVerletIntegrator)
-        .timestep(dt)
-        .duration(duration)?;
+        .build()?;
+    j2.advance(duration, dt)?;
+    let j2_state = j2.state()?;
+    let j2_elements =
+        OrbitalElements::from_state(&j2_state, mu, OrbitalElementClassification::default())?;
 
     // --- inspect results ---
-    let final_two_body_raan = two_body
-        .elements
+    let final_two_body_raan = two_body_elements
         .right_ascension_of_ascending_node()
         .map(|a| a.degrees())
         .ok_or("two-body RAAN is undefined")?;
-    let final_j2_raan = j2
-        .elements
+    let final_j2_raan = j2_elements
         .right_ascension_of_ascending_node()
         .map(|a| a.degrees())
         .ok_or("J2 RAAN is undefined")?;

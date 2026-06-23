@@ -96,7 +96,11 @@ The physics layer is re-exported from the crate root:
   `CircularEquatorialElements`, `EquatorialEllipticElements`.
 - Diagnostics: `OrbitalDiagnostics`, `SpecificEnergy`,
   `SpecificAngularMomentum`.
-- Propagation convenience: `Sim`, `SimBuilder`, `SimResult`.
+- Propagation: `Sim`, `SimBuilder`. `Sim` is a pure stepper owning state,
+  frame, dynamics, integrator, epoch, and step count. `advance(duration, dt)`
+  and `step(dt)` take the timestep as a parameter; analysis (orbital
+  diagnostics, elements) is computed by callers via
+  `OrbitalDiagnostics::from_state` / `OrbitalElements::from_state`.
 
 `physics::maneuvers` is a module-level API, but its helpers are not re-exported
 at the crate root today. Simulation burns consume them internally, and mission
@@ -949,7 +953,7 @@ The architecture currently includes:
 - singular-safe bound orbital elements and phase angle extraction
 - orbital diagnostics for analysis and tests
 - prograde, circularize, Hohmann, and bi-elliptic maneuver helpers
-- `Sim` builder for fixed-duration single-body propagation convenience
+- `Sim` pure stepper and `SimBuilder` for single-body propagation
 - TOML rollout and mission scenario DTOs
 - config-to-runtime plan validation
 - single-body fixed-step `Propagator`
