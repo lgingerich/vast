@@ -1,3 +1,4 @@
+use crate::errors::StateError;
 use crate::{EquatorialRadius, GravitationalParameter, J2Coefficient, RotationRate};
 
 /// A celestial body modeled by the simulator.
@@ -117,6 +118,40 @@ impl Frame {
         }
     }
 
+    /// Returns the central body's gravitational parameter.
+    pub fn mu(&self) -> Result<GravitationalParameter, StateError> {
+        Ok(self.central_body().ok_or(StateError::InvalidFrame)?.mu())
+    }
+
+    /// Returns the central body's equatorial radius.
+    pub fn equatorial_radius(&self) -> Result<EquatorialRadius, StateError> {
+        Ok(self
+            .central_body()
+            .ok_or(StateError::InvalidFrame)?
+            .equatorial_radius())
+    }
+
+    /// Returns the central body's inertial rotation rate.
+    pub fn rotation_rate(&self) -> Result<RotationRate, StateError> {
+        Ok(self
+            .central_body()
+            .ok_or(StateError::InvalidFrame)?
+            .rotation_rate())
+    }
+
+    /// Returns the central body's J2 coefficient, if modeled.
+    pub fn j2(&self) -> Result<Option<J2Coefficient>, StateError> {
+        Ok(self.central_body().ok_or(StateError::InvalidFrame)?.j2())
+    }
+
+    /// Returns `Ok` when this frame has inertial axes.
+    pub fn require_inertial_axes(&self) -> Result<(), StateError> {
+        match self.axes {
+            Axes::J2000Eq => Ok(()),
+            Axes::BodyFixed(_) => Err(StateError::InvalidAxes),
+        }
+    }
+
     /// The Earth-centered inertial frame: origin at Earth's center of mass with
     /// J2000 mean equator and equinox axes.
     pub const fn earth_inertial() -> Self {
@@ -156,6 +191,38 @@ mod tests {
 
         assert_eq!(BodyId::Earth.j2(), Some(J2Coefficient::earth()));
         assert_eq!(BodyId::Moon.j2(), Some(J2Coefficient::moon()));
+    }
+
+    #[test]
+    fn frame_resolves_central_body_constants() {
+        let frame = Frame::earth_inertial();
+
+        assert_eq!(frame.mu(), Ok(GravitationalParameter::earth()));
+        assert_eq!(frame.equatorial_radius(), Ok(EquatorialRadius::earth()));
+        assert_eq!(frame.rotation_rate(), Ok(RotationRate::earth()));
+        assert_eq!(frame.j2(), Ok(Some(J2Coefficient::earth())));
+    }
+
+    #[test]
+    fn barycenter_frame_cannot_resolve_single_body_constants() {
+        let frame = Frame::new(
+            Origin::Barycenter(&[BodyId::Earth, BodyId::Moon]),
+            Axes::J2000Eq,
+        );
+
+        assert_eq!(frame.mu(), Err(StateError::InvalidFrame));
+        assert_eq!(frame.equatorial_radius(), Err(StateError::InvalidFrame));
+        assert_eq!(frame.rotation_rate(), Err(StateError::InvalidFrame));
+        assert_eq!(frame.j2(), Err(StateError::InvalidFrame));
+    }
+
+    #[test]
+    fn inertial_axes_requirement_rejects_body_fixed_axes() {
+        assert_eq!(Frame::earth_inertial().require_inertial_axes(), Ok(()));
+        assert_eq!(
+            Frame::earth_body_fixed().require_inertial_axes(),
+            Err(StateError::InvalidAxes),
+        );
     }
 
     #[test]

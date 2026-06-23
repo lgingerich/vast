@@ -227,13 +227,6 @@ not copy TigerBeetle-specific constraints blindly.
   deterministic resets, and invalid physical states.
 - Avoid tests that rely on timing or flaky behavior.
 
-## Project Memory
-
-- Read `MEMORY.md` before making architectural or convention changes.
-- After significant decisions, update `MEMORY.md` with what was decided, why, and what was rejected.
-- Check `ERRORS.md` before retrying similar failed approaches.
-- When an approach takes more than two attempts, update `ERRORS.md` with what failed and what worked instead.
-
 ## Architecture Documentation
 
 `docs/architecture.md` is the living architecture reference: layer boundaries,
@@ -256,9 +249,6 @@ Keep `docs/architecture.md` in sync in the same change set when work:
 
 Updates should be concise: adjust the layered model, "what exists today",
 planned concepts, or open questions — not a changelog of every commit.
-
-When an architectural decision is made, record it in `MEMORY.md` and reflect the
-outcome in `docs/architecture.md` (remove or rewrite stale open questions).
 
 ### Review Expectations
 
@@ -305,13 +295,6 @@ current in the same change set as the code or decision it reflects.
   P1/P2/P3 within the affected category.
 - If the finished work changes what is implemented or planned at the layer level,
   update `docs/architecture.md` accordingly.
-
-### When Scope Changes
-
-- If an item is rejected or postponed, remove or rewrite it rather than leaving
-  outdated text.
-- Record the decision in `MEMORY.md` when it affects architecture, conventions,
-  or long-term direction.
 
 ### Review Expectations
 

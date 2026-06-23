@@ -1,8 +1,8 @@
 #![allow(missing_docs)]
 
 use vast::{
-    Angle, CentralBody, Distance, Duration, J2_EARTH, MU_EARTH, OblateBodyGravity, Orbit, R_EARTH,
-    SimBuilder, TimeStep, TwoBodyGravity, VelocityVerletIntegrator,
+    Angle, Distance, Duration, Frame, J2_EARTH, J2Gravity, MU_EARTH, Orbit, R_EARTH, SimBuilder,
+    TimeStep, TwoBodyGravity, VelocityVerletIntegrator,
 };
 
 const ALTITUDE_KM: f64 = 600.0;
@@ -13,7 +13,7 @@ const PROPAGATION_DAYS: f64 = 3.0;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- configure simulation ---
-    let body = CentralBody::earth()?;
+    let frame = Frame::earth_inertial();
     let orbit_spec = Orbit::circular_inclined(
         Distance::new(ALTITUDE_KM * 1000.0),
         Angle::from_degrees(INCLINATION_DEG),
@@ -24,8 +24,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dt = TimeStep::new(STEP_SECONDS);
 
     // --- analytical prediction ---
-    let mean_motion = (MU_EARTH / orbit_spec.semi_major_axis(&body).meters().powi(3)).sqrt();
-    let radius_ratio = R_EARTH / orbit_spec.semi_major_axis(&body).meters();
+    let semi_major_axis = orbit_spec.semi_major_axis(&frame)?.meters();
+    let mean_motion = (MU_EARTH / semi_major_axis.powi(3)).sqrt();
+    let radius_ratio = R_EARTH / semi_major_axis;
     let analytical_drift_rad_per_sec = -1.5
         * J2_EARTH
         * mean_motion
@@ -35,18 +36,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let analytical_drift_deg_per_day = analytical_drift_rad_per_sec.to_degrees() * 86_400.0;
 
     // --- run two-body simulation ---
-    let two_body = SimBuilder::new(body)
+    let two_body = SimBuilder::new(frame)
         .orbit(orbit_spec)?
-        .dynamics(TwoBodyGravity::from_body(&body))
+        .dynamics(TwoBodyGravity::from_frame(&frame)?)
         .integrator(VelocityVerletIntegrator)
         .timestep(dt)
         .duration(duration)?;
 
     // --- run J2 simulation ---
-    let j2_dynamics = OblateBodyGravity::from_body(&body)?;
-    let j2 = SimBuilder::new(body)
+    let j2 = SimBuilder::new(frame)
         .orbit(orbit_spec)?
-        .dynamics(j2_dynamics)
+        .dynamics(J2Gravity::from_frame(&frame)?)
         .integrator(VelocityVerletIntegrator)
         .timestep(dt)
         .duration(duration)?;
@@ -70,7 +70,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- print report ---
     println!(
         "J2 precession demo: altitude {:.0} km | inclination {:.1}°",
-        orbit_spec.semi_major_axis(&body).meters() / 1000.0 - R_EARTH / 1000.0,
+        semi_major_axis / 1000.0 - R_EARTH / 1000.0,
         INCLINATION_DEG,
     );
     println!(

@@ -29,7 +29,12 @@ pub struct MissionResult {
 /// Runs a mission scenario once from its initial state.
 pub fn run_mission(config: &MissionScenarioConfig) -> Result<MissionResult, MissionError> {
     let plan = config.build()?;
-    let mut propagator = Propagator::new(plan.initial_state, Epoch::ZERO, plan.propagation)?;
+    let mut propagator = Propagator::new(
+        plan.initial_state,
+        plan.frame,
+        Epoch::ZERO,
+        plan.propagation,
+    )?;
 
     for burn in &plan.initial_burns {
         propagator.apply_burn(*burn)?;
@@ -67,22 +72,10 @@ pub fn run_mission(config: &MissionScenarioConfig) -> Result<MissionResult, Miss
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::physics::constants::{MU_EARTH, R_EARTH};
-    use crate::physics::elements::{OrbitalElementClassification, OrbitalElements};
-    use crate::physics::types::{Distance, GravitationalParameter};
     use crate::sim::config::{
         BodyConfig, BurnConfig, ForceModelKind, InitialOrbitConfig, IntegratorKind, LoadedScenario,
         MissionSegmentConfig, PropagationConfig, StopConfig,
     };
-
-    fn elements_semi_major_axis_m(elements: &OrbitalElements) -> f64 {
-        match elements {
-            OrbitalElements::Classical(elements) => elements.semi_major_axis().meters(),
-            OrbitalElements::CircularInclined(elements) => elements.semi_major_axis().meters(),
-            OrbitalElements::CircularEquatorial(elements) => elements.semi_major_axis().meters(),
-            OrbitalElements::EquatorialElliptic(elements) => elements.semi_major_axis().meters(),
-        }
-    }
 
     #[test]
     fn parses_mission_scenario_toml() {

@@ -321,14 +321,14 @@ impl DiagnosticSeries {
     /// ```
     /// # use vast::*;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let body = CentralBody::earth()?;
-    /// # let result = SimBuilder::new(body)
+    /// # let frame = Frame::earth_inertial();
+    /// # let result = SimBuilder::new(frame)
     /// #     .orbit(Orbit::circular_inclined(
     /// #         Distance::new((6678.0) * 1000.0),
     /// #         Angle::from_degrees(51.6),
     /// #         Angle::from_degrees(32.0),
     /// #     ))?
-    /// #     .dynamics(TwoBodyGravity::from_body(&body))
+    /// #     .dynamics(TwoBodyGravity::from_frame(&frame)?)
     /// #     .integrator(VelocityVerletIntegrator)
     /// #     .timestep(TimeStep::new(10.0))
     /// #     .duration(Duration::new(5_330.0))?;
@@ -366,6 +366,7 @@ fn bound_semi_major_axis(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::physics::frame::Frame;
     use crate::{
         Angle, CartesianStateBuffer, ClassicalOrbitalElements, Eccentricity, MU_EARTH, Position,
         R_EARTH, Velocity,
@@ -386,7 +387,7 @@ mod tests {
             Angle::ZERO,
             Angle::ZERO,
         );
-        Ok(elements.to_cartesian_state(earth_mu()?)?)
+        Ok(elements.to_cartesian_state(&Frame::earth_inertial())?)
     }
 
     fn earth_mu() -> Result<GravitationalParameter, Box<dyn std::error::Error>> {

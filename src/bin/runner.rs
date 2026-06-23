@@ -103,7 +103,8 @@ fn run_mission_command(
     output_dir: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut recorder = RunRecorder::new_mission(output_dir, config)?;
-    let body = config.propagation.body.resolve()?;
+    let frame = config.propagation.body.inertial_frame();
+    let equatorial_radius = frame.equatorial_radius()?;
 
     for episode_index in 0..episodes {
         let seed = episode_index as u64;
@@ -111,7 +112,7 @@ fn run_mission_command(
         let result = run_mission(config)?;
 
         let final_radius = result.final_state.position.vector().norm();
-        let final_altitude_m = final_radius - body.equatorial_radius().meters();
+        let final_altitude_m = final_radius - equatorial_radius.meters();
         let total_steps: usize = result
             .segments
             .iter()

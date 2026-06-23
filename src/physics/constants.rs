@@ -46,6 +46,17 @@ pub const EARTH_ANGULAR_RATE_RAD_S: f64 = 7.292_115_146_706_979e-5;
 /// Equal to the Moon's mean orbital motion: 2π / 27.321661 sidereal days.
 pub const MOON_ANGULAR_RATE_RAD_S: f64 = 2.661_743_784_033_667e-6;
 
+/// Reference altitude of the exponential atmosphere above Earth's equatorial radius.
+pub const EARTH_ATMOSPHERE_REFERENCE_ALTITUDE_M: f64 = 250_000.0;
+
+/// Reference atmospheric density at the reference altitude, in kg/m^3.
+///
+/// Low solar activity value at 250 km; suitable for loose-fidelity LEO drag.
+pub const EARTH_ATMOSPHERE_REFERENCE_DENSITY_KG_M3: f64 = 1.0e-10;
+
+/// Exponential atmosphere scale height in meters.
+pub const EARTH_ATMOSPHERE_SCALE_HEIGHT_M: f64 = 50_000.0;
+
 /// Default tolerance for classifying an orbit as circular, dimensionless.
 ///
 /// Chosen an order of magnitude above the cancellation floor of the

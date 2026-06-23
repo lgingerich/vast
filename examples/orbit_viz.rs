@@ -2,7 +2,7 @@
 
 use macroquad::prelude::*;
 use vast::{
-    CentralBody, Distance, Duration, LeapfrogIntegrator, Orbit, R_EARTH, Sim, SimBuilder, Speed,
+    Distance, Duration, Frame, LeapfrogIntegrator, Orbit, R_EARTH, Sim, SimBuilder, Speed,
     TimeStep, TwoBodyGravity,
 };
 
@@ -40,14 +40,14 @@ struct OrbitVizScenario {
 
 impl OrbitVizScenario {
     fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        let body = CentralBody::earth()?;
+        let frame = Frame::earth_inertial();
         let altitude = Distance::new(400.0 * 1000.0);
         let orbit = Orbit::circular_equatorial(altitude);
         let earth_radius_km = R_EARTH / 1000.0;
 
-        let sim = SimBuilder::new(body)
+        let sim = SimBuilder::new(frame)
             .orbit(Orbit::circular_equatorial(altitude))?
-            .dynamics(TwoBodyGravity::from_body(&body))
+            .dynamics(TwoBodyGravity::from_frame(&frame)?)
             .integrator(LeapfrogIntegrator)
             .timestep(TimeStep::new(1.0))
             .build()?;
@@ -55,9 +55,9 @@ impl OrbitVizScenario {
         Ok(Self {
             sim,
             earth_radius_km,
-            ideal_orbital_radius: orbit.semi_major_axis(&body),
-            circular_speed: orbit.speed(&body)?,
-            orbital_period: orbit.period(&body)?,
+            ideal_orbital_radius: orbit.semi_major_axis(&frame)?,
+            circular_speed: orbit.speed(&frame)?,
+            orbital_period: orbit.period(&frame)?,
             meters_per_pixel: 40_000.0,
             trail: [Vec2::ZERO; TRAIL_POINTS_MAX],
             trail_start: 0,

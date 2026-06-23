@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::errors::MissionError;
-use crate::physics::body::CentralBody;
+use crate::physics::frame::{Axes, BodyId, Frame, Origin};
 
 /// Loaded scenario kind for the runner.
 #[derive(Debug, Clone, PartialEq)]
@@ -225,10 +225,10 @@ pub enum BodyConfig {
 }
 
 impl BodyConfig {
-    /// Resolves this configuration into the validated physics body.
-    pub fn resolve(&self) -> Result<CentralBody, crate::errors::NumericalError> {
+    /// Resolves this body into the inertial frame used for orbit construction.
+    pub const fn inertial_frame(&self) -> Frame {
         match self {
-            Self::Earth => CentralBody::earth(),
+            Self::Earth => Frame::new(Origin::CelestialBody(BodyId::Earth), Axes::J2000Eq),
         }
     }
 }
@@ -245,9 +245,9 @@ impl BodyConfig {
 pub enum ForceModelKind {
     /// Two-body point-mass gravity.
     TwoBody,
-    /// Oblate central-body gravity with the body's J2 zonal harmonic.
+    /// Central-body gravity with the body's J2 zonal harmonic.
     J2,
-    /// Oblate central-body gravity plus exponential atmospheric drag.
+    /// J2 gravity plus exponential atmospheric drag.
     J2Drag {
         /// Drag area per unit mass (C_d * A / m) in m^2/kg.
         area_per_mass_m2_kg: f64,

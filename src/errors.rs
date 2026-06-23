@@ -36,7 +36,7 @@ pub enum DynamicsError {
     PositionAtGravityCenter,
 }
 
-/// Errors produced while reading or writing Cartesian state storage.
+/// Errors produced while constructing, querying, or converting simulation state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
 pub enum StateError {
     /// A numerical check failed.
@@ -124,6 +124,9 @@ pub enum MissionError {
     /// Propagation failed.
     #[error(transparent)]
     Propagation(#[from] PropagationError),
+    /// State construction or storage failed.
+    #[error(transparent)]
+    State(#[from] StateError),
     /// A numerical field was physically invalid.
     #[error(transparent)]
     Numerical(#[from] NumericalError),

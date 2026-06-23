@@ -1,6 +1,6 @@
 use crate::errors::{MissionError, NumericalError, PropagationError};
 use crate::physics::state::CartesianState;
-use crate::physics::types::Velocity;
+use crate::physics::types::{GravitationalParameter, Velocity};
 use nalgebra::Vector3;
 
 /// Runtime impulsive burn command applied at a step boundary.
@@ -37,7 +37,61 @@ impl BurnCommand {
         Self::Circularize
     }
 
+    pub(crate) fn apply_to(
+        self,
+        state: CartesianState,
+        mu: GravitationalParameter,
+    ) -> Result<CartesianState, MissionError> {
+        let delta_v = match self {
+            Self::Inertial(delta_v_mps) => {
+                Velocity::from_vector(Vector3::new(delta_v_mps[0], delta_v_mps[1], delta_v_mps[2]))
+            }
+            Self::Prograde(delta_v_mps) => prograde_delta_v(state, delta_v_mps)?,
+            Self::Circularize => circularize_delta_v(state, mu)?,
+        };
 
+        Ok(apply_delta_v(state, delta_v)?)
+    }
+}
+
+fn prograde_delta_v(state: CartesianState, delta_v_mps: f64) -> Result<Velocity, MissionError> {
+    let velocity = state.velocity.vector();
+    let speed = velocity.norm();
+    if speed == 0.0 {
+        return Err(MissionError::Numerical(NumericalError::ZeroNorm {
+            field: "velocity",
+        }));
+    }
+
+    Ok(Velocity::from_vector(velocity / speed * delta_v_mps))
+}
+
+fn circularize_delta_v(
+    state: CartesianState,
+    mu: GravitationalParameter,
+) -> Result<Velocity, MissionError> {
+    let position = state.position.vector();
+    let velocity = state.velocity.vector();
+    let radius = position.norm();
+    if radius == 0.0 {
+        return Err(MissionError::Numerical(NumericalError::ZeroNorm {
+            field: "position",
+        }));
+    }
+
+    let radial_direction = position / radius;
+    let radial_velocity = velocity.dot(&radial_direction) * radial_direction;
+    let tangential_velocity = velocity - radial_velocity;
+    let tangential_speed = tangential_velocity.norm();
+    if tangential_speed == 0.0 {
+        return Err(MissionError::Numerical(NumericalError::ZeroNorm {
+            field: "tangential velocity",
+        }));
+    }
+
+    let circular_speed = (mu.meters_cubed_per_second_squared() / radius).sqrt();
+    let target_velocity = tangential_velocity / tangential_speed * circular_speed;
+    Ok(Velocity::from_vector(target_velocity - velocity))
 }
 
 fn apply_delta_v(

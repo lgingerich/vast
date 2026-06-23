@@ -4,8 +4,7 @@ Living architecture reference for VAST. This document describes what the
 simulator is today, what it is becoming, and the boundaries between layers.
 
 For planned work, see [ROADMAP.md](../ROADMAP.md). For agent and contribution
-conventions, see [AGENTS.md](../AGENTS.md). For durable decisions that explain
-why the architecture has this shape, see [MEMORY.md](../MEMORY.md).
+conventions, see [AGENTS.md](../AGENTS.md).
 
 ---
 
@@ -81,19 +80,18 @@ top-level operations, not the internal runtime plan or propagator machinery.
 The physics layer is re-exported from the crate root:
 
 - Constants: `MU_EARTH`, `R_EARTH`, `J2_EARTH`.
-- Central body: `CentralBody`, `AtmosphereModel`.
+- Frames: `Frame`, `Origin`, `Axes`, `BodyId`.
 - Domain scalars and vectors: `Angle`, `AngularRate`, `Epoch`, `TimeStep`,
   `Duration`, `Distance`, `Speed`, `MassDensity`, `AreaPerMass`,
   `GravitationalParameter`, `J2Coefficient`, `Eccentricity`, `Position`,
   `Velocity`, `Acceleration`.
 - State storage: `CartesianState`, `CartesianStateComponents`,
   `CartesianStateBuffer<N>`, `CartesianStates`, `CartesianStatesMut`.
-- Dynamics: `Dynamics`, `TwoBodyGravity`, `OblateBodyGravity`,
+- Dynamics: `Dynamics`, `TwoBodyGravity`, `J2Gravity`,
   `ExponentialAtmosphere`, `AtmosphericDrag`, `CompositeDynamics<A, B>`.
 - Integrators: `Integrator`, `EulerIntegrator`, `VelocityVerletIntegrator`,
   `LeapfrogIntegrator`, `RungeKutta4Integrator`.
-- Orbits and elements: `Orbit`, `OrbitDirection`,
-  `OrbitalElements`, `OrbitalElementClassification`,
+- Orbits and elements: `Orbit`, `OrbitalElements`, `OrbitalElementClassification`,
   `ClassicalOrbitalElements`, `CircularInclinedElements`,
   `CircularEquatorialElements`, `EquatorialEllipticElements`.
 - Diagnostics: `OrbitalDiagnostics`, `SpecificEnergy`,
@@ -143,10 +141,10 @@ inspection, diagnostics, and maneuver vector math.
 
 | Module | Responsibility |
 | --- | --- |
-| `body` | `CentralBody` and `AtmosphereModel`: physical constants and atmosphere parameters. |
 | `constants` | Earth constants plus classification tolerances for orbital elements. |
 | `types` | SI domain newtypes and vector wrappers with constructor invariants. |
 | `state` | Boundary `CartesianState`, flat `CartesianStateComponents`, and SoA buffers/views. |
+| `frame` | Reference frames and `BodyId`-keyed physical constants for orbit and force-model construction. |
 | `dynamics` | Allocation-free `Dynamics` trait and built-in acceleration models. |
 | `integrators` | Fixed-step `Integrator` trait and Euler, Verlet, Leapfrog, RK4 implementations. |
 | `orbits` | Forward elliptic orbit construction from Keplerian inputs. |
@@ -269,10 +267,11 @@ Built-in models:
 
 - `TwoBodyGravity` computes point-mass central gravity `-mu r / |r|^3` and
   rejects the central singularity with `DynamicsError::PositionAtGravityCenter`.
-- `OblateBodyGravity` adds analytical J2 perturbation using a gravitational
+- `J2Gravity` adds analytical J2 perturbation using a gravitational
   parameter, equatorial radius, and `J2Coefficient`.
 - `ExponentialAtmosphere` models a spherical atmosphere with reference radius,
-  reference altitude, density, scale height, and body rotation rate.
+  reference altitude, density, scale height, and body rotation rate. It is the
+  atmosphere parameter model used by drag force construction.
 - `AtmosphericDrag` is a cannonball drag model over an `ExponentialAtmosphere`
   and `AreaPerMass`; it computes relative velocity against the co-rotating
   atmosphere.
@@ -331,21 +330,30 @@ representations.
 
 `Orbit` is the forward initial-condition specification. It stores geometric
 orbit elements per orbital regime, and validation and derived quantities require
-a `CentralBody` to supply the gravitational parameter and equatorial radius.
+a `Frame` whose central body supplies the gravitational parameter and equatorial
+radius.
 
 - `Orbit::circular_equatorial(altitude)` — circular equatorial orbit.
 - `Orbit::circular_inclined(altitude, inclination, raan)` — circular inclined
   orbit.
 - `Orbit::elliptic(...)` — all classical elements.
 
+Forward construction uses `Frame` as setup context without tagging
+`CartesianState` itself:
+
+```text
+Orbit + Frame -> CartesianState -> CartesianStateBuffer<1>
+Frame -----------------------------> Simulation
+```
+
 `Orbit` methods:
 
-- `to_cartesian_state(&CentralBody)` — converts the spec to an inertial
+- `to_cartesian_state(&Frame)` — converts the spec to an inertial
   `CartesianState`.
-- `speed(&CentralBody)` — instantaneous orbital speed via the vis-viva equation.
-- `period(&CentralBody)` — orbital period from Kepler's third law.
+- `speed(&Frame)` — instantaneous orbital speed via the vis-viva equation.
+- `period(&Frame)` — orbital period from Kepler's third law.
 - Geometric getters (`semi_major_axis`, `eccentricity`, `inclination`, `raan`,
-  `argument_of_periapsis`, `true_anomaly`, `direction`) return conventional
+  `argument_of_periapsis`, `true_anomaly`) return conventional
   values for circular variants where an angle is undefined.
 - All variants represent bound orbits; eccentricity in `[0, 1)` is validated
   during conversion.
@@ -368,9 +376,12 @@ singular-safe variant. Defaults come from `constants.rs`:
 - `DEFAULT_CIRCULAR_ECCENTRICITY_TOLERANCE = 1.0e-6`.
 - `DEFAULT_EQUATORIAL_INCLINATION_TOLERANCE_RAD = 1.0e-10`.
 
-The inverse path rejects unbound states and zero angular momentum. Simulation
-uses `OrbitalElements::orbital_phase_angle()` for apoapsis and periapsis
-detection; it does not need to know which element variant was selected.
+The inverse path rejects unbound states and zero angular momentum. Conversion
+from `OrbitalElements` back to Cartesian state also resolves through a `Frame`;
+diagnostics and inverse extraction still take an explicit gravitational
+parameter. Simulation uses `OrbitalElements::orbital_phase_angle()` for apoapsis
+and periapsis detection; it does not need to know which element variant was
+selected.
 
 ### Diagnostics
 
@@ -505,16 +516,18 @@ Supported integrators in config:
 Supported force models in config (internally tagged via `kind`):
 
 - `two_body` — point-mass central gravity
-- `j2` — oblate central gravity using the body's J2 coefficient
+- `j2` — J2 gravity using the body's J2 coefficient
 - `j2_drag` — J2 gravity composed with the body's exponential atmosphere
   (parameters: spacecraft `area_per_mass_m2_kg`)
 
-Body physical constants (`mu`, equatorial radius, `j2`, atmosphere) come from
-the scenario's chosen `body`. The force model selects which perturbations to
-compose. Each force model resolves to a variant of the closed `RuntimeDynamics`
-enum at plan-build time. The propagator dispatches on this enum in `step_once`,
-so each arm calls into a statically-known dynamics type with no trait objects
-on the stepping path.
+Body physical constants (`mu`, equatorial radius, rotation rate, `j2`) resolve
+through the scenario's inertial `Frame`, whose `BodyId` is the source of named
+body constants. Atmosphere parameters live with `ExponentialAtmosphere`, which
+constructs from the same frame for bodies that model an atmosphere. The force
+model selects which perturbations to compose. Each force model resolves to a
+variant of the closed `RuntimeDynamics` enum at plan-build time. The propagator
+dispatches on this enum in `step_once`, so each arm calls into a statically-known
+dynamics type with no trait objects on the stepping path.
 
 ### Runtime Plans
 
@@ -531,7 +544,7 @@ public DTOs into crate-private runtime plans:
   `BurnCommand`s.
 
 `RuntimeDynamics` is a closed enum wrapping the concrete `Dynamics` models
-(`TwoBodyGravity`, `OblateBodyGravity`, `CompositeDynamics<OblateBodyGravity,
+(`TwoBodyGravity`, `J2Gravity`, `CompositeDynamics<J2Gravity,
 AtmosphericDrag>`). It exposes `mu()` so burn application can resolve orbital
 elements without matching on the variant.
 
@@ -546,9 +559,9 @@ Validation and conversion performed here:
 - `dt_s` becomes `TimeStep`.
 - `duration_s` becomes `Duration`.
 - circular altitudes become `Orbit::circular_equatorial(altitude_m)`, which
-  resolves against the chosen `CentralBody`.
+  resolves against the chosen inertial `Frame`.
 - classical initial orbit fields become typed `Distance`, `Eccentricity`, and
-  `Angle`s, then `ClassicalOrbitalElements::to_cartesian_state`.
+  `Angle`s, then `ClassicalOrbitalElements::to_cartesian_state(&Frame)`.
 - burn DTOs become `BurnCommand`s.
 - stop DTOs become `TerminationCondition`s.
 
@@ -777,7 +790,7 @@ ScenarioConfig / rollout TOML
   -> ScenarioConfig::build()
       validates fields
       resolves ForceModelKind to RuntimeDynamics
-      constructs circular Earth initial state
+      constructs circular initial state in configured inertial frame
       creates PropagationPlan
       creates Duration termination
   -> LeoCircularEnv::from_config()
@@ -801,7 +814,7 @@ MissionScenarioConfig / mission TOML
   -> MissionScenarioConfig::build()
       validates mission structure
       resolves ForceModelKind to RuntimeDynamics
-      constructs circular or classical initial state
+      constructs circular or classical initial state in configured inertial frame
       validates shared propagation settings
       maps stops to TerminationCondition
       maps burns to BurnCommand
@@ -885,8 +898,8 @@ More precisely:
 - `StateError` wraps `NumericalError` and adds invalid index/length errors.
 - `PropagationError` wraps dynamics, state, and numerical errors and adds
   invalid burns plus segment-without-stop.
-- `MissionError` wraps propagation and numerical errors and adds file read,
-  TOML parse, and config-field validation failures.
+- `MissionError` wraps propagation, state, and numerical errors and adds file
+  read, TOML parse, and config-field validation failures.
 - `EnvironmentError` wraps mission, propagation, and recording failures.
 
 Boundary guidance:
@@ -1038,8 +1051,7 @@ VAST's north star is deterministic RL rollout throughput:
 
 ## Open Design Questions
 
-Some MVP decisions are recorded in [MEMORY.md](../MEMORY.md). Remaining
-questions:
+Remaining questions:
 
 1. **Spacecraft properties**: introduce a spacecraft/body property bundle for
    mass, drag area, and future SRP, or keep force-model parameters external
@@ -1071,9 +1083,9 @@ Resolved for the current MVP:
   each arm calls into a statically-known dynamics type, so the acceleration
   computation is monomorphized per force model with no trait objects on the
   stepping path.
-- `CentralBody` owns gravitational parameter, equatorial radius, J2, rotation
-  rate, and atmosphere parameters. Force models read these from the scenario
-  body rather than restating Earth constants.
+- `Frame` is the construction context for orbit specs and force models.
+  `BodyId` resolves named body constants, while `ExponentialAtmosphere` owns
+  atmosphere parameters used by drag.
 
 ---
 
@@ -1081,4 +1093,3 @@ Resolved for the current MVP:
 
 - [ROADMAP.md](../ROADMAP.md) - prioritized unimplemented work.
 - [AGENTS.md](../AGENTS.md) - contribution and maintenance rules.
-- [MEMORY.md](../MEMORY.md) - architectural decisions log.

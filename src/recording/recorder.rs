@@ -331,12 +331,12 @@ pub fn stop_reason_name(reason: StopReason) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{CartesianState, CentralBody, Distance, Epoch, Orbit, TrajectorySample};
+    use crate::physics::frame::Frame;
+    use crate::{CartesianState, Distance, Epoch, Orbit, TrajectorySample};
 
     fn sample_state() -> CartesianState {
-        let body = CentralBody::earth().expect("body");
         Orbit::circular_equatorial(Distance::new(400_000.0))
-            .to_cartesian_state(&body)
+            .to_cartesian_state(&Frame::earth_inertial())
             .expect("state")
     }
 

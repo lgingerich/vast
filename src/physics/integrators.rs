@@ -199,11 +199,11 @@ fn write_integrated_vectors(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::CentralBody;
     use crate::errors::{DynamicsError, StateError};
     use crate::physics::constants::R_EARTH;
     use crate::physics::diagnostics::OrbitalDiagnostics;
     use crate::physics::dynamics::TwoBodyGravity;
+    use crate::physics::frame::Frame;
     use crate::physics::orbits::Orbit;
     use crate::physics::state::{CartesianState, CartesianStateBuffer};
     use crate::physics::types::{Acceleration, Distance, Position, Velocity};
@@ -497,15 +497,15 @@ mod tests {
 
     #[test]
     fn two_independent_central_gravity_bodies_conserve_energy() -> TestResult {
-        let body = CentralBody::earth()?;
-        let mu = body.mu();
-        let gravity = TwoBodyGravity::new(mu);
+        let frame = Frame::earth_inertial();
+        let mu = frame.mu()?;
+        let gravity = TwoBodyGravity::from_frame(&frame)?;
         let integrator = RungeKutta4Integrator;
         let mut states = CartesianStateBuffer::<2>::with_len(2)?;
         let orbit_zero = circular_orbit(R_EARTH + 400_000.0)?;
         let orbit_one = circular_orbit(R_EARTH + 800_000.0)?;
-        states.write_from_state(0, &orbit_zero.to_cartesian_state(&body)?)?;
-        states.write_from_state(1, &orbit_one.to_cartesian_state(&body)?)?;
+        states.write_from_state(0, &orbit_zero.to_cartesian_state(&frame)?)?;
+        states.write_from_state(1, &orbit_one.to_cartesian_state(&frame)?)?;
 
         let initial_zero = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?;
         let initial_one = OrbitalDiagnostics::from_states(&states.view(), 1, mu)?;
@@ -515,14 +515,14 @@ mod tests {
             &gravity,
             &mut states,
             0,
-            orbit_zero.period(&body)?.seconds(),
+            orbit_zero.period(&frame)?.seconds(),
         )?;
         propagate_one_period(
             &integrator,
             &gravity,
             &mut states,
             1,
-            orbit_one.period(&body)?.seconds(),
+            orbit_one.period(&frame)?.seconds(),
         )?;
 
         let final_zero = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?;
@@ -563,12 +563,12 @@ mod tests {
         integrator: I,
         tolerance: f64,
     ) -> TestResult {
-        let body = CentralBody::earth()?;
-        let mu = body.mu();
-        let gravity = TwoBodyGravity::new(mu);
+        let frame = Frame::earth_inertial();
+        let mu = frame.mu()?;
+        let gravity = TwoBodyGravity::from_frame(&frame)?;
         let orbit = circular_orbit(R_EARTH + 400_000.0)?;
         let mut states = CartesianStateBuffer::<2>::with_len(2)?;
-        states.write_from_state(0, &orbit.to_cartesian_state(&body)?)?;
+        states.write_from_state(0, &orbit.to_cartesian_state(&frame)?)?;
 
         let initial = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?;
         propagate_one_period(
@@ -576,7 +576,7 @@ mod tests {
             &gravity,
             &mut states,
             0,
-            orbit.period(&body)?.seconds(),
+            orbit.period(&frame)?.seconds(),
         )?;
         let final_diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?;
 
@@ -633,18 +633,18 @@ mod tests {
         integrator: I,
         tolerance: f64,
     ) -> TestResult {
-        let body = CentralBody::earth()?;
-        let mu = body.mu();
-        let gravity = TwoBodyGravity::new(mu);
+        let frame = Frame::earth_inertial();
+        let mu = frame.mu()?;
+        let gravity = TwoBodyGravity::from_frame(&frame)?;
         let orbit = circular_orbit(R_EARTH + 400_000.0)?;
         let mut states = CartesianStateBuffer::<1>::with_len(1)?;
-        states.write_from_state(0, &orbit.to_cartesian_state(&body)?)?;
+        states.write_from_state(0, &orbit.to_cartesian_state(&frame)?)?;
 
         let initial_h = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
             .specific_angular_momentum()
             .square_meters_per_second();
 
-        let period_s = orbit.period(&body)?.seconds();
+        let period_s = orbit.period(&frame)?.seconds();
         propagate_one_period(&integrator, &gravity, &mut states, 0, period_s)?;
 
         let final_h = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
@@ -685,18 +685,18 @@ mod tests {
     fn energy_error_after_one_period<I: Integrator>(
         integrator: I,
     ) -> Result<f64, Box<dyn std::error::Error>> {
-        let body = CentralBody::earth()?;
-        let mu = body.mu();
-        let gravity = TwoBodyGravity::new(mu);
+        let frame = Frame::earth_inertial();
+        let mu = frame.mu()?;
+        let gravity = TwoBodyGravity::from_frame(&frame)?;
         let orbit = circular_orbit(R_EARTH + 400_000.0)?;
         let mut states = CartesianStateBuffer::<1>::with_len(1)?;
-        states.write_from_state(0, &orbit.to_cartesian_state(&body)?)?;
+        states.write_from_state(0, &orbit.to_cartesian_state(&frame)?)?;
 
         let initial_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
             .specific_energy()
             .square_meters_per_square_second();
 
-        let period_s = orbit.period(&body)?.seconds();
+        let period_s = orbit.period(&frame)?.seconds();
         propagate_one_period(&integrator, &gravity, &mut states, 0, period_s)?;
 
         let final_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?

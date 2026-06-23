@@ -28,9 +28,9 @@ recording with segment metadata**, **`runner` CLI (`run`, `serve`)**,
 **React + R3F replay UI (`ui/`)**, **RL ops dashboard with per-run metrics
 (reward, episode length, stop reasons, final altitude) and synchronized
 multi-episode comparison view**, **two-body/J2/J2+drag force models wired from
-scenario config through the `RuntimeDynamics` dispatch enum**, **`CentralBody`
-and `AtmosphereModel` domain types centralizing Earth constants and atmosphere
-parameters, with force-model resolution reading from the scenario body**.
+scenario config through the `RuntimeDynamics` dispatch enum**, **frame-based
+orbit and force-model construction with `BodyId`-keyed constants and atmosphere
+parameters owned by `ExponentialAtmosphere`**.
 
 ---
 
@@ -372,7 +372,7 @@ ephemeris files.
 
 ### P3 — Analytical J2 + J4 Gravity
 
-**What:** Extend the current oblate gravity model with an analytical J4 term before
+**What:** Extend the current J2 gravity model with an analytical J4 term before
 introducing full spherical-harmonic infrastructure.
 
 **Why:** J2 captures most LEO secular effects, but J4 improves oblateness fidelity
@@ -383,7 +383,7 @@ allocation-free and compatible with fixed-step batch stepping.
 
 **First version scope:**
 
-- Extend `OblateBodyGravity` or add a sibling model with explicit J2/J4 coefficients.
+- Extend `J2Gravity` or add a sibling model with explicit J2/J4 coefficients.
 - Tests against known equatorial/polar acceleration differences and secular trends.
 
 **Defer:** tesseral terms, sectorial terms, coefficient tables.

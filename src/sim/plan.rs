@@ -5,11 +5,11 @@ use super::config::{
 };
 use super::termination::TerminationCondition;
 use crate::errors::MissionError;
-use crate::physics::body::CentralBody;
 use crate::physics::dynamics::{
-    AtmosphericDrag, CompositeDynamics, ExponentialAtmosphere, OblateBodyGravity, TwoBodyGravity,
+    AtmosphericDrag, CompositeDynamics, ExponentialAtmosphere, J2Gravity, TwoBodyGravity,
 };
 use crate::physics::elements::ClassicalOrbitalElements;
+use crate::physics::frame::Frame;
 use crate::physics::orbits::Orbit;
 use crate::physics::state::CartesianState;
 use crate::physics::types::{
@@ -20,7 +20,8 @@ use crate::physics::types::{
 #[derive(Debug)]
 pub(crate) struct RolloutPlan {
     pub(crate) initial_state: CartesianState,
-    pub(crate) body: CentralBody,
+    pub(crate) frame: Frame,
+    pub(crate) equatorial_radius: Distance,
     pub(crate) propagation: PropagationPlan,
     pub(crate) termination: TerminationCondition,
     pub(crate) steps_per_env_step: usize,
@@ -30,6 +31,7 @@ pub(crate) struct RolloutPlan {
 #[derive(Debug)]
 pub(crate) struct MissionPlan {
     pub(crate) initial_state: CartesianState,
+    pub(crate) frame: Frame,
     pub(crate) propagation: PropagationPlan,
     pub(crate) initial_burns: Vec<BurnCommand>,
     pub(crate) segments: Vec<MissionSegmentPlan>,
@@ -59,10 +61,10 @@ impl PropagationPlan {
 pub(crate) enum RuntimeDynamics {
     /// Point-mass central gravity.
     TwoBody(TwoBodyGravity),
-    /// Oblate central gravity with J2.
-    J2(OblateBodyGravity),
+    /// Central gravity with J2 perturbation.
+    J2(J2Gravity),
     /// J2 gravity composed with exponential atmospheric drag.
-    J2Drag(CompositeDynamics<OblateBodyGravity, AtmosphericDrag>),
+    J2Drag(CompositeDynamics<J2Gravity, AtmosphericDrag>),
 }
 
 impl RuntimeDynamics {
@@ -100,20 +102,21 @@ impl ScenarioConfig {
             });
         }
 
-        let body = self.body.resolve()?;
+        let frame = self.body.inertial_frame();
         let propagation = propagation_plan(
             self.dt_s,
             self.integrator,
-            &body,
+            &frame,
             &self.force_model,
             self.sample_every_steps,
         )?;
-        let initial_state = circular_initial_state(self.altitude_m, &body)?;
+        let initial_state = circular_initial_state(self.altitude_m, &frame)?;
         let duration = Duration::new(self.duration_s);
 
         Ok(RolloutPlan {
             initial_state,
-            body,
+            frame,
+            equatorial_radius: Distance::new(frame.equatorial_radius()?.meters()),
             propagation,
             termination: TerminationCondition::Duration(duration),
             steps_per_env_step: self.steps_per_env_step,
@@ -138,16 +141,16 @@ impl MissionScenarioConfig {
             });
         }
 
-        let body = self.propagation.body.resolve()?;
+        let frame = self.propagation.body.inertial_frame();
         let propagation = propagation_plan(
             self.propagation.dt_s,
             self.propagation.integrator,
-            &body,
+            &frame,
             &self.propagation.force_model,
             self.propagation.sample_every_steps,
         )?;
         let mu = propagation.mu();
-        let initial_state = initial_state(&self.initial_orbit, &body)?;
+        let initial_state = initial_state(&self.initial_orbit, &frame)?;
         let initial_burns = self
             .initial_burns
             .iter()
@@ -171,6 +174,7 @@ impl MissionScenarioConfig {
 
         Ok(MissionPlan {
             initial_state,
+            frame,
             propagation,
             initial_burns,
             segments,
@@ -191,7 +195,7 @@ fn validate_name(name: &str) -> Result<(), MissionError> {
 fn propagation_plan(
     dt_s: f64,
     integrator: IntegratorKind,
-    body: &CentralBody,
+    frame: &Frame,
     force_model: &ForceModelKind,
     sample_every_steps: usize,
 ) -> Result<PropagationPlan, MissionError> {
@@ -204,26 +208,25 @@ fn propagation_plan(
     Ok(PropagationPlan {
         dt: TimeStep::new(dt_s),
         integrator,
-        dynamics: runtime_dynamics(force_model, body)?,
+        dynamics: runtime_dynamics(force_model, frame)?,
         sample_every_steps,
     })
 }
 
-/// Resolves a configured force model into a validated runtime dynamics, reading
-/// the central body's physical constants.
+/// Resolves a configured force model into validated runtime dynamics.
 fn runtime_dynamics(
     force_model: &ForceModelKind,
-    body: &CentralBody,
+    frame: &Frame,
 ) -> Result<RuntimeDynamics, MissionError> {
     match force_model {
-        ForceModelKind::TwoBody => Ok(RuntimeDynamics::TwoBody(TwoBodyGravity::from_body(body))),
-        ForceModelKind::J2 => Ok(RuntimeDynamics::J2(OblateBodyGravity::from_body(body)?)),
+        ForceModelKind::TwoBody => Ok(RuntimeDynamics::TwoBody(TwoBodyGravity::from_frame(frame)?)),
+        ForceModelKind::J2 => Ok(RuntimeDynamics::J2(J2Gravity::from_frame(frame)?)),
         ForceModelKind::J2Drag {
             area_per_mass_m2_kg,
         } => {
-            let atmosphere = ExponentialAtmosphere::from_body(body)?;
+            let atmosphere = ExponentialAtmosphere::from_frame(frame)?;
             let drag = AtmosphericDrag::new(atmosphere, AreaPerMass::new(*area_per_mass_m2_kg));
-            let gravity = OblateBodyGravity::from_body(body)?;
+            let gravity = J2Gravity::from_frame(frame)?;
             Ok(RuntimeDynamics::J2Drag(CompositeDynamics::new(
                 gravity, drag,
             )))
@@ -233,10 +236,10 @@ fn runtime_dynamics(
 
 fn initial_state(
     initial_orbit: &InitialOrbitConfig,
-    body: &CentralBody,
+    frame: &Frame,
 ) -> Result<CartesianState, MissionError> {
     match initial_orbit {
-        InitialOrbitConfig::Circular { altitude_m } => circular_initial_state(*altitude_m, body),
+        InitialOrbitConfig::Circular { altitude_m } => circular_initial_state(*altitude_m, frame),
         InitialOrbitConfig::Classical {
             semi_major_axis_m,
             eccentricity,
@@ -253,17 +256,14 @@ fn initial_state(
                 Angle::from_degrees(*arg_periapsis_deg),
                 Angle::from_degrees(*true_anomaly_deg),
             );
-            Ok(elements.to_cartesian_state(body.mu())?)
+            Ok(elements.to_cartesian_state(frame)?)
         }
     }
 }
 
-fn circular_initial_state(
-    altitude_m: f64,
-    body: &CentralBody,
-) -> Result<CartesianState, MissionError> {
+fn circular_initial_state(altitude_m: f64, frame: &Frame) -> Result<CartesianState, MissionError> {
     let orbit = Orbit::circular_equatorial(Distance::new(altitude_m));
-    Ok(orbit.to_cartesian_state(body)?)
+    Ok(orbit.to_cartesian_state(frame)?)
 }
 
 fn termination(
@@ -325,7 +325,7 @@ mod tests {
     }
 
     #[test]
-    fn j2_force_model_resolves_to_oblate_gravity() {
+    fn j2_force_model_resolves_to_j2_gravity() {
         let config = ScenarioConfig::from_toml(
             r#"
             name = "j2_test"
@@ -450,9 +450,9 @@ mod tests {
         let result = crate::sim::mission::run_mission(&config).expect("run");
         let elements = OrbitalElements::from_state(
             &result.final_state,
-            crate::physics::body::CentralBody::earth()
-                .expect("earth constants")
-                .mu(),
+            crate::physics::frame::Frame::earth_inertial()
+                .mu()
+                .expect("earth mu"),
             OrbitalElementClassification::default(),
         )
         .expect("elements");
@@ -482,9 +482,9 @@ mod tests {
         let episode = env.run_episode(0).expect("episode");
         let initial = &episode.propagation.samples[0].state;
         let final_state = &episode.propagation.final_state;
-        let mu = crate::physics::body::CentralBody::earth()
-            .expect("earth constants")
-            .mu();
+        let mu = crate::physics::frame::Frame::earth_inertial()
+            .mu()
+            .expect("earth mu");
         let initial_energy = OrbitalDiagnostics::from_state(initial, mu)
             .expect("initial diagnostics")
             .specific_energy()

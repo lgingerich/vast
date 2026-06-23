@@ -14,7 +14,7 @@ sample_every_steps = 20
 
 [[initial_burns]]
 kind = "prograde"
-delta_v_mps = 2586.2
+delta_v_mps = 2397.5
 
 [[segments]]
 stop = { kind = "apoapsis" }

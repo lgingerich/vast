@@ -3,7 +3,12 @@ pub use super::types::{
     Acceleration, AngularRate, AreaPerMass, Distance, Epoch, GravitationalParameter, J2Coefficient,
     MassDensity,
 };
-use crate::errors::{DynamicsError, NumericalError};
+use crate::errors::{DynamicsError, NumericalError, StateError};
+use crate::physics::constants::{
+    EARTH_ATMOSPHERE_REFERENCE_ALTITUDE_M, EARTH_ATMOSPHERE_REFERENCE_DENSITY_KG_M3,
+    EARTH_ATMOSPHERE_SCALE_HEIGHT_M,
+};
+use crate::physics::frame::{BodyId, Frame};
 use nalgebra::Vector3;
 
 /// Point-mass gravity model for a single central body.
@@ -20,12 +25,11 @@ impl TwoBodyGravity {
         Self { mu }
     }
 
-    /// Creates a point-mass gravity model from a central body's gravitational
-    /// parameter.
+    /// Creates a point-mass gravity model from a frame's central body.
     #[inline]
-    #[must_use]
-    pub const fn from_body(body: &crate::physics::body::CentralBody) -> Self {
-        Self { mu: body.mu() }
+    pub fn from_frame(frame: &Frame) -> Result<Self, StateError> {
+        frame.require_inertial_axes()?;
+        Ok(Self { mu: frame.mu()? })
     }
 
     /// Returns the central body's gravitational parameter.
@@ -35,9 +39,9 @@ impl TwoBodyGravity {
     }
 }
 
-/// Gravity model for an oblate central body with J2 perturbation.
+/// Central gravity model with analytical J2 perturbation.
 #[derive(Debug)]
-pub struct OblateBodyGravity {
+pub struct J2Gravity {
     /// Standard gravitational parameter in cubic meters per second squared.
     mu: GravitationalParameter,
     /// Equatorial reference radius in meters.
@@ -46,8 +50,8 @@ pub struct OblateBodyGravity {
     j2: J2Coefficient,
 }
 
-impl OblateBodyGravity {
-    /// Creates an oblate-body gravity model.
+impl J2Gravity {
+    /// Creates a J2 gravity model.
     #[inline]
     pub const fn new(
         mu: GravitationalParameter,
@@ -61,19 +65,24 @@ impl OblateBodyGravity {
         }
     }
 
-    /// Creates an oblate-body gravity model from a central body.
+    /// Creates a J2 gravity model from a frame's central body.
     ///
-    /// Returns [`NumericalError::ConstraintViolation`] if the body has no J2
+    /// Returns [`NumericalError::ConstraintViolation`] if the frame's body has no J2
     /// coefficient (point-mass only).
     #[inline]
-    pub fn from_body(body: &crate::physics::body::CentralBody) -> Result<Self, NumericalError> {
-        let Some(j2) = body.j2() else {
-            return Err(NumericalError::ConstraintViolation {
+    pub fn from_frame(frame: &Frame) -> Result<Self, StateError> {
+        frame.require_inertial_axes()?;
+        let Some(j2) = frame.j2()? else {
+            return Err(StateError::Numerical(NumericalError::ConstraintViolation {
                 field: "j2",
-                reason: "central body has no J2 coefficient",
-            });
+                reason: "frame central body has no J2 coefficient",
+            }));
         };
-        Ok(Self::new(body.mu(), body.equatorial_radius(), j2))
+        Ok(Self::new(
+            frame.mu()?,
+            Distance::new(frame.equatorial_radius()?.meters()),
+            j2,
+        ))
     }
 
     /// Returns the central body's gravitational parameter.
@@ -129,25 +138,29 @@ impl ExponentialAtmosphere {
         }
     }
 
-    /// Creates an exponential atmosphere from a central body.
+    /// Creates an exponential atmosphere from a frame's central body.
     ///
-    /// Returns [`NumericalError::ConstraintViolation`] if the body has no
+    /// Returns [`NumericalError::ConstraintViolation`] if the frame's body has no
     /// atmosphere.
     #[inline]
-    pub fn from_body(body: &crate::physics::body::CentralBody) -> Result<Self, NumericalError> {
-        let Some(atmosphere) = body.atmosphere() else {
-            return Err(NumericalError::ConstraintViolation {
-                field: "atmosphere",
-                reason: "central body has no atmosphere",
-            });
+    pub fn from_frame(frame: &Frame) -> Result<Self, StateError> {
+        frame.require_inertial_axes()?;
+        let Some(body) = frame.central_body() else {
+            return Err(StateError::InvalidFrame);
         };
-        Ok(Self::new(
-            body.equatorial_radius(),
-            atmosphere.reference_altitude(),
-            atmosphere.reference_density(),
-            atmosphere.scale_height(),
-            body.rotation_rate(),
-        ))
+        match body {
+            BodyId::Earth => Ok(Self::new(
+                Distance::new(frame.equatorial_radius()?.meters()),
+                Distance::new(EARTH_ATMOSPHERE_REFERENCE_ALTITUDE_M),
+                MassDensity::new(EARTH_ATMOSPHERE_REFERENCE_DENSITY_KG_M3),
+                Distance::new(EARTH_ATMOSPHERE_SCALE_HEIGHT_M),
+                AngularRate::new(frame.rotation_rate()?.radians_per_second()),
+            )),
+            BodyId::Moon => Err(StateError::Numerical(NumericalError::ConstraintViolation {
+                field: "atmosphere",
+                reason: "frame central body has no atmosphere",
+            })),
+        }
     }
 
     /// Returns the planet reference radius.
@@ -282,7 +295,7 @@ impl Dynamics for TwoBodyGravity {
     }
 }
 
-impl Dynamics for OblateBodyGravity {
+impl Dynamics for J2Gravity {
     fn acceleration_at(
         &self,
         state: CartesianStateComponents,
@@ -395,9 +408,9 @@ impl<A: Dynamics, B: Dynamics> Dynamics for CompositeDynamics<A, B> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::CentralBody;
     use crate::physics::constants::{J2_EARTH, MU_EARTH, R_EARTH};
     use crate::physics::diagnostics::OrbitalDiagnostics;
+    use crate::physics::frame::Frame;
     use crate::physics::integrators::{Integrator, RungeKutta4Integrator};
     use crate::physics::orbits::Orbit;
     use crate::physics::state::CartesianStateBuffer;
@@ -419,8 +432,8 @@ mod tests {
         Ok(TwoBodyGravity::new(GravitationalParameter::new(MU_EARTH)))
     }
 
-    fn earth_oblate_gravity(j2: f64) -> Result<OblateBodyGravity, Box<dyn std::error::Error>> {
-        Ok(OblateBodyGravity::new(
+    fn earth_j2_gravity(j2: f64) -> Result<J2Gravity, Box<dyn std::error::Error>> {
+        Ok(J2Gravity::new(
             GravitationalParameter::new(MU_EARTH),
             Distance::new(R_EARTH),
             J2Coefficient::new(j2),
@@ -442,6 +455,26 @@ mod tests {
             atmosphere()?,
             AreaPerMass::new(area_per_mass),
         ))
+    }
+
+    #[test]
+    fn frame_based_gravity_rejects_body_fixed_axes() {
+        assert_eq!(
+            TwoBodyGravity::from_frame(&Frame::earth_body_fixed()).err(),
+            Some(StateError::InvalidAxes),
+        );
+        assert_eq!(
+            J2Gravity::from_frame(&Frame::earth_body_fixed()).err(),
+            Some(StateError::InvalidAxes),
+        );
+    }
+
+    #[test]
+    fn frame_based_atmosphere_rejects_body_fixed_axes() {
+        assert_eq!(
+            ExponentialAtmosphere::from_frame(&Frame::earth_body_fixed()).err(),
+            Some(StateError::InvalidAxes),
+        );
     }
 
     fn state_from_position(px_m: f64, py_m: f64, pz_m: f64) -> CartesianStateComponents {
@@ -529,28 +562,28 @@ mod tests {
     }
 
     #[test]
-    fn oblate_body_gravity_with_zero_j2_matches_two_body_gravity() -> TestResult {
+    fn j2_gravity_with_zero_j2_matches_two_body_gravity() -> TestResult {
         let two_body = earth_gravity()?;
-        let oblate = earth_oblate_gravity(0.0)?;
+        let j2_gravity = earth_j2_gravity(0.0)?;
         let px = R_EARTH + 400_000.0;
         let epoch = Epoch::ZERO;
 
         let two_body_acceleration = two_body
             .acceleration_at(state_from_position(px, 200_000.0, 300_000.0), epoch)?
             .vector();
-        let oblate_acceleration = oblate
+        let j2_acceleration = j2_gravity
             .acceleration_at(state_from_position(px, 200_000.0, 300_000.0), epoch)?
             .vector();
 
-        assert_close(oblate_acceleration.x, two_body_acceleration.x, EPS);
-        assert_close(oblate_acceleration.y, two_body_acceleration.y, EPS);
-        assert_close(oblate_acceleration.z, two_body_acceleration.z, EPS);
+        assert_close(j2_acceleration.x, two_body_acceleration.x, EPS);
+        assert_close(j2_acceleration.y, two_body_acceleration.y, EPS);
+        assert_close(j2_acceleration.z, two_body_acceleration.z, EPS);
         Ok(())
     }
 
     #[test]
-    fn oblate_body_gravity_is_finite_for_inclined_leo_position() -> TestResult {
-        let gravity = earth_oblate_gravity(J2_EARTH)?;
+    fn j2_gravity_is_finite_for_inclined_leo_position() -> TestResult {
+        let gravity = earth_j2_gravity(J2_EARTH)?;
 
         let acceleration = gravity
             .acceleration_at(
@@ -566,8 +599,8 @@ mod tests {
     }
 
     #[test]
-    fn oblate_body_gravity_rejects_zero_radius() -> TestResult {
-        let gravity = earth_oblate_gravity(J2_EARTH)?;
+    fn j2_gravity_rejects_zero_radius() -> TestResult {
+        let gravity = earth_j2_gravity(J2_EARTH)?;
 
         assert!(matches!(
             gravity.acceleration_at(state_from_position(0.0, 0.0, 0.0), Epoch::ZERO,),
@@ -577,9 +610,9 @@ mod tests {
     }
 
     #[test]
-    fn oblate_body_gravity_stores_j2_coefficient() -> TestResult {
+    fn j2_gravity_stores_j2_coefficient() -> TestResult {
         let j2 = J2Coefficient::new(J2_EARTH);
-        let gravity = OblateBodyGravity::new(
+        let gravity = J2Gravity::new(
             GravitationalParameter::new(MU_EARTH),
             Distance::new(R_EARTH),
             j2,
@@ -590,42 +623,42 @@ mod tests {
     }
 
     #[test]
-    fn oblate_body_gravity_equatorial_j2_increases_inward_acceleration() -> TestResult {
+    fn j2_gravity_equatorial_j2_increases_inward_acceleration() -> TestResult {
         let two_body = earth_gravity()?;
-        let oblate = earth_oblate_gravity(J2_EARTH)?;
+        let j2_gravity = earth_j2_gravity(J2_EARTH)?;
         let epoch = Epoch::ZERO;
 
         let two_body_x = two_body
             .acceleration_at(state_from_position(R_EARTH + 400_000.0, 0.0, 0.0), epoch)?
             .vector()
             .x;
-        let oblate_x = oblate
+        let j2_x = j2_gravity
             .acceleration_at(state_from_position(R_EARTH + 400_000.0, 0.0, 0.0), epoch)?
             .vector()
             .x;
 
         assert!(two_body_x < 0.0);
-        assert!(oblate_x < two_body_x);
+        assert!(j2_x < two_body_x);
         Ok(())
     }
 
     #[test]
-    fn oblate_body_gravity_polar_axis_j2_reduces_inward_acceleration() -> TestResult {
+    fn j2_gravity_polar_axis_j2_reduces_inward_acceleration() -> TestResult {
         let two_body = earth_gravity()?;
-        let oblate = earth_oblate_gravity(J2_EARTH)?;
+        let j2_gravity = earth_j2_gravity(J2_EARTH)?;
         let epoch = Epoch::ZERO;
 
         let two_body_z = two_body
             .acceleration_at(state_from_position(0.0, 0.0, R_EARTH + 400_000.0), epoch)?
             .vector()
             .z;
-        let oblate_z = oblate
+        let j2_z = j2_gravity
             .acceleration_at(state_from_position(0.0, 0.0, R_EARTH + 400_000.0), epoch)?
             .vector()
             .z;
 
         assert!(two_body_z < 0.0);
-        assert!(oblate_z > two_body_z);
+        assert!(j2_z > two_body_z);
         Ok(())
     }
 
@@ -728,12 +761,13 @@ mod tests {
 
     #[test]
     fn low_orbit_with_drag_loses_specific_energy() -> TestResult {
-        let body = CentralBody::earth()?;
-        let mu = body.mu();
+        let frame = Frame::earth_inertial();
+        let mu = frame.mu()?;
         let orbit = Orbit::circular_equatorial(Distance::new(250_000.0));
         let mut states = CartesianStateBuffer::<1>::with_len(1)?;
-        states.write_from_state(0, &orbit.to_cartesian_state(&body)?)?;
-        let dynamics = CompositeDynamics::new(TwoBodyGravity::new(mu), drag_model(0.05)?);
+        states.write_from_state(0, &orbit.to_cartesian_state(&frame)?)?;
+        let dynamics =
+            CompositeDynamics::new(TwoBodyGravity::from_frame(&frame)?, drag_model(0.05)?);
         let initial_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
             .specific_energy()
             .square_meters_per_square_second();
@@ -756,9 +790,8 @@ mod tests {
 
     #[test]
     fn drag_decay_energy_loss_matches_physical_expectation() -> TestResult {
-        // let body = CentralBody::earth()?;
         let frame = Frame::earth_inertial();
-        let mu = body.mu();
+        let mu = frame.mu()?;
         let altitude_m = 250_000.0;
         let orbit = Orbit::circular_equatorial(Distance::new(altitude_m));
         let mut states = CartesianStateBuffer::<1>::with_len(1)?;
@@ -770,11 +803,12 @@ mod tests {
             .radius()
             .meters()
             - R_EARTH;
-        let dynamics = CompositeDynamics::new(TwoBodyGravity::new(mu), drag_model(0.1)?);
+        let dynamics =
+            CompositeDynamics::new(TwoBodyGravity::from_frame(&frame)?, drag_model(0.1)?);
         let integrator = RungeKutta4Integrator;
         let dt = TimeStep::new(10.0);
         let mut epoch = Epoch::ZERO;
-        let period_s = orbit.period(&body)?.seconds();
+        let period_s = orbit.period(&Frame::earth_inertial())?.seconds();
 
         while epoch.seconds() < period_s {
             let remaining_s = period_s - epoch.seconds();

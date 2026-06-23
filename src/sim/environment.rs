@@ -2,7 +2,6 @@ use super::config::ScenarioConfig;
 use super::engine::{AccelerationCommand, PropagationResult, Propagator};
 use super::termination::{StopReason, TerminationCondition};
 use crate::errors::{EnvironmentError, NumericalError};
-use crate::physics::body::CentralBody;
 use crate::physics::state::CartesianState;
 use crate::physics::types::{Distance, Epoch};
 
@@ -73,7 +72,7 @@ pub trait Environment {
 /// LEO circular-orbit rollout environment (MVP).
 pub struct LeoCircularEnv {
     initial_state: CartesianState,
-    body: CentralBody,
+    equatorial_radius: Distance,
     termination: TerminationCondition,
     steps_per_env_step: usize,
     propagator: Propagator,
@@ -85,10 +84,15 @@ impl LeoCircularEnv {
     pub fn from_config(config: &ScenarioConfig) -> Result<Self, EnvironmentError> {
         let plan = config.build()?;
         let initial_epoch = Epoch::ZERO;
-        let propagator = Propagator::new(plan.initial_state, initial_epoch, plan.propagation)?;
+        let propagator = Propagator::new(
+            plan.initial_state,
+            plan.frame,
+            initial_epoch,
+            plan.propagation,
+        )?;
         Ok(Self {
             initial_state: plan.initial_state,
-            body: plan.body,
+            equatorial_radius: plan.equatorial_radius,
             termination: plan.termination,
             steps_per_env_step: plan.steps_per_env_step,
             propagator,
@@ -109,8 +113,7 @@ impl LeoCircularEnv {
                     None,
                 ));
         }
-        let observation =
-            Observation::from_state(&propagation.final_state, self.body.equatorial_radius());
+        let observation = Observation::from_state(&propagation.final_state, self.equatorial_radius);
         self.done = true;
         Ok(RolloutEpisodeResult {
             observation,
@@ -154,7 +157,7 @@ impl Environment for LeoCircularEnv {
         self.done = false;
         Ok(Observation::from_state(
             &self.initial_state,
-            self.body.equatorial_radius(),
+            self.equatorial_radius,
         ))
     }
 
@@ -162,7 +165,7 @@ impl Environment for LeoCircularEnv {
         if self.done {
             let state = self.propagator.current_state()?;
             return Ok(StepResult {
-                observation: Observation::from_state(&state, self.body.equatorial_radius()),
+                observation: Observation::from_state(&state, self.equatorial_radius),
                 reward: 0.0,
                 done: true,
                 stop_reason: None,
@@ -178,10 +181,7 @@ impl Environment for LeoCircularEnv {
         self.done = done;
 
         Ok(StepResult {
-            observation: Observation::from_state(
-                &result.final_state,
-                self.body.equatorial_radius(),
-            ),
+            observation: Observation::from_state(&result.final_state, self.equatorial_radius),
             reward: 0.0,
             done,
             stop_reason: result.stop_reason,
@@ -219,6 +219,37 @@ mod tests {
         assert!(!result.done);
         assert_eq!(result.stop_reason, None);
         assert_eq!(result.steps, 3);
+    }
+
+    #[test]
+    fn repeated_steps_finish_at_episode_duration() {
+        let config = ScenarioConfig::from_toml(
+            r#"
+            name = "test"
+            altitude_m = 400_000.0
+            dt_s = 10.0
+            duration_s = 50.0
+            integrator = "leapfrog"
+            force_model = { kind = "two_body" }
+            sample_every_steps = 5
+            steps_per_env_step = 2
+            "#,
+        )
+        .expect("scenario");
+
+        let mut env = LeoCircularEnv::from_config(&config).expect("env");
+        let _obs = env.reset(42).expect("reset");
+        let action = Action::inertial([0.0, 0.0, 0.0]).expect("action");
+
+        let first = env.step(action).expect("first step");
+        let second = env.step(action).expect("second step");
+        let terminal = env.step(action).expect("terminal step");
+
+        assert!(!first.done);
+        assert!(!second.done);
+        assert!(terminal.done);
+        assert_eq!(terminal.stop_reason, Some(StopReason::DurationMet));
+        assert_eq!(terminal.steps, 1);
     }
 
     #[test]

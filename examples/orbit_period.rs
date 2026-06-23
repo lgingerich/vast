@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
 
 use vast::{
-    CentralBody, Column, Distance, Duration, EulerIntegrator, LeapfrogIntegrator, Orbit, Position,
+    Column, Distance, Duration, EulerIntegrator, Frame, LeapfrogIntegrator, Orbit, Position,
     RungeKutta4Integrator, SimBuilder, Speed, TimeStep, TwoBodyGravity, VelocityVerletIntegrator,
 };
 
@@ -17,32 +17,34 @@ struct Summary {
     position_drift_km: f64,
     speed_error_mps: f64,
     energy_error: f64,
+    relative_energy_error: f64,
     h_error: f64,
+    relative_h_error: f64,
     eccentricity: f64,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- configure simulation ---
-    let body = CentralBody::earth()?;
+    let frame = Frame::earth_inertial();
     let orbit_spec = Orbit::circular_equatorial(Distance::new(ALTITUDE_KM * 1000.0));
-    let speed = orbit_spec.speed(&body)?;
-    let period = orbit_spec.period(&body)?;
-    let initial_position = orbit_spec.to_cartesian_state(&body)?.position;
+    let speed = orbit_spec.speed(&frame)?;
+    let period = orbit_spec.period(&frame)?;
+    let initial_position = orbit_spec.to_cartesian_state(&frame)?.position;
 
     // --- print header ---
     println!(
         "Circular Earth orbit at {:.0} km altitude",
-        orbit_spec.semi_major_axis(&body).meters() / 1000.0 - vast::R_EARTH / 1000.0,
+        orbit_spec.semi_major_axis(&frame)?.meters() / 1000.0 - vast::R_EARTH / 1000.0,
     );
     println!(
         "radius: {:.3} km | speed: {:.3} km/s | period: {:.3} min",
-        orbit_spec.semi_major_axis(&body).meters() / 1000.0,
+        orbit_spec.semi_major_axis(&frame)?.meters() / 1000.0,
         speed.meters_per_second() / 1000.0,
         period.seconds() / 60.0,
     );
     println!();
     println!(
-        "{:>8} {:>8} {:>8} {:>12} {:>13} {:>20} {:>18} {:>18} {:>16} {:>12}",
+        "{:>8} {:>8} {:>8} {:>12} {:>13} {:>20} {:>18} {:>20} {:>12} {:>18} {:>12} {:>12}",
         "method",
         "dt(s)",
         "steps",
@@ -50,8 +52,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "overshoot(s)",
         "position drift(km)",
         "speed error(m/s)",
-        "energy error",
-        "h error",
+        "energy abs(m^2/s^2)",
+        "energy rel",
+        "h abs(m^2/s)",
+        "h rel",
         "eccentricity",
     );
 
@@ -61,7 +65,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let euler = run(
             "Euler",
-            &body,
+            frame,
             &orbit_spec,
             EulerIntegrator,
             dt,
@@ -71,7 +75,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?;
         let rk4 = run(
             "RK4",
-            &body,
+            frame,
             &orbit_spec,
             RungeKutta4Integrator,
             dt,
@@ -81,7 +85,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?;
         let verlet = run(
             "Verlet",
-            &body,
+            frame,
             &orbit_spec,
             VelocityVerletIntegrator,
             dt,
@@ -91,7 +95,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?;
         let leapfrog = run(
             "Leapfrog",
-            &body,
+            frame,
             &orbit_spec,
             LeapfrogIntegrator,
             dt,
@@ -112,7 +116,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[allow(clippy::too_many_arguments)]
 fn run<I: vast::Integrator>(
     method: &'static str,
-    body: &CentralBody,
+    frame: Frame,
     orbit_spec: &Orbit,
     integrator: I,
     dt: TimeStep,
@@ -121,9 +125,9 @@ fn run<I: vast::Integrator>(
     circular_speed: Speed,
 ) -> Result<Summary, Box<dyn std::error::Error>> {
     // --- run simulation ---
-    let result = SimBuilder::new(*body)
+    let result = SimBuilder::new(frame)
         .orbit(*orbit_spec)?
-        .dynamics(TwoBodyGravity::from_body(body))
+        .dynamics(TwoBodyGravity::from_frame(&frame)?)
         .integrator(integrator)
         .timestep(dt)
         .duration(period)?;
@@ -137,9 +141,12 @@ fn run<I: vast::Integrator>(
     let energy_error = (result.series.column(Column::SpecificEnergy)[1]
         - result.series.column(Column::SpecificEnergy)[0])
         .abs();
+    let relative_energy_error =
+        energy_error / result.series.column(Column::SpecificEnergy)[0].abs();
     let h_error = (result.series.column(Column::SpecificAngularMomentum)[1]
         - result.series.column(Column::SpecificAngularMomentum)[0])
         .abs();
+    let relative_h_error = h_error / result.series.column(Column::SpecificAngularMomentum)[0];
 
     Ok(Summary {
         method,
@@ -150,14 +157,16 @@ fn run<I: vast::Integrator>(
         position_drift_km: pos_drift / 1000.0,
         speed_error_mps: speed_error,
         energy_error,
+        relative_energy_error,
         h_error,
+        relative_h_error,
         eccentricity: result.series.column(Column::Eccentricity)[1],
     })
 }
 
 fn print_summary(s: &Summary) {
     println!(
-        "{:>8} {:>8.2} {:>8} {:>12.1} {:>13.3} {:>20.6} {:>18.9} {:>18.6} {:>16.6} {:>12.9}",
+        "{:>8} {:>8.2} {:>8} {:>12.1} {:>13.3} {:>20.6} {:>18.9} {:>20.6} {:>12.3e} {:>18.6} {:>12.3e} {:>12.9}",
         s.method,
         s.dt_s,
         s.steps,
@@ -166,7 +175,9 @@ fn print_summary(s: &Summary) {
         s.position_drift_km,
         s.speed_error_mps,
         s.energy_error,
+        s.relative_energy_error,
         s.h_error,
+        s.relative_h_error,
         s.eccentricity,
     );
 }

@@ -5,8 +5,7 @@ operations. Triggered by discussion of
 [bsk_rl](https://github.com/AVSLab/bsk_rl) (Basilisk-based RL) and the case for
 a medium-fidelity, highly-parallelizable sim.
 
-**This is an analysis document, not a decision log.** Open questions are
-flagged explicitly. Decisions belong in `MEMORY.md`.
+**This is an analysis document.** Open questions are flagged explicitly.
 
 ---
 
@@ -256,4 +255,3 @@ These are explicitly unresolved and should not be treated as settled:
 
 - [ROADMAP.md](../ROADMAP.md) — prioritized unimplemented work
 - [architecture.md](architecture.md) — layered simulator model
-- [MEMORY.md](../MEMORY.md) — architectural decisions log

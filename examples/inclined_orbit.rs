@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
 
 use vast::{
-    Angle, CentralBody, Column, Distance, Duration, Orbit, SimBuilder, TimeStep, TwoBodyGravity,
+    Angle, Column, Distance, Duration, Frame, Orbit, SimBuilder, TimeStep, TwoBodyGravity,
     VelocityVerletIntegrator,
 };
 
@@ -13,19 +13,19 @@ const PERIODS: f64 = 3.0;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- configure simulation ---
-    let body = CentralBody::earth()?;
+    let frame = Frame::earth_inertial();
     let spec = Orbit::circular_inclined(
         Distance::new(ALTITUDE_KM * 1000.0),
         Angle::from_degrees(INCLINATION_DEG),
         Angle::from_degrees(RAAN_DEG),
     );
-    let period = spec.period(&body)?;
+    let period = spec.period(&frame)?;
     let num_periods = Duration::new(period.seconds() * PERIODS);
 
     // --- run simulation ---
-    let result = SimBuilder::new(body)
+    let result = SimBuilder::new(frame)
         .orbit(spec)?
-        .dynamics(TwoBodyGravity::from_body(&body))
+        .dynamics(TwoBodyGravity::from_frame(&frame)?)
         .integrator(VelocityVerletIntegrator)
         .timestep(TimeStep::new(STEP_SECONDS))
         .duration(num_periods)?;
@@ -57,7 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         result.steps,
     );
     println!(
-        "radius drift: {:.6} km | energy error: {:.6} | h error: {:.6}",
+        "radius drift: {:.6} km | energy error: {:.6} m^2/s^2 | h error: {:.6} m^2/s",
         radius_drift.max(f64::EPSILON) / 1000.0,
         energy_error,
         h_error,
