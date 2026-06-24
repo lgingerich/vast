@@ -40,7 +40,11 @@ integrators, orbit construction, diagnostics, elements, and maneuver helpers.
 
 ```text
 External consumers
-  runner CLI · artifact recorder · local API · React/R3F replay UI · examples
+  runner CLI · local read API · React/R3F replay UI · examples
+        |
+        v
+Recording layer
+  run manifests · per-episode metrics · trajectory JSONL · read helpers
         |
         v
 Environment and mission APIs
@@ -55,6 +59,13 @@ Physics core
   domain types · Cartesian state storage · dynamics · integrators · orbits
   elements · diagnostics · maneuver vector math
 ```
+
+Arrows denote dependency: lower layers do not depend on higher ones.
+`recording` is a sibling top-level module to `sim`. It depends on simulation
+config, engine, and termination types to serialize run artifacts, but it owns
+no physics or stepping logic, and physics/simulation never depend on it. The
+runner CLI and the read API are thin consumers of `RunRecorder` and the
+`list_runs` / `read_trajectory` helpers.
 
 The important boundary is not merely module layout. It is ownership:
 
@@ -80,20 +91,22 @@ top-level operations, not the internal runtime plan or propagator machinery.
 The physics layer is re-exported from the crate root:
 
 - Constants: `MU_EARTH`, `R_EARTH`, `J2_EARTH`.
-- Frames: `Frame`, `Origin`, `Axes`, `BodyId`.
+- Frames: `Frame`, `Origin`, `Axes`, `BodyId` (currently `Earth` and `Moon`).
 - Domain scalars and vectors: `Angle`, `AngularRate`, `Epoch`, `TimeStep`,
   `Duration`, `Distance`, `Speed`, `MassDensity`, `AreaPerMass`,
-  `GravitationalParameter`, `J2Coefficient`, `Eccentricity`, `Position`,
-  `Velocity`, `Acceleration`.
+  `GravitationalParameter`, `J2Coefficient`, `Eccentricity`, `EquatorialRadius`,
+  `RotationRate`, `Position`, `Velocity`, `Acceleration`.
 - State storage: `CartesianState`, `CartesianStateComponents`,
   `CartesianStateBuffer<N>`, `CartesianStates`, `CartesianStatesMut`.
 - Dynamics: `Dynamics`, `TwoBodyGravity`, `J2Gravity`,
   `ExponentialAtmosphere`, `AtmosphericDrag`, `CompositeDynamics<A, B>`.
 - Integrators: `Integrator`, `EulerIntegrator`, `VelocityVerletIntegrator`,
   `LeapfrogIntegrator`, `RungeKutta4Integrator`.
-- Orbits and elements: `Orbit`, `OrbitalElements`, `OrbitalElementClassification`,
-  `ClassicalOrbitalElements`, `CircularInclinedElements`,
-  `CircularEquatorialElements`, `EquatorialEllipticElements`.
+- Orbits and elements: `Orbit` (enum with `CircularEquatorial`,
+  `CircularInclined`, `Elliptic` variants), `OrbitalElements`,
+  `OrbitalElementClassification`, `ClassicalOrbitalElements`,
+  `CircularInclinedElements`, `CircularEquatorialElements`,
+  `EquatorialEllipticElements`.
 - Propagation: `Sim`, `SimBuilder`. `Sim` is a pure stepper owning state,
   frame, dynamics, integrator, epoch, and step count. `advance(duration, dt)`
   and `step(dt)` take the timestep as a parameter; analysis (orbital
@@ -116,6 +129,34 @@ The simulation layer exposes:
 - Mission API: `run_mission`, `MissionResult`, `MissionSegmentResult`.
 - Propagation outputs: `PropagationResult`, `TrajectorySample`.
 - Stop reporting: `StopReason`.
+
+### Public Recording Surface
+
+`recording` is re-exported from the crate root and is the artifact boundary:
+
+- `RunRecorder`: creates a run directory and manifest from a `ScenarioConfig`
+  (`RunRecorder::new`) or a `MissionScenarioConfig` (`RunRecorder::new_mission`),
+  records episodes with `write_episode(EpisodeRecord)`, and can be re-opened
+  via `RunRecorder::open`.
+- `RunManifest`: per-run metadata (artifact version, run id, ISO-ish timestamp,
+  scenario name, full scenario/mission config snapshot, episode count).
+- `EpisodeRecord`: in-memory per-episode data (seed, steps, stop reason, final
+  altitude, reward, trajectory samples, optional mission segment metrics).
+- `EpisodeMetrics`: serialized per-episode line in `metrics.jsonl`.
+- `MissionSegmentMetrics`: per-segment summary for mission episodes.
+- `TrajectoryPoint`: one sampled point in `trajectory.jsonl` (`t`, `pos`, `vel`,
+  optional `segment_index`).
+- `list_runs`, `read_trajectory`, `stop_reason_name`: read-side helpers.
+
+Run artifacts live under `runs/<run_id>/`:
+
+```text
+runs/<run_id>/
+  manifest.json
+  metrics.jsonl
+  episodes/<NNNN>/
+    trajectory.jsonl
+```
 
 The following are intentionally crate-private:
 
@@ -191,6 +232,8 @@ crossed a boundary.
 | `GravitationalParameter` | m^3/s^2 | finite and strictly positive |
 | `J2Coefficient` | dimensionless | finite |
 | `Eccentricity` | dimensionless | finite and non-negative |
+| `EquatorialRadius` | meters | finite and strictly positive |
+| `RotationRate` | rad/s | finite |
 | `Position` | Cartesian vector, meters | all components finite |
 | `Velocity` | Cartesian vector, m/s | all components finite |
 | `Acceleration` | Cartesian vector, m/s^2 | all components finite |
@@ -279,9 +322,10 @@ Built-in models:
 
 `Dynamics` does not own control actions, burn schedules, termination conditions,
 scenario config, or artifact sampling. The one current low-thrust path is the
-simulation-local `ControlledDynamics` adapter in `engine.rs`; it adds an inertial
-acceleration command above the selected gravity model for a bounded environment
-step.
+simulation-local `ControlledDynamics` adapter in `engine.rs`; it wraps the
+active `RuntimeDynamics` variant and adds a piecewise-constant inertial
+acceleration command above the base force model acceleration for a bounded
+environment step.
 
 ### Integrators
 
@@ -327,15 +371,19 @@ adaptive step-size control.
 `orbits.rs` and `elements.rs` handle forward and inverse two-body orbit
 representations.
 
-`Orbit` is the forward initial-condition specification. It stores geometric
-orbit elements per orbital regime, and validation and derived quantities require
-a `Frame` whose central body supplies the gravitational parameter and equatorial
-radius.
+`Orbit` is the forward initial-condition specification. It is an enum whose
+variants store geometric orbit elements per orbital regime, and validation and
+derived quantities require a `Frame` whose central body supplies the
+gravitational parameter and equatorial radius. Variants:
 
-- `Orbit::circular_equatorial(altitude)` — circular equatorial orbit.
-- `Orbit::circular_inclined(altitude, inclination, raan)` — circular inclined
+- `Orbit::CircularEquatorial { altitude }` — circular equatorial orbit.
+- `Orbit::CircularInclined { altitude, inclination, raan }` — circular inclined
   orbit.
-- `Orbit::elliptic(...)` — all classical elements.
+- `Orbit::Elliptic { semi_major_axis, eccentricity, inclination, raan,
+  arg_periapsis, true_anomaly }` — all classical elements.
+
+Constructors `Orbit::circular_equatorial`, `Orbit::circular_inclined`, and
+`Orbit::elliptic` build the corresponding variants.
 
 Forward construction uses `Frame` as setup context without tagging
 `CartesianState` itself:
@@ -870,6 +918,8 @@ NumericalError
   -> PropagationError
   -> MissionError
   -> EnvironmentError
+
+RecordingError (sibling: I/O + serde_json)
 ```
 
 More precisely:
@@ -885,6 +935,8 @@ More precisely:
 - `MissionError` wraps propagation, state, and numerical errors and adds file
   read, TOML parse, and config-field validation failures.
 - `EnvironmentError` wraps mission, propagation, and recording failures.
+- `RecordingError` is a sibling artifact-boundary error wrapping `std::io::Error`
+  and `serde_json::Error`; it is not part of the simulation layer chain.
 
 Boundary guidance:
 
@@ -894,6 +946,7 @@ Boundary guidance:
 - Integrators and propagators return `PropagationError`.
 - Scenario loading/building and mission execution return `MissionError`.
 - Environment APIs return `EnvironmentError`.
+- Run artifact writing and reading return `RecordingError`.
 
 ---
 
@@ -943,8 +996,17 @@ The architecture currently includes:
 - runtime impulsive burn commands
 - mission runner over ordered segments
 - `LeoCircularEnv` with `reset` and bounded `step(action)`
+- per-step low-thrust inertial acceleration command above `Dynamics`, wired
+  through the `ControlledDynamics` adapter with a single monomorphized code path
 - full rollout recording path with trajectory samples
-- runner CLI, local read API, and replay/dashboard UI above the library
+- `recording` module: `RunRecorder`, manifests, `metrics.jsonl`, per-episode
+  `trajectory.jsonl`, mission segment metrics, and read helpers
+- runner CLI (`run` for rollouts and missions, `serve` for the read API),
+  local read API, and replay/dashboard/compare UI above the library
+- examples covering single-body propagation (`orbit_viz`, `orbit_period`,
+  `inclined_orbit`, `j2_precession`, `drag_decay`), force-model comparison
+  (`force_model_compare`), mission transfer (`mission_transfer`), and
+  environment rollout (`env_rollout`)
 
 ---
 
@@ -966,8 +1028,8 @@ architecture:
   stops are runtime termination conditions, not a separate event system.
 - `MissionResult` does not carry the central body. Callers that need the body
   radius or other constants can read them from the input scenario config.
-- Low thrust exists only as a per-step inertial acceleration command above
-  two-body gravity; there is no actuator, mass depletion, attitude model, or
+- Low thrust exists as a per-step inertial acceleration command above the
+  selected force model; there is no actuator, mass depletion, attitude model, or
   thrust profile scheduler.
 - Mission scripting is structured Rust/TOML config, not a DSL.
 - The UI reads saved artifacts only; it does not run physics or propagation in

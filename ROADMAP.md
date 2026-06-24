@@ -15,22 +15,22 @@ this roadmap implements toward.
 Implemented baseline (not listed below): two-body and J2 gravity, exponential
 atmospheric drag, `CompositeDynamics`, fixed-step Euler/RK4/Verlet/Leapfrog
 integrators, orbital diagnostics, classical element conversion (Cartesian ↔
-elements), J2 secular-rate checks, SoA Cartesian state stepping, **circular
-and elliptic orbit initial-condition construction via the **`Orbit` enum**
-convenience variants (`Orbit::CircularEquatorial`, `Orbit::CircularInclined`,
-`Orbit::Elliptic`).  **`Sim` builder** for fixed-duration physics-layer
-propagation without termination/sampling.  **propagator
-with duration/step/orbital termination and trajectory sampling**, **impulsive
-burns**, **TOML scenario config**, **`LeoCircularEnv` (`reset` / bounded
-`step(action)` with inertial acceleration command)**,
-**mission scenarios (`MissionRunner`, segment stops/burns)**, **run artifact
-recording with segment metadata**, **`runner` CLI (`run`, `serve`)**,
-**React + R3F replay UI (`ui/`)**, **RL ops dashboard with per-run metrics
-(reward, episode length, stop reasons, final altitude) and synchronized
-multi-episode comparison view**, **two-body/J2/J2+drag force models wired from
-scenario config through the `RuntimeDynamics` dispatch enum**, **frame-based
-orbit and force-model construction with `BodyId`-keyed constants and atmosphere
-parameters owned by `ExponentialAtmosphere`**.
+elements), J2 secular-rate checks, SoA Cartesian state stepping, circular and
+elliptic orbit initial-condition construction via the `Orbit` enum convenience
+variants (`Orbit::CircularEquatorial`, `Orbit::CircularInclined`,
+`Orbit::Elliptic`), `Sim` builder for fixed-duration physics-layer propagation
+without termination/sampling, propagator with duration/step/orbital
+termination and trajectory sampling, impulsive burns, TOML scenario config,
+`LeoCircularEnv` (`reset` / bounded `step(action)` with inertial acceleration
+command), mission scenarios (`MissionRunner`, segment stops/burns), run artifact
+recording (`RunRecorder`, manifests, `metrics.jsonl`, `trajectory.jsonl`,
+mission segment metrics) with segment metadata, `runner` CLI (`run`, `serve`),
+React + R3F replay UI (`ui/`) including an RL ops dashboard with per-run
+metrics (reward, episode length, stop reasons, final altitude) and a
+synchronized multi-episode comparison view, two-body/J2/J2+drag force models
+wired from scenario config through the `RuntimeDynamics` dispatch enum, and
+frame-based orbit and force-model construction with `BodyId`-keyed constants and
+atmosphere parameters owned by `ExponentialAtmosphere`.
 
 ---
 
@@ -210,8 +210,9 @@ force models read immutable params per body index.
 ## Control & Maneuvers
 
 Controls and maneuvers live **above** `Dynamics`, applied at step boundaries.
-Low thrust is tracked under **Simulation Layer → P1 Controlled Low Thrust**.
-Impulsive burns and mission segment burns are implemented; finite-burn arcs and
+Per-step low-thrust inertial acceleration is implemented through the
+`ControlledDynamics` adapter in `LeoCircularEnv`; impulsive and mission segment
+burns are implemented. Finite-burn arcs, actuator/mass-depletion models, and
 Lambert targeting remain future work.
 
 ---
