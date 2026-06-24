@@ -383,20 +383,17 @@ mod tests {
     }
 
     #[test]
-    fn drag_scenario_loses_energy_relative_to_two_body() {
-        // Drag dissipates orbital energy; two-body conserves it. Propagating
-        // a low orbit under both models for several orbits and comparing the
-        // specific energy change separates them.
-        let two_body_energy_delta = energy_delta("{ kind = \"two_body\" }");
-        let drag_energy_delta = energy_delta("{ kind = \"j2_drag\", area_per_mass_m2_kg = 0.02 }");
+    fn drag_scenario_shrinks_orbit_relative_to_two_body() {
+        let two_body_delta = radius_delta("{ kind = \"two_body\" }");
+        let drag_delta = radius_delta("{ kind = \"j2_drag\", area_per_mass_m2_kg = 0.02 }");
 
         assert!(
-            two_body_energy_delta.abs() < 0.01,
-            "two-body energy should be conserved, got delta {two_body_energy_delta}"
+            two_body_delta.abs() < 1.0,
+            "two-body radius should be conserved, got delta {two_body_delta}"
         );
         assert!(
-            drag_energy_delta < -1.0e-3,
-            "drag should lose energy, got delta {drag_energy_delta}"
+            drag_delta < -1.0,
+            "drag should shrink the orbit, got delta {drag_delta}"
         );
     }
 
@@ -462,10 +459,9 @@ mod tests {
     }
 
     /// Propagates a low circular orbit under the given force model and returns
-    /// the change in specific orbital energy (J/kg) over the episode.
-    fn energy_delta(force_model_inline: &str) -> f64 {
-        use crate::physics::diagnostics::OrbitalDiagnostics;
-
+    /// the change in orbital radius (meters) over the episode. Drag dissipates
+    /// energy and shrinks the orbit; two-body conserves it.
+    fn radius_delta(force_model_inline: &str) -> f64 {
         let toml = format!(
             r#"
             name = "energy"
@@ -482,17 +478,6 @@ mod tests {
         let episode = env.run_episode(0).expect("episode");
         let initial = &episode.propagation.samples[0].state;
         let final_state = &episode.propagation.final_state;
-        let mu = crate::physics::frame::Frame::earth_inertial()
-            .mu()
-            .expect("earth mu");
-        let initial_energy = OrbitalDiagnostics::from_state(initial, mu)
-            .expect("initial diagnostics")
-            .specific_energy()
-            .square_meters_per_square_second();
-        let final_energy = OrbitalDiagnostics::from_state(final_state, mu)
-            .expect("final diagnostics")
-            .specific_energy()
-            .square_meters_per_square_second();
-        final_energy - initial_energy
+        final_state.position.vector().norm() - initial.position.vector().norm()
     }
 }

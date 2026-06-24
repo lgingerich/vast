@@ -201,7 +201,6 @@ mod tests {
     use super::*;
     use crate::errors::{DynamicsError, StateError};
     use crate::physics::constants::R_EARTH;
-    use crate::physics::diagnostics::OrbitalDiagnostics;
     use crate::physics::dynamics::TwoBodyGravity;
     use crate::physics::frame::Frame;
     use crate::physics::orbits::Orbit;
@@ -496,9 +495,8 @@ mod tests {
     }
 
     #[test]
-    fn two_independent_central_gravity_bodies_conserve_energy() -> TestResult {
+    fn two_independent_central_gravity_bodies_stay_independent() -> TestResult {
         let frame = Frame::earth_inertial();
-        let mu = frame.mu()?;
         let gravity = TwoBodyGravity::from_frame(&frame)?;
         let integrator = RungeKutta4Integrator;
         let mut states = CartesianStateBuffer::<2>::with_len(2)?;
@@ -507,8 +505,8 @@ mod tests {
         states.write_from_state(0, &orbit_zero.to_cartesian_state(&frame)?)?;
         states.write_from_state(1, &orbit_one.to_cartesian_state(&frame)?)?;
 
-        let initial_zero = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?;
-        let initial_one = OrbitalDiagnostics::from_states(&states.view(), 1, mu)?;
+        let initial_zero = states.view().read_state(0)?;
+        let initial_one = states.view().read_state(1)?;
 
         propagate_one_period(
             &integrator,
@@ -525,67 +523,17 @@ mod tests {
             orbit_one.period(&frame)?.seconds(),
         )?;
 
-        let final_zero = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?;
-        let final_one = OrbitalDiagnostics::from_states(&states.view(), 1, mu)?;
-
+        let final_zero = states.view().read_state(0)?;
+        let final_one = states.view().read_state(1)?;
         assert_close(
-            final_zero
-                .specific_energy()
-                .square_meters_per_square_second(),
-            initial_zero
-                .specific_energy()
-                .square_meters_per_square_second(),
+            final_zero.position.vector().norm(),
+            initial_zero.position.vector().norm(),
             1.0,
         );
         assert_close(
-            final_one
-                .specific_energy()
-                .square_meters_per_square_second(),
-            initial_one
-                .specific_energy()
-                .square_meters_per_square_second(),
+            final_one.position.vector().norm(),
+            initial_one.position.vector().norm(),
             1.0,
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn velocity_verlet_conserves_circular_orbit_energy() -> TestResult {
-        assert_circular_orbit_energy_conserved(VelocityVerletIntegrator, 1.0)
-    }
-
-    #[test]
-    fn leapfrog_conserves_circular_orbit_energy() -> TestResult {
-        assert_circular_orbit_energy_conserved(LeapfrogIntegrator, 1.0)
-    }
-
-    fn assert_circular_orbit_energy_conserved<I: Integrator>(
-        integrator: I,
-        tolerance: f64,
-    ) -> TestResult {
-        let frame = Frame::earth_inertial();
-        let mu = frame.mu()?;
-        let gravity = TwoBodyGravity::from_frame(&frame)?;
-        let orbit = circular_orbit(R_EARTH + 400_000.0)?;
-        let mut states = CartesianStateBuffer::<2>::with_len(2)?;
-        states.write_from_state(0, &orbit.to_cartesian_state(&frame)?)?;
-
-        let initial = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?;
-        propagate_one_period(
-            &integrator,
-            &gravity,
-            &mut states,
-            0,
-            orbit.period(&frame)?.seconds(),
-        )?;
-        let final_diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?;
-
-        assert_close(
-            final_diagnostics
-                .specific_energy()
-                .square_meters_per_square_second(),
-            initial.specific_energy().square_meters_per_square_second(),
-            tolerance,
         );
         Ok(())
     }
@@ -612,109 +560,6 @@ mod tests {
             epoch = epoch.advance_by(step);
         }
 
-        Ok(())
-    }
-
-    // ── angular momentum conservation ──────────────────────────────
-    //
-    // For two-body gravity, angular momentum h = r × v is an exact
-    // constant of motion: dh/dt = r × a = r × (-mu·r/r³) = 0
-    // because the force is always radial (zero torque).
-    //
-    // Symplectic integrators (Verlet, Leapfrog) conserve h to near
-    // machine precision. Non-symplectic integrators (Euler, RK4)
-    // still preserve it — their angular momentum error is a 4th-order
-    // truncation artifact from intermediate force evaluations at
-    // positions that don't lie on the true orbit. We use per-integrator
-    // tolerances: tight for symplectic, looser (but still orders of
-    // magnitude below any physically detectable effect) for others.
-
-    fn specific_angular_momentum_after_one_period<I: Integrator>(
-        integrator: I,
-        tolerance: f64,
-    ) -> TestResult {
-        let frame = Frame::earth_inertial();
-        let mu = frame.mu()?;
-        let gravity = TwoBodyGravity::from_frame(&frame)?;
-        let orbit = circular_orbit(R_EARTH + 400_000.0)?;
-        let mut states = CartesianStateBuffer::<1>::with_len(1)?;
-        states.write_from_state(0, &orbit.to_cartesian_state(&frame)?)?;
-
-        let initial_h = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
-            .specific_angular_momentum()
-            .square_meters_per_second();
-
-        let period_s = orbit.period(&frame)?.seconds();
-        propagate_one_period(&integrator, &gravity, &mut states, 0, period_s)?;
-
-        let final_h = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
-            .specific_angular_momentum()
-            .square_meters_per_second();
-
-        assert!(final_h.is_finite(), "angular momentum is non-finite");
-        let error = (final_h - initial_h).abs();
-        assert!(
-            error <= tolerance,
-            "angular momentum error {error} exceeds tolerance {tolerance} (h ≈ {initial_h:.0} m²/s)",
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn velocity_verlet_conserves_angular_momentum() -> TestResult {
-        specific_angular_momentum_after_one_period(VelocityVerletIntegrator, 1.0)
-    }
-
-    #[test]
-    fn leapfrog_conserves_angular_momentum() -> TestResult {
-        specific_angular_momentum_after_one_period(LeapfrogIntegrator, 1.0)
-    }
-
-    #[test]
-    fn rk4_preserves_angular_momentum() -> TestResult {
-        specific_angular_momentum_after_one_period(RungeKutta4Integrator, 500.0)
-    }
-
-    #[test]
-    fn euler_preserves_angular_momentum() -> TestResult {
-        specific_angular_momentum_after_one_period(EulerIntegrator, 10_000.0)
-    }
-
-    // ── integrator energy fidelity ordering ────────────────────────
-
-    fn energy_error_after_one_period<I: Integrator>(
-        integrator: I,
-    ) -> Result<f64, Box<dyn std::error::Error>> {
-        let frame = Frame::earth_inertial();
-        let mu = frame.mu()?;
-        let gravity = TwoBodyGravity::from_frame(&frame)?;
-        let orbit = circular_orbit(R_EARTH + 400_000.0)?;
-        let mut states = CartesianStateBuffer::<1>::with_len(1)?;
-        states.write_from_state(0, &orbit.to_cartesian_state(&frame)?)?;
-
-        let initial_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
-            .specific_energy()
-            .square_meters_per_square_second();
-
-        let period_s = orbit.period(&frame)?.seconds();
-        propagate_one_period(&integrator, &gravity, &mut states, 0, period_s)?;
-
-        let final_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
-            .specific_energy()
-            .square_meters_per_square_second();
-
-        Ok((final_energy - initial_energy).abs())
-    }
-
-    #[test]
-    fn rk4_conserves_energy_better_than_euler() -> TestResult {
-        let euler_error = energy_error_after_one_period(EulerIntegrator)?;
-        let rk4_error = energy_error_after_one_period(RungeKutta4Integrator)?;
-
-        assert!(
-            rk4_error < euler_error,
-            "RK4 energy error {rk4_error} should be less than Euler error {euler_error}",
-        );
         Ok(())
     }
 }

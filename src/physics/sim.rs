@@ -11,8 +11,7 @@ use crate::physics::types::{Duration, Epoch, TimeStep};
 /// `Sim` owns the state buffer and a while-loop step control flow. It answers
 /// "where is this state after N seconds?" without knowing about termination
 /// conditions, sampling cadence, or artifact recording. Analysis (orbital
-/// elements, diagnostics) is computed by the caller via
-/// [`crate::physics::diagnostics::OrbitalDiagnostics::from_state`] or
+/// elements) is computed by the caller via
 /// [`crate::physics::elements::OrbitalElements::from_state`].
 ///
 /// The crate-private `Propagator` builds on the same
@@ -147,11 +146,7 @@ impl<D: Dynamics, I: Integrator> Sim<D, I> {
     ///
     /// The final step may be shorter than `dt` to land exactly on the
     /// requested duration.
-    pub fn advance(
-        &mut self,
-        duration: Duration,
-        dt: TimeStep,
-    ) -> Result<(), PropagationError> {
+    pub fn advance(&mut self, duration: Duration, dt: TimeStep) -> Result<(), PropagationError> {
         let target = self.epoch.seconds() + duration.seconds();
         while self.epoch.seconds() < target {
             let remaining = target - self.epoch.seconds();

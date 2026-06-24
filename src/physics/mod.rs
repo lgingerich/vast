@@ -1,5 +1,4 @@
 pub mod constants;
-pub mod diagnostics;
 pub mod dynamics;
 pub mod elements;
 pub mod frame;

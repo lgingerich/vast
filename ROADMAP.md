@@ -223,15 +223,18 @@ Lambert targeting remain future work.
 **What:** A reporting-oriented diagnostics API that computes orbital invariants
 only at explicit sample boundaries, integrated with propagator/output sampling.
 
-**Why:** Diagnostics are fine in examples today, but batch rollouts should not
-pay for ecc/energy/h every step unless requested.
+**Why:** Diagnostics were removed from the core crate to keep the propagator
+lean. Tests and examples currently compute radius/speed inline from
+`CartesianState`. A proper diagnostics API should return when the environment
+and analysis layer need it.
 
-**How it helps:** Preserves correctness tooling for tests and analysis while
+**How it helps:** Restores correctness tooling for tests and analysis while
 keeping core stepping lean.
 
 **First version scope:**
 
-- Keep `OrbitalDiagnostics::from_state` as the analysis entry point.
+- Re-introduce an `OrbitalDiagnostics`-equivalent type computed on demand
+  from `CartesianState` + `GravitationalParameter`.
 - Propagator/report hooks for periodic sampling.
 - Prefer relative drift metrics (`ΔE/E`, `Δh/h`) in examples and tests.
 

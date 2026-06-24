@@ -156,40 +156,36 @@ impl OrbitalElements {
         mu: GravitationalParameter,
         classification: OrbitalElementClassification,
     ) -> Result<Self, NumericalError> {
-        let diagnostics =
-            super::diagnostics::OrbitalDiagnostics::from_components(position, velocity, mu)?;
-        let position = position.vector();
+        let position_v = position.vector();
+        let velocity_v = velocity.vector();
+        let mu_f64 = mu.meters_cubed_per_second_squared();
+        let radius = position_v.norm();
+        let speed = velocity_v.norm();
 
-        if diagnostics
-            .specific_energy()
-            .square_meters_per_square_second()
-            >= 0.0
-        {
+        if radius == 0.0 {
+            return Err(NumericalError::ZeroNorm { field: "position" });
+        }
+
+        let specific_energy = 0.5 * speed * speed - mu_f64 / radius;
+        if specific_energy >= 0.0 {
             return Err(NumericalError::ConstraintViolation {
                 field: "specific energy",
                 reason: "must be negative for a bound orbit",
             });
         }
 
-        let semi_major_axis =
-            diagnostics
-                .semi_major_axis()
-                .ok_or(NumericalError::ConstraintViolation {
-                    field: "semi-major axis",
-                    reason: "not defined for unbound orbits",
-                })?;
-        let eccentricity = diagnostics.eccentricity();
-        let eccentricity_scalar = eccentricity.scalar();
-        let eccentricity_vector = *diagnostics.eccentricity_vector();
-        let h = *diagnostics.specific_angular_momentum_vector();
-        let h_norm = diagnostics
-            .specific_angular_momentum()
-            .square_meters_per_second();
+        let h = position_v.cross(&velocity_v);
+        let h_norm = h.norm();
         if h_norm == 0.0 {
             return Err(NumericalError::ZeroNorm {
                 field: "angular momentum",
             });
         }
+
+        let eccentricity_vector = velocity_v.cross(&h) / mu_f64 - position_v / radius;
+        let eccentricity = Eccentricity::new(eccentricity_vector.norm());
+        let eccentricity_scalar = eccentricity.scalar();
+        let semi_major_axis = Distance::new(-mu_f64 / (2.0 * specific_energy));
 
         let h_hat = h / h_norm;
         let node = Vector3::new(-h.y, h.x, 0.0);
@@ -207,27 +203,27 @@ impl OrbitalElements {
                 inclination,
                 Angle::new(node.y.atan2(node.x)),
                 angle_between_in_plane(node, eccentricity_vector, h_hat),
-                angle_between_in_plane(eccentricity_vector, position, h_hat),
+                angle_between_in_plane(eccentricity_vector, position_v, h_hat),
             ))),
             (true, false) => Ok(Self::CircularInclined(CircularInclinedElements::new(
                 semi_major_axis,
                 eccentricity,
                 inclination,
                 Angle::new(node.y.atan2(node.x)),
-                angle_between_in_plane(node, position, h_hat),
+                angle_between_in_plane(node, position_v, h_hat),
             ))),
             (true, true) => Ok(Self::CircularEquatorial(CircularEquatorialElements::new(
                 semi_major_axis,
                 eccentricity,
                 inclination,
-                Angle::new(position.y.atan2(position.x)),
+                Angle::new(position_v.y.atan2(position_v.x)),
             ))),
             (false, true) => Ok(Self::EquatorialElliptic(EquatorialEllipticElements::new(
                 semi_major_axis,
                 eccentricity,
                 inclination,
                 Angle::new(eccentricity_vector.y.atan2(eccentricity_vector.x)),
-                angle_between_in_plane(eccentricity_vector, position, h_hat),
+                angle_between_in_plane(eccentricity_vector, position_v, h_hat),
             ))),
         }
     }

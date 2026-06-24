@@ -1,9 +1,8 @@
 #![allow(missing_docs)]
 
 use vast::{
-    Distance, Duration, EulerIntegrator, Frame, GravitationalParameter, LeapfrogIntegrator, Orbit,
-    OrbitalDiagnostics, Position, RungeKutta4Integrator, SimBuilder, Speed, TimeStep,
-    TwoBodyGravity, VelocityVerletIntegrator,
+    Distance, Duration, EulerIntegrator, Frame, LeapfrogIntegrator, Orbit, Position,
+    RungeKutta4Integrator, SimBuilder, Speed, TimeStep, TwoBodyGravity, VelocityVerletIntegrator,
 };
 
 const ALTITUDE_KM: f64 = 400.0;
@@ -17,23 +16,15 @@ struct Summary {
     overshoot_s: f64,
     position_drift_km: f64,
     speed_error_mps: f64,
-    energy_error: f64,
-    relative_energy_error: f64,
-    h_error: f64,
-    relative_h_error: f64,
-    eccentricity: f64,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // --- configure simulation ---
     let frame = Frame::earth_inertial();
     let orbit_spec = Orbit::circular_equatorial(Distance::new(ALTITUDE_KM * 1000.0));
     let speed = orbit_spec.speed(&frame)?;
     let period = orbit_spec.period(&frame)?;
     let initial_position = orbit_spec.to_cartesian_state(&frame)?.position;
-    let mu = frame.mu()?;
 
-    // --- print header ---
     println!(
         "Circular Earth orbit at {:.0} km altitude",
         orbit_spec.semi_major_axis(&frame)?.meters() / 1000.0 - vast::R_EARTH / 1000.0,
@@ -46,7 +37,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!();
     println!(
-        "{:>8} {:>8} {:>8} {:>12} {:>13} {:>20} {:>18} {:>20} {:>12} {:>18} {:>12} {:>12}",
+        "{:>8} {:>8} {:>8} {:>12} {:>13} {:>20} {:>18}",
         "method",
         "dt(s)",
         "steps",
@@ -54,14 +45,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "overshoot(s)",
         "position drift(km)",
         "speed error(m/s)",
-        "energy abs(m^2/s^2)",
-        "energy rel",
-        "h abs(m^2/s)",
-        "h rel",
-        "eccentricity",
     );
 
-    // --- sweep timesteps ---
     for step_s in STEP_SECONDS {
         let dt = TimeStep::new(step_s);
 
@@ -74,7 +59,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             period,
             &initial_position,
             speed,
-            mu,
         )?;
         let rk4 = run(
             "RK4",
@@ -85,7 +69,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             period,
             &initial_position,
             speed,
-            mu,
         )?;
         let verlet = run(
             "Verlet",
@@ -96,7 +79,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             period,
             &initial_position,
             speed,
-            mu,
         )?;
         let leapfrog = run(
             "Leapfrog",
@@ -107,7 +89,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             period,
             &initial_position,
             speed,
-            mu,
         )?;
 
         print_summary(&euler);
@@ -129,50 +110,20 @@ fn run<I: vast::Integrator>(
     period: Duration,
     initial_position: &Position,
     circular_speed: Speed,
-    mu: GravitationalParameter,
 ) -> Result<Summary, Box<dyn std::error::Error>> {
-    // --- run simulation ---
     let mut sim = SimBuilder::new(frame)
         .orbit(*orbit_spec)?
         .dynamics(TwoBodyGravity::from_frame(&frame)?)
         .integrator(integrator)
         .build()?;
-    let initial_state = sim.state()?;
-    let initial_diag = OrbitalDiagnostics::from_state(&initial_state, mu)?;
     sim.advance(period, dt)?;
 
-    // --- inspect results ---
     let final_state = sim.state()?;
-    let final_diag = OrbitalDiagnostics::from_state(&final_state, mu)?;
-
     let pos_drift = (final_state.position.vector() - initial_position.vector())
         .norm()
         .max(f64::EPSILON);
     let speed_error =
-        (final_diag.speed().meters_per_second() - circular_speed.meters_per_second()).abs();
-    let energy_error = (final_diag
-        .specific_energy()
-        .square_meters_per_square_second()
-        - initial_diag
-            .specific_energy()
-            .square_meters_per_square_second())
-    .abs();
-    let relative_energy_error = energy_error
-        / initial_diag
-            .specific_energy()
-            .square_meters_per_square_second()
-            .abs();
-    let h_error = (final_diag
-        .specific_angular_momentum()
-        .square_meters_per_second()
-        - initial_diag
-            .specific_angular_momentum()
-            .square_meters_per_second())
-    .abs();
-    let relative_h_error = h_error
-        / initial_diag
-            .specific_angular_momentum()
-            .square_meters_per_second();
+        (final_state.velocity.vector().norm() - circular_speed.meters_per_second()).abs();
 
     let elapsed = Duration::new(sim.epoch().seconds());
     Ok(Summary {
@@ -183,17 +134,12 @@ fn run<I: vast::Integrator>(
         overshoot_s: elapsed.seconds() - period.seconds(),
         position_drift_km: pos_drift / 1000.0,
         speed_error_mps: speed_error,
-        energy_error,
-        relative_energy_error,
-        h_error,
-        relative_h_error,
-        eccentricity: final_diag.eccentricity().scalar(),
     })
 }
 
 fn print_summary(s: &Summary) {
     println!(
-        "{:>8} {:>8.2} {:>8} {:>12.1} {:>13.3} {:>20.6} {:>18.9} {:>20.6} {:>12.3e} {:>18.6} {:>12.3e} {:>12.9}",
+        "{:>8} {:>8.2} {:>8} {:>12.1} {:>13.3} {:>20.6} {:>18.9}",
         s.method,
         s.dt_s,
         s.steps,
@@ -201,10 +147,5 @@ fn print_summary(s: &Summary) {
         s.overshoot_s,
         s.position_drift_km,
         s.speed_error_mps,
-        s.energy_error,
-        s.relative_energy_error,
-        s.h_error,
-        s.relative_h_error,
-        s.eccentricity,
     );
 }

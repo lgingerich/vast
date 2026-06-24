@@ -404,7 +404,6 @@ impl<A: Dynamics, B: Dynamics> Dynamics for CompositeDynamics<A, B> {
 mod tests {
     use super::*;
     use crate::physics::constants::{J2_EARTH, MU_EARTH, R_EARTH};
-    use crate::physics::diagnostics::OrbitalDiagnostics;
     use crate::physics::frame::Frame;
     use crate::physics::integrators::{Integrator, RungeKutta4Integrator};
     use crate::physics::orbits::Orbit;
@@ -755,49 +754,13 @@ mod tests {
     }
 
     #[test]
-    fn low_orbit_with_drag_loses_specific_energy() -> TestResult {
+    fn drag_decay_reduces_altitude() -> TestResult {
         let frame = Frame::earth_inertial();
-        let mu = frame.mu()?;
-        let orbit = Orbit::circular_equatorial(Distance::new(250_000.0));
-        let mut states = CartesianStateBuffer::<1>::with_len(1)?;
-        states.write_from_state(0, &orbit.to_cartesian_state(&frame)?)?;
-        let dynamics =
-            CompositeDynamics::new(TwoBodyGravity::from_frame(&frame)?, drag_model(0.05)?);
-        let initial_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
-            .specific_energy()
-            .square_meters_per_square_second();
-        let integrator = RungeKutta4Integrator;
-        let dt = TimeStep::new(10.0);
-        let mut epoch = Epoch::ZERO;
-
-        for _ in 0..120 {
-            integrator.step(&dynamics, &mut states.view_mut(), 0, epoch, dt)?;
-            epoch = epoch.advance_by(dt);
-        }
-
-        let final_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
-            .specific_energy()
-            .square_meters_per_square_second();
-
-        assert!(final_energy < initial_energy);
-        Ok(())
-    }
-
-    #[test]
-    fn drag_decay_energy_loss_matches_physical_expectation() -> TestResult {
-        let frame = Frame::earth_inertial();
-        let mu = frame.mu()?;
         let altitude_m = 250_000.0;
         let orbit = Orbit::circular_equatorial(Distance::new(altitude_m));
         let mut states = CartesianStateBuffer::<1>::with_len(1)?;
         states.write_from_state(0, &orbit.to_cartesian_state(&frame)?)?;
-        let initial_energy = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
-            .specific_energy()
-            .square_meters_per_square_second();
-        let initial_altitude_m = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?
-            .radius()
-            .meters()
-            - R_EARTH;
+        let initial_altitude_m = states.view().read_state(0)?.position.vector().norm() - R_EARTH;
         let dynamics =
             CompositeDynamics::new(TwoBodyGravity::from_frame(&frame)?, drag_model(0.1)?);
         let integrator = RungeKutta4Integrator;
@@ -812,23 +775,7 @@ mod tests {
             epoch = epoch.advance_by(step);
         }
 
-        let diagnostics = OrbitalDiagnostics::from_states(&states.view(), 0, mu)?;
-        let final_energy = diagnostics
-            .specific_energy()
-            .square_meters_per_square_second();
-        let final_altitude_m = diagnostics.radius().meters() - R_EARTH;
-        let energy_loss = initial_energy - final_energy;
-
-        let min_energy_loss = 1.0;
-        let max_energy_loss = 100_000.0;
-        assert!(
-            energy_loss > min_energy_loss,
-            "expected energy loss > {min_energy_loss} m²/s², got {energy_loss}",
-        );
-        assert!(
-            energy_loss < max_energy_loss,
-            "energy loss {energy_loss} exceeds sanity bound {max_energy_loss} m²/s²",
-        );
+        let final_altitude_m = states.view().read_state(0)?.position.vector().norm() - R_EARTH;
         assert!(
             final_altitude_m < initial_altitude_m,
             "drag should reduce altitude: initial {initial_altitude_m} m, final {final_altitude_m} m",

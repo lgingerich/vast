@@ -94,13 +94,10 @@ The physics layer is re-exported from the crate root:
 - Orbits and elements: `Orbit`, `OrbitalElements`, `OrbitalElementClassification`,
   `ClassicalOrbitalElements`, `CircularInclinedElements`,
   `CircularEquatorialElements`, `EquatorialEllipticElements`.
-- Diagnostics: `OrbitalDiagnostics`, `SpecificEnergy`,
-  `SpecificAngularMomentum`.
 - Propagation: `Sim`, `SimBuilder`. `Sim` is a pure stepper owning state,
   frame, dynamics, integrator, epoch, and step count. `advance(duration, dt)`
   and `step(dt)` take the timestep as a parameter; analysis (orbital
-  diagnostics, elements) is computed by callers via
-  `OrbitalDiagnostics::from_state` / `OrbitalElements::from_state`.
+  elements) is computed by callers via `OrbitalElements::from_state`.
 
 `physics::maneuvers` is a module-level API, but its helpers are not re-exported
 at the crate root today. Simulation burns consume them internally, and mission
@@ -153,7 +150,6 @@ inspection, diagnostics, and maneuver vector math.
 | `integrators` | Fixed-step `Integrator` trait and Euler, Verlet, Leapfrog, RK4 implementations. |
 | `orbits` | Forward elliptic orbit construction from Keplerian inputs. |
 | `elements` | Cartesian-to-elements conversion with singular-safe element variants. |
-| `diagnostics` | Two-body orbital invariants and bound-orbit radii. |
 | `maneuvers` | State-dependent impulsive delta-v vector helpers and analytical transfer formulas. |
 | `sim` | Convenience builder for fixed-duration single-body propagation. |
 
@@ -164,7 +160,6 @@ constants
 types
   -> state
       -> dynamics
-      -> diagnostics
       -> integrators
   -> orbits/elements
   -> maneuvers
@@ -382,27 +377,12 @@ singular-safe variant. Defaults come from `constants.rs`:
 
 The inverse path rejects unbound states and zero angular momentum. Conversion
 from `OrbitalElements` back to Cartesian state also resolves through a `Frame`;
-diagnostics and inverse extraction still take an explicit gravitational
-parameter. Simulation uses `OrbitalElements::orbital_phase_angle()` for apoapsis
-and periapsis detection; it does not need to know which element variant was
-selected.
-
-### Diagnostics
-
-`diagnostics.rs` computes two-body orbital invariants from either a
-`CartesianState` or an indexed `CartesianStates` view:
-
-- radius and inertial speed
-- specific orbital energy
-- specific angular momentum vector and magnitude
-- eccentricity vector and scalar eccentricity
-- optional semi-major axis, periapsis radius, and apoapsis radius for bound
-  elliptical states
-
-Diagnostics are analysis tools, not implicit work in every propagation step.
-Tests and examples use them to check conservation, drag decay, and orbital
-conversion behavior. Future sampled diagnostics should remain explicit at sample
-boundaries so batch rollouts do not pay diagnostic cost unless requested.
+inverse extraction still takes an explicit gravitational parameter. The
+two-body orbital invariants (specific energy, eccentricity vector, angular
+momentum) needed by `OrbitalElements::from_components` are computed inline
+within `elements.rs`. Simulation uses `OrbitalElements::orbital_phase_angle()`
+for apoapsis and periapsis detection; it does not need to know which element
+variant was selected.
 
 ### Maneuvers
 
