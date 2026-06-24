@@ -250,6 +250,21 @@ impl<A, B> CompositeDynamics<A, B> {
     }
 }
 
+/// Closed set of validated force models used by the propagator.
+///
+/// Each variant owns a fully-validated dynamics model. The enum itself
+/// implements [`Dynamics`] so the propagator step path dispatches without
+/// trait objects and stays allocation-free.
+#[derive(Debug)]
+pub(crate) enum RuntimeDynamics {
+    /// Point-mass central gravity.
+    TwoBody(TwoBodyGravity),
+    /// Central gravity with J2 perturbation.
+    J2(J2Gravity),
+    /// J2 gravity composed with exponential atmospheric drag.
+    J2Drag(CompositeDynamics<J2Gravity, AtmosphericDrag>),
+}
+
 /// Computes acceleration for a state at a given simulation time.
 ///
 /// The `t` parameter supports time-dependent models (e.g. low-thrust
@@ -397,6 +412,70 @@ impl<A: Dynamics, B: Dynamics> Dynamics for CompositeDynamics<A, B> {
             fv.y + sv.y,
             fv.z + sv.z,
         )))
+    }
+}
+
+impl Dynamics for RuntimeDynamics {
+    fn acceleration_at(
+        &self,
+        state: CartesianStateComponents,
+        t: Epoch,
+    ) -> Result<Acceleration, DynamicsError> {
+        match self {
+            Self::TwoBody(d) => d.acceleration_at(state, t),
+            Self::J2(d) => d.acceleration_at(state, t),
+            Self::J2Drag(d) => d.acceleration_at(state, t),
+        }
+    }
+}
+
+/// Adds a piecewise-constant inertial acceleration above an arbitrary
+/// base dynamics model.
+#[derive(Debug)]
+pub struct ControlledDynamics<'a, D: Dynamics + ?Sized> {
+    /// The base dynamics model.
+    pub dynamics: &'a D,
+    /// Constant inertial acceleration added to the base acceleration.
+    pub command: Acceleration,
+}
+
+impl<D: Dynamics + ?Sized> Dynamics for ControlledDynamics<'_, D> {
+    fn acceleration_at(
+        &self,
+        state: CartesianStateComponents,
+        epoch: Epoch,
+    ) -> Result<Acceleration, DynamicsError> {
+        self.dynamics
+            .acceleration_at(state, epoch)
+            .map(|base| base + self.command)
+    }
+}
+
+/// Constant inertial acceleration, e.g. a piecewise-constant low-thrust
+/// profile held fixed for the duration of an environment step.
+///
+/// Composes with other dynamics models via [`CompositeDynamics`] for
+/// fixed-thrust scenarios, or via [`ControlledDynamics`] when the
+/// command changes at environment-step boundaries.
+#[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
+pub struct ConstantAcceleration(Acceleration);
+
+impl ConstantAcceleration {
+    #[inline]
+    #[allow(dead_code)]
+    pub const fn new(acceleration: Acceleration) -> Self {
+        Self(acceleration)
+    }
+}
+
+impl Dynamics for ConstantAcceleration {
+    fn acceleration_at(
+        &self,
+        _state: CartesianStateComponents,
+        _t: Epoch,
+    ) -> Result<Acceleration, DynamicsError> {
+        Ok(self.0)
     }
 }
 

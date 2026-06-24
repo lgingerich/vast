@@ -196,6 +196,41 @@ fn write_integrated_vectors(
     Ok(())
 }
 
+/// Closed set of integrators for scenario dispatch.
+///
+/// Dispatches to the unit-struct integrators without trait objects and
+/// takes the body index explicitly so callers choose which body to step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum IntegratorKind {
+    /// Semi-implicit Euler.
+    Euler,
+    /// Velocity Verlet (symplectic).
+    VelocityVerlet,
+    /// Leapfrog (kick-drift-kick).
+    Leapfrog,
+    /// Fourth-order Runge-Kutta.
+    RungeKutta4,
+}
+
+impl IntegratorKind {
+    /// Steps one indexed body by `dt` using the provided dynamics.
+    pub(crate) fn step<D: Dynamics>(
+        self,
+        dynamics: &D,
+        states: &mut CartesianStatesMut<'_>,
+        index: usize,
+        t: Epoch,
+        dt: TimeStep,
+    ) -> Result<(), PropagationError> {
+        match self {
+            Self::Euler => EulerIntegrator.step(dynamics, states, index, t, dt),
+            Self::VelocityVerlet => VelocityVerletIntegrator.step(dynamics, states, index, t, dt),
+            Self::Leapfrog => LeapfrogIntegrator.step(dynamics, states, index, t, dt),
+            Self::RungeKutta4 => RungeKutta4Integrator.step(dynamics, states, index, t, dt),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

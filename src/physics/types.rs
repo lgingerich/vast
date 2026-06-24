@@ -661,6 +661,9 @@ impl Velocity {
 pub struct Acceleration(Vector3<f64>);
 
 impl Acceleration {
+    /// Zero acceleration.
+    pub const ZERO: Self = Self(Vector3::new(0.0, 0.0, 0.0));
+
     /// Creates an acceleration from a finite Cartesian vector.
     ///
     /// Panics in debug builds if any component is not finite.
@@ -676,6 +679,30 @@ impl Acceleration {
     #[inline]
     pub const fn vector(self) -> Vector3<f64> {
         self.0
+    }
+}
+
+impl Add<Acceleration> for Acceleration {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        let result = Self(self.0 + rhs.0);
+        debug_assert!(result.0.x.is_finite(), "acceleration overflow on x");
+        debug_assert!(result.0.y.is_finite(), "acceleration overflow on y");
+        debug_assert!(result.0.z.is_finite(), "acceleration overflow on z");
+        result
+    }
+}
+
+impl Sub<Acceleration> for Acceleration {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        let result = Self(self.0 - rhs.0);
+        debug_assert!(result.0.x.is_finite(), "acceleration overflow on x");
+        debug_assert!(result.0.y.is_finite(), "acceleration overflow on y");
+        debug_assert!(result.0.z.is_finite(), "acceleration overflow on z");
+        result
     }
 }
 

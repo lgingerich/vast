@@ -29,15 +29,11 @@ pub(crate) enum TerminationCondition {
     StepCount(usize),
     /// Stop on the first apoapsis after `min_steps` integrator steps.
     Apoapsis {
-        /// Gravitational parameter for element extraction.
-        mu: GravitationalParameter,
         /// Minimum integrator steps before an apoapsis can trigger.
         min_steps: usize,
     },
     /// Stop on the first periapsis after `min_steps` integrator steps.
     Periapsis {
-        /// Gravitational parameter for element extraction.
-        mu: GravitationalParameter,
         /// Minimum integrator steps before a periapsis can trigger.
         min_steps: usize,
     },
@@ -46,32 +42,37 @@ pub(crate) enum TerminationCondition {
 impl TerminationCondition {
     /// Creates an apoapsis stop with the default minimum step guard.
     #[must_use]
-    pub(crate) fn apoapsis(mu: GravitationalParameter) -> Self {
+    pub(crate) fn apoapsis() -> Self {
         Self::Apoapsis {
-            mu,
             min_steps: DEFAULT_ORBITAL_MIN_STEPS,
         }
     }
 
     /// Creates a periapsis stop with the default minimum step guard.
     #[must_use]
-    pub(crate) fn periapsis(mu: GravitationalParameter) -> Self {
+    pub(crate) fn periapsis() -> Self {
         Self::Periapsis {
-            mu,
             min_steps: DEFAULT_ORBITAL_MIN_STEPS,
         }
     }
 
     /// Returns the stop reason if the condition is satisfied.
-    pub(crate) fn stop_reason(&self, context: TerminationContext<'_>) -> Option<StopReason> {
+    ///
+    /// `mu` is the central body's gravitational parameter, used only by
+    /// apoapsis and periapsis stops to compute orbital phase angles.
+    pub(crate) fn stop_reason(
+        &self,
+        context: TerminationContext<'_>,
+        mu: GravitationalParameter,
+    ) -> Option<StopReason> {
         match self {
             Self::Duration(duration) => {
                 let elapsed = context.current_epoch.duration_since(context.start_epoch);
                 (elapsed >= *duration).then_some(StopReason::DurationMet)
             }
             Self::StepCount(limit) => (context.steps >= *limit).then_some(StopReason::StepCountMet),
-            Self::Apoapsis { mu, min_steps } => apoapsis_met(*mu, *min_steps, context),
-            Self::Periapsis { mu, min_steps } => periapsis_met(*mu, *min_steps, context),
+            Self::Apoapsis { min_steps } => apoapsis_met(mu, *min_steps, context),
+            Self::Periapsis { min_steps } => periapsis_met(mu, *min_steps, context),
         }
     }
 
@@ -103,11 +104,14 @@ pub(crate) struct TerminationTracker {
 
 impl TerminationTracker {
     /// Initializes termination bookkeeping at the segment start state.
-    pub(crate) fn new(condition: &TerminationCondition, state: &CartesianState) -> Self {
+    ///
+    /// `mu` enables orbital-phase tracking; pass `Some(mu)` for orbital stop
+    /// conditions, `None` for duration and step-count stops.
+    pub(crate) fn new(state: &CartesianState, mu: GravitationalParameter) -> Self {
         Self {
             previous_orbital_angle_rad: None,
             previous_radial_velocity_mps: None,
-            current_orbital_phase_angle_rad: orbital_phase_for(condition, state),
+            current_orbital_phase_angle_rad: orbital_phase_angle_rad(state, mu),
             current_radial_velocity_mps: radial_velocity_mps(state),
         }
     }
@@ -132,10 +136,10 @@ impl TerminationTracker {
     }
 
     /// Advances bookkeeping after the propagator reaches a new step boundary.
-    pub(crate) fn advance(&mut self, condition: &TerminationCondition, state: &CartesianState) {
+    pub(crate) fn advance(&mut self, state: &CartesianState, mu: GravitationalParameter) {
         self.previous_orbital_angle_rad = self.current_orbital_phase_angle_rad;
         self.previous_radial_velocity_mps = Some(self.current_radial_velocity_mps);
-        self.current_orbital_phase_angle_rad = orbital_phase_for(condition, state);
+        self.current_orbital_phase_angle_rad = orbital_phase_angle_rad(state, mu);
         self.current_radial_velocity_mps = radial_velocity_mps(state);
     }
 }
@@ -237,15 +241,6 @@ fn orbital_crossing(
         || angle_near(current_angle, target_rad)
 }
 
-fn orbital_phase_for(condition: &TerminationCondition, state: &CartesianState) -> Option<f64> {
-    match condition {
-        TerminationCondition::Duration(_) | TerminationCondition::StepCount(_) => None,
-        TerminationCondition::Apoapsis { mu, .. } | TerminationCondition::Periapsis { mu, .. } => {
-            orbital_phase_angle_rad(state, *mu)
-        }
-    }
-}
-
 fn orbital_phase_angle_rad(state: &CartesianState, mu: GravitationalParameter) -> Option<f64> {
     let elements =
         OrbitalElements::from_state(state, mu, OrbitalElementClassification::default()).ok()?;
@@ -278,17 +273,21 @@ mod tests {
         let current = Epoch::new(100.0);
         let condition = TerminationCondition::Duration(Duration::new(100.0));
         let state = sample_state();
+        let mu = GravitationalParameter::new(MU_EARTH);
 
         assert_eq!(
-            condition.stop_reason(TerminationContext {
-                start_epoch: start,
-                current_epoch: current,
-                steps: 0,
-                state: &state,
-                previous_orbital_angle_rad: None,
-                previous_radial_velocity_mps: None,
-                current_orbital_phase_angle_rad: None,
-            }),
+            condition.stop_reason(
+                TerminationContext {
+                    start_epoch: start,
+                    current_epoch: current,
+                    steps: 0,
+                    state: &state,
+                    previous_orbital_angle_rad: None,
+                    previous_radial_velocity_mps: None,
+                    current_orbital_phase_angle_rad: None,
+                },
+                mu,
+            ),
             Some(StopReason::DurationMet)
         );
     }
@@ -299,29 +298,36 @@ mod tests {
         let current = Epoch::new(1.0);
         let condition = TerminationCondition::StepCount(5);
         let state = sample_state();
+        let mu = GravitationalParameter::new(MU_EARTH);
 
         assert_eq!(
-            condition.stop_reason(TerminationContext {
-                start_epoch: start,
-                current_epoch: current,
-                steps: 4,
-                state: &state,
-                previous_orbital_angle_rad: None,
-                previous_radial_velocity_mps: None,
-                current_orbital_phase_angle_rad: None,
-            }),
+            condition.stop_reason(
+                TerminationContext {
+                    start_epoch: start,
+                    current_epoch: current,
+                    steps: 4,
+                    state: &state,
+                    previous_orbital_angle_rad: None,
+                    previous_radial_velocity_mps: None,
+                    current_orbital_phase_angle_rad: None,
+                },
+                mu,
+            ),
             None
         );
         assert_eq!(
-            condition.stop_reason(TerminationContext {
-                start_epoch: start,
-                current_epoch: current,
-                steps: 5,
-                state: &state,
-                previous_orbital_angle_rad: None,
-                previous_radial_velocity_mps: None,
-                current_orbital_phase_angle_rad: None,
-            }),
+            condition.stop_reason(
+                TerminationContext {
+                    start_epoch: start,
+                    current_epoch: current,
+                    steps: 5,
+                    state: &state,
+                    previous_orbital_angle_rad: None,
+                    previous_radial_velocity_mps: None,
+                    current_orbital_phase_angle_rad: None,
+                },
+                mu,
+            ),
             Some(StopReason::StepCountMet)
         );
     }
@@ -330,19 +336,22 @@ mod tests {
     fn apoapsis_met_on_radial_velocity_sign_crossing() {
         let mu = GravitationalParameter::new(MU_EARTH);
         let state = sample_state();
-        let condition = TerminationCondition::apoapsis(mu);
+        let condition = TerminationCondition::apoapsis();
         let epoch = Epoch::new(10.0);
 
         assert_eq!(
-            condition.stop_reason(TerminationContext {
-                start_epoch: Epoch::ZERO,
-                current_epoch: epoch,
-                steps: 1,
-                state: &state,
-                previous_orbital_angle_rad: None,
-                previous_radial_velocity_mps: Some(1.0),
-                current_orbital_phase_angle_rad: None,
-            }),
+            condition.stop_reason(
+                TerminationContext {
+                    start_epoch: Epoch::ZERO,
+                    current_epoch: epoch,
+                    steps: 1,
+                    state: &state,
+                    previous_orbital_angle_rad: None,
+                    previous_radial_velocity_mps: Some(1.0),
+                    current_orbital_phase_angle_rad: None,
+                },
+                mu,
+            ),
             Some(StopReason::ApoapsisMet)
         );
     }
@@ -351,19 +360,22 @@ mod tests {
     fn periapsis_met_on_radial_velocity_sign_crossing() {
         let mu = GravitationalParameter::new(MU_EARTH);
         let state = sample_state();
-        let condition = TerminationCondition::periapsis(mu);
+        let condition = TerminationCondition::periapsis();
         let epoch = Epoch::new(10.0);
 
         assert_eq!(
-            condition.stop_reason(TerminationContext {
-                start_epoch: Epoch::ZERO,
-                current_epoch: epoch,
-                steps: 1,
-                state: &state,
-                previous_orbital_angle_rad: None,
-                previous_radial_velocity_mps: Some(-1.0),
-                current_orbital_phase_angle_rad: None,
-            }),
+            condition.stop_reason(
+                TerminationContext {
+                    start_epoch: Epoch::ZERO,
+                    current_epoch: epoch,
+                    steps: 1,
+                    state: &state,
+                    previous_orbital_angle_rad: Some(-1.0),
+                    previous_radial_velocity_mps: Some(-1.0),
+                    current_orbital_phase_angle_rad: None,
+                },
+                mu,
+            ),
             Some(StopReason::PeriapsisMet)
         );
     }

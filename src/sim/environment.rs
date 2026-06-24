@@ -1,9 +1,10 @@
 use super::config::ScenarioConfig;
-use super::engine::{AccelerationCommand, PropagationResult, Propagator};
+use super::engine::{PropagationResult, Propagator};
 use super::termination::{StopReason, TerminationCondition};
 use crate::errors::{EnvironmentError, NumericalError};
 use crate::physics::state::CartesianState;
-use crate::physics::types::{Distance, Epoch};
+use crate::physics::types::{Acceleration, Distance};
+use nalgebra::Vector3;
 
 /// Inertial thrust acceleration action in meters per second squared.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -83,13 +84,7 @@ impl LeoCircularEnv {
     /// Builds an environment from a scenario configuration.
     pub fn from_config(config: &ScenarioConfig) -> Result<Self, EnvironmentError> {
         let plan = config.build()?;
-        let initial_epoch = Epoch::ZERO;
-        let propagator = Propagator::new(
-            plan.initial_state,
-            plan.frame,
-            initial_epoch,
-            plan.propagation,
-        )?;
+        let propagator = Propagator::new(plan.initial_state, plan.frame, plan.propagation)?;
         Ok(Self {
             initial_state: plan.initial_state,
             equatorial_radius: plan.equatorial_radius,
@@ -173,7 +168,8 @@ impl Environment for LeoCircularEnv {
             });
         }
 
-        let command = AccelerationCommand::inertial(action.acceleration_mps2())?;
+        let [ax, ay, az] = action.acceleration_mps2();
+        let command = Acceleration::from_vector(Vector3::new(ax, ay, az));
         let result =
             self.propagator
                 .advance_steps(&self.termination, self.steps_per_env_step, command)?;

@@ -1,15 +1,10 @@
 use super::burns::BurnCommand;
-use super::config::IntegratorKind;
-use super::plan::{PropagationPlan, RuntimeDynamics};
+use super::plan::PropagationPlan;
 use super::termination::{StopReason, TerminationCondition, TerminationTracker};
 use crate::errors::PropagationError;
-use crate::physics::dynamics::Dynamics;
-use crate::physics::frame::{Axes, Frame};
-use crate::physics::integrators::{
-    EulerIntegrator, Integrator, LeapfrogIntegrator, RungeKutta4Integrator,
-    VelocityVerletIntegrator,
-};
-use crate::physics::state::{CartesianState, CartesianStateBuffer, CartesianStateComponents};
+use crate::physics::dynamics::ControlledDynamics;
+use crate::physics::frame::Frame;
+use crate::physics::state::{CartesianState, CartesianStateBuffer};
 use crate::physics::types::{Acceleration, Epoch, TimeStep};
 
 /// One recorded state sample along a propagation.
@@ -62,28 +57,24 @@ pub(crate) struct AdvanceResult {
 /// Fixed-step propagator for a single indexed body in a state buffer.
 #[derive(Debug)]
 pub(crate) struct Propagator {
-    frame: Frame,
     epoch: Epoch,
-    initial_epoch: Epoch,
     propagation: PropagationPlan,
     states: CartesianStateBuffer<1>,
 }
 
 impl Propagator {
-    /// Creates a propagator starting from `initial_state` at the given epoch.
+    /// Creates a propagator starting from `initial_state` at epoch zero.
     pub(crate) fn new(
         initial_state: CartesianState,
         frame: Frame,
-        initial_epoch: Epoch,
         propagation: PropagationPlan,
     ) -> Result<Self, PropagationError> {
+        frame.require_inertial_axes()?;
         let mut states = CartesianStateBuffer::<1>::with_len(1)?;
         states.write_from_state(0, &initial_state)?;
 
         Ok(Self {
-            frame,
-            epoch: initial_epoch,
-            initial_epoch,
+            epoch: Epoch::ZERO,
             propagation,
             states,
         })
@@ -91,7 +82,7 @@ impl Propagator {
 
     /// Resets epoch and state for a new episode.
     pub(crate) fn reset(&mut self, initial_state: CartesianState) -> Result<(), PropagationError> {
-        self.epoch = self.initial_epoch;
+        self.epoch = Epoch::ZERO;
         self.states.write_from_state(0, &initial_state)?;
         Ok(())
     }
@@ -121,16 +112,12 @@ impl Propagator {
         segment_index: Option<usize>,
     ) -> Result<PropagationResult, PropagationError> {
         let mut samples = Vec::new();
-        let mut sampling = SegmentSampling {
-            every_steps: self.propagation.sample_every_steps,
-            segment_index,
-            samples: &mut samples,
-        };
         let result = self.advance(
             termination,
             None,
-            AccelerationCommand::default(),
-            Some(&mut sampling),
+            Acceleration::ZERO,
+            segment_index,
+            Some(&mut samples),
             self.epoch,
         )?;
         let Some(stop_reason) = result.stop_reason else {
@@ -150,14 +137,15 @@ impl Propagator {
         &mut self,
         termination: &TerminationCondition,
         max_steps: usize,
-        command: AccelerationCommand,
+        command: Acceleration,
     ) -> Result<AdvanceResult, PropagationError> {
         self.advance(
             termination,
             Some(max_steps),
             command,
             None,
-            self.initial_epoch,
+            None,
+            Epoch::ZERO,
         )
     }
 
@@ -165,16 +153,22 @@ impl Propagator {
         &mut self,
         termination: &TerminationCondition,
         max_steps: Option<usize>,
-        command: AccelerationCommand,
-        mut samples: Option<&mut SegmentSampling<'_>>,
+        command: Acceleration,
+        segment_index: Option<usize>,
+        mut samples: Option<&mut Vec<TrajectorySample>>,
         termination_start_epoch: Epoch,
     ) -> Result<AdvanceResult, PropagationError> {
         let mut steps = 0_usize;
+        let mu = self.propagation.mu();
         let mut current_state = self.states.read_state(0)?;
-        let mut termination_tracker = TerminationTracker::new(termination, &current_state);
+        let mut termination_tracker = TerminationTracker::new(&current_state, mu);
 
         if let Some(samples) = samples.as_deref_mut() {
-            samples.record(self.epoch, current_state, steps)?;
+            samples.push(TrajectorySample::new(
+                self.epoch,
+                current_state,
+                segment_index,
+            ));
         }
 
         loop {
@@ -185,7 +179,7 @@ impl Propagator {
                 &current_state,
             );
 
-            if let Some(reason) = termination.stop_reason(context) {
+            if let Some(reason) = termination.stop_reason(context, mu) {
                 return Ok(AdvanceResult {
                     final_epoch: self.epoch,
                     final_state: current_state,
@@ -215,146 +209,31 @@ impl Propagator {
             steps += 1;
 
             current_state = self.states.read_state(0)?;
-            termination_tracker.advance(termination, &current_state);
+            termination_tracker.advance(&current_state, mu);
 
-            if let Some(samples) = samples.as_deref_mut() {
-                samples.record(self.epoch, current_state, steps)?;
+            if let Some(samples) = samples.as_deref_mut()
+                && steps.is_multiple_of(self.propagation.sample_every_steps)
+            {
+                samples.push(TrajectorySample::new(
+                    self.epoch,
+                    current_state,
+                    segment_index,
+                ));
             }
         }
     }
 
-    fn step_once(
-        &mut self,
-        step: TimeStep,
-        command: AccelerationCommand,
-    ) -> Result<(), PropagationError> {
-        debug_assert!(
-            matches!(self.frame.axes(), Axes::J2000Eq),
-            "propagator states must be expressed in inertial axes"
-        );
-        let integrator = self.propagation.integrator;
-        let states = &mut self.states.view_mut();
-        match &self.propagation.dynamics {
-            RuntimeDynamics::TwoBody(gravity) => integrator.step(
-                &ControlledDynamics {
-                    dynamics: gravity,
-                    command,
-                },
-                states,
-                self.epoch,
-                step,
-            ),
-            RuntimeDynamics::J2(gravity) => integrator.step(
-                &ControlledDynamics {
-                    dynamics: gravity,
-                    command,
-                },
-                states,
-                self.epoch,
-                step,
-            ),
-            RuntimeDynamics::J2Drag(composite) => integrator.step(
-                &ControlledDynamics {
-                    dynamics: composite,
-                    command,
-                },
-                states,
-                self.epoch,
-                step,
-            ),
-        }
-    }
-}
-
-struct SegmentSampling<'a> {
-    every_steps: usize,
-    segment_index: Option<usize>,
-    samples: &'a mut Vec<TrajectorySample>,
-}
-
-impl SegmentSampling<'_> {
-    fn record(
-        &mut self,
-        epoch: Epoch,
-        state: CartesianState,
-        steps: usize,
-    ) -> Result<(), PropagationError> {
-        if steps == 0 || steps.is_multiple_of(self.every_steps) {
-            self.samples
-                .push(TrajectorySample::new(epoch, state, self.segment_index));
-        }
-        Ok(())
-    }
-}
-
-/// Piecewise-constant inertial acceleration command.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) struct AccelerationCommand {
-    acceleration_mps2: [f64; 3],
-}
-
-impl AccelerationCommand {
-    /// Creates an inertial acceleration command in meters per second squared.
-    pub(crate) fn inertial(acceleration_mps2: [f64; 3]) -> Result<Self, PropagationError> {
-        if !acceleration_mps2
-            .iter()
-            .all(|component| component.is_finite())
-        {
-            return Err(PropagationError::Numerical(
-                crate::errors::NumericalError::NotFinite {
-                    field: "action acceleration",
-                },
-            ));
-        }
-        Ok(Self { acceleration_mps2 })
-    }
-}
-
-impl Default for AccelerationCommand {
-    fn default() -> Self {
-        Self {
-            acceleration_mps2: [0.0, 0.0, 0.0],
-        }
-    }
-}
-
-/// Adds a piecewise-constant inertial acceleration command above an arbitrary
-/// base dynamics model.
-struct ControlledDynamics<'a, D: Dynamics + ?Sized> {
-    dynamics: &'a D,
-    command: AccelerationCommand,
-}
-
-impl<D: Dynamics + ?Sized> Dynamics for ControlledDynamics<'_, D> {
-    fn acceleration_at(
-        &self,
-        state: CartesianStateComponents,
-        epoch: Epoch,
-    ) -> Result<Acceleration, crate::errors::DynamicsError> {
-        let base = self.dynamics.acceleration_at(state, epoch)?.vector();
-        let total = nalgebra::Vector3::new(
-            base.x + self.command.acceleration_mps2[0],
-            base.y + self.command.acceleration_mps2[1],
-            base.z + self.command.acceleration_mps2[2],
-        );
-        Ok(Acceleration::from_vector(total))
-    }
-}
-
-impl IntegratorKind {
-    fn step<D: Dynamics>(
-        self,
-        dynamics: &D,
-        states: &mut crate::physics::state::CartesianStatesMut<'_>,
-        epoch: Epoch,
-        dt: TimeStep,
-    ) -> Result<(), PropagationError> {
-        match self {
-            Self::Leapfrog => LeapfrogIntegrator.step(dynamics, states, 0, epoch, dt),
-            Self::VelocityVerlet => VelocityVerletIntegrator.step(dynamics, states, 0, epoch, dt),
-            Self::Euler => EulerIntegrator.step(dynamics, states, 0, epoch, dt),
-            Self::RungeKutta4 => RungeKutta4Integrator.step(dynamics, states, 0, epoch, dt),
-        }
+    fn step_once(&mut self, step: TimeStep, command: Acceleration) -> Result<(), PropagationError> {
+        self.propagation.integrator.step(
+            &ControlledDynamics {
+                dynamics: &self.propagation.dynamics,
+                command,
+            },
+            &mut self.states.view_mut(),
+            0,
+            self.epoch,
+            step,
+        )
     }
 }
 
@@ -362,8 +241,9 @@ impl IntegratorKind {
 mod tests {
     use super::*;
     use crate::physics::constants::MU_EARTH;
-    use crate::physics::dynamics::TwoBodyGravity;
+    use crate::physics::dynamics::{RuntimeDynamics, TwoBodyGravity};
     use crate::physics::frame::Frame;
+    use crate::physics::integrators::IntegratorKind;
     use crate::physics::orbits::Orbit;
     use crate::physics::types::{Distance, Duration, GravitationalParameter};
 
@@ -372,6 +252,7 @@ mod tests {
             dt: TimeStep::new(10.0),
             integrator: IntegratorKind::Leapfrog,
             dynamics: RuntimeDynamics::TwoBody(TwoBodyGravity::new(mu())),
+            mu: mu(),
             sample_every_steps,
         }
     }
@@ -393,8 +274,7 @@ mod tests {
     #[test]
     fn run_segment_samples_at_configured_cadence() {
         let plan = propagation_plan(2);
-        let mut propagator =
-            Propagator::new(initial_state(), frame(), Epoch::ZERO, plan).expect("propagator");
+        let mut propagator = Propagator::new(initial_state(), frame(), plan).expect("propagator");
 
         let result = propagator
             .run_segment(&TerminationCondition::StepCount(5), Some(7))
@@ -414,8 +294,7 @@ mod tests {
     #[test]
     fn duration_segment_uses_partial_final_step() {
         let plan = propagation_plan(1);
-        let mut propagator =
-            Propagator::new(initial_state(), frame(), Epoch::ZERO, plan).expect("propagator");
+        let mut propagator = Propagator::new(initial_state(), frame(), plan).expect("propagator");
 
         let result = propagator
             .run_segment(&TerminationCondition::Duration(Duration::new(25.0)), None)
@@ -429,14 +308,13 @@ mod tests {
     #[test]
     fn bounded_advance_can_end_without_terminal_stop() {
         let plan = propagation_plan(1);
-        let mut propagator =
-            Propagator::new(initial_state(), frame(), Epoch::ZERO, plan).expect("propagator");
+        let mut propagator = Propagator::new(initial_state(), frame(), plan).expect("propagator");
 
         let result = propagator
             .advance_steps(
                 &TerminationCondition::Duration(Duration::new(100.0)),
                 2,
-                AccelerationCommand::default(),
+                Acceleration::ZERO,
             )
             .expect("advance");
 

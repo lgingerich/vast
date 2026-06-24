@@ -40,7 +40,7 @@ pub use errors::{
 
 pub use sim::{
     config::{
-        BurnConfig, ForceModelKind, InitialOrbitConfig, IntegratorKind, LoadedScenario,
+        BurnConfig, ForceModelKind, InitialOrbitConfig, IntegratorSelection, LoadedScenario,
         MissionScenarioConfig, MissionSegmentConfig, PropagationConfig, ScenarioConfig, StopConfig,
     },
     engine::{PropagationResult, TrajectorySample},

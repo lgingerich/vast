@@ -29,12 +29,7 @@ pub struct MissionResult {
 /// Runs a mission scenario once from its initial state.
 pub fn run_mission(config: &MissionScenarioConfig) -> Result<MissionResult, MissionError> {
     let plan = config.build()?;
-    let mut propagator = Propagator::new(
-        plan.initial_state,
-        plan.frame,
-        Epoch::ZERO,
-        plan.propagation,
-    )?;
+    let mut propagator = Propagator::new(plan.initial_state, plan.frame, plan.propagation)?;
 
     for burn in &plan.initial_burns {
         propagator.apply_burn(*burn)?;
@@ -73,8 +68,8 @@ pub fn run_mission(config: &MissionScenarioConfig) -> Result<MissionResult, Miss
 mod tests {
     use super::*;
     use crate::sim::config::{
-        BodyConfig, BurnConfig, ForceModelKind, InitialOrbitConfig, IntegratorKind, LoadedScenario,
-        MissionSegmentConfig, PropagationConfig, StopConfig,
+        BodyConfig, BurnConfig, ForceModelKind, InitialOrbitConfig, IntegratorSelection,
+        LoadedScenario, MissionSegmentConfig, PropagationConfig, StopConfig,
     };
 
     #[test]
@@ -87,7 +82,7 @@ mod tests {
             },
             propagation: PropagationConfig {
                 dt_s: 10.0,
-                integrator: IntegratorKind::Leapfrog,
+                integrator: IntegratorSelection::Leapfrog,
                 body: BodyConfig::Earth,
                 force_model: ForceModelKind::TwoBody,
                 sample_every_steps: 5,
@@ -124,7 +119,7 @@ mod tests {
             },
             propagation: PropagationConfig {
                 dt_s: 10.0,
-                integrator: IntegratorKind::Leapfrog,
+                integrator: IntegratorSelection::Leapfrog,
                 body: BodyConfig::Earth,
                 force_model: ForceModelKind::TwoBody,
                 sample_every_steps: 1,

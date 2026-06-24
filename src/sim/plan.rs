@@ -1,15 +1,17 @@
 use super::burns::BurnCommand;
 use super::config::{
-    BurnConfig, ForceModelKind, InitialOrbitConfig, IntegratorKind, MissionScenarioConfig,
+    BurnConfig, ForceModelKind, InitialOrbitConfig, IntegratorSelection, MissionScenarioConfig,
     ScenarioConfig, StopConfig,
 };
 use super::termination::TerminationCondition;
 use crate::errors::MissionError;
 use crate::physics::dynamics::{
-    AtmosphericDrag, CompositeDynamics, ExponentialAtmosphere, J2Gravity, TwoBodyGravity,
+    AtmosphericDrag, CompositeDynamics, ExponentialAtmosphere, J2Gravity, RuntimeDynamics,
+    TwoBodyGravity,
 };
 use crate::physics::elements::{ClassicalOrbitalElements, OrbitalElements};
 use crate::physics::frame::Frame;
+use crate::physics::integrators::IntegratorKind;
 use crate::physics::orbits::Orbit;
 use crate::physics::state::CartesianState;
 use crate::physics::types::{
@@ -43,38 +45,14 @@ pub(crate) struct PropagationPlan {
     pub(crate) dt: TimeStep,
     pub(crate) integrator: IntegratorKind,
     pub(crate) dynamics: RuntimeDynamics,
+    pub(crate) mu: GravitationalParameter,
     pub(crate) sample_every_steps: usize,
 }
 
 impl PropagationPlan {
-    /// Returns the gravitational parameter of the configured force model.
-    pub(crate) const fn mu(&self) -> GravitationalParameter {
-        self.dynamics.mu()
-    }
-}
-
-/// Resolved force model used by the propagator.
-///
-/// Closed enum so the stepping path can dispatch without trait objects and
-/// stay allocation-free. Each variant owns its fully-validated dynamics model.
-#[derive(Debug)]
-pub(crate) enum RuntimeDynamics {
-    /// Point-mass central gravity.
-    TwoBody(TwoBodyGravity),
-    /// Central gravity with J2 perturbation.
-    J2(J2Gravity),
-    /// J2 gravity composed with exponential atmospheric drag.
-    J2Drag(CompositeDynamics<J2Gravity, AtmosphericDrag>),
-}
-
-impl RuntimeDynamics {
     /// Returns the gravitational parameter of the central body.
     pub(crate) const fn mu(&self) -> GravitationalParameter {
-        match self {
-            Self::TwoBody(gravity) => gravity.mu(),
-            Self::J2(gravity) => gravity.mu(),
-            Self::J2Drag(composite) => composite.first().mu(),
-        }
+        self.mu
     }
 }
 
@@ -149,7 +127,6 @@ impl MissionScenarioConfig {
             &self.propagation.force_model,
             self.propagation.sample_every_steps,
         )?;
-        let mu = propagation.mu();
         let initial_state = initial_state(&self.initial_orbit, &frame)?;
         let initial_burns = self
             .initial_burns
@@ -161,7 +138,7 @@ impl MissionScenarioConfig {
             .segments
             .iter()
             .map(|segment| {
-                let termination = termination(&segment.stop, mu)?;
+                let termination = termination(&segment.stop)?;
                 let burns = segment
                     .burns
                     .iter()
@@ -194,7 +171,7 @@ fn validate_name(name: &str) -> Result<(), MissionError> {
 
 fn propagation_plan(
     dt_s: f64,
-    integrator: IntegratorKind,
+    selection: IntegratorSelection,
     frame: &Frame,
     force_model: &ForceModelKind,
     sample_every_steps: usize,
@@ -207,10 +184,22 @@ fn propagation_plan(
     }
     Ok(PropagationPlan {
         dt: TimeStep::new(dt_s),
-        integrator,
+        integrator: selection.into(),
         dynamics: runtime_dynamics(force_model, frame)?,
+        mu: frame.mu()?,
         sample_every_steps,
     })
+}
+
+impl From<IntegratorSelection> for IntegratorKind {
+    fn from(selection: IntegratorSelection) -> Self {
+        match selection {
+            IntegratorSelection::Leapfrog => Self::Leapfrog,
+            IntegratorSelection::VelocityVerlet => Self::VelocityVerlet,
+            IntegratorSelection::Euler => Self::Euler,
+            IntegratorSelection::RungeKutta4 => Self::RungeKutta4,
+        }
+    }
 }
 
 /// Resolves a configured force model into validated runtime dynamics.
@@ -266,13 +255,10 @@ fn circular_initial_state(altitude_m: f64, frame: &Frame) -> Result<CartesianSta
     Ok(orbit.to_cartesian_state(frame)?)
 }
 
-fn termination(
-    stop: &StopConfig,
-    mu: GravitationalParameter,
-) -> Result<TerminationCondition, MissionError> {
+fn termination(stop: &StopConfig) -> Result<TerminationCondition, MissionError> {
     match stop {
-        StopConfig::Apoapsis => Ok(TerminationCondition::apoapsis(mu)),
-        StopConfig::Periapsis => Ok(TerminationCondition::periapsis(mu)),
+        StopConfig::Apoapsis => Ok(TerminationCondition::apoapsis()),
+        StopConfig::Periapsis => Ok(TerminationCondition::periapsis()),
         StopConfig::Duration { duration_s } => {
             Ok(TerminationCondition::Duration(Duration::new(*duration_s)))
         }

@@ -51,8 +51,8 @@ pub struct ScenarioConfig {
     pub dt_s: f64,
     /// Episode duration in seconds.
     pub duration_s: f64,
-    /// Integrator.
-    pub integrator: IntegratorKind,
+    /// Named selection of integrator from scenario TOML.
+    pub integrator: IntegratorSelection,
     /// Force model.
     pub force_model: ForceModelKind,
     /// Sample trajectory every N integrator steps.
@@ -139,8 +139,8 @@ pub enum InitialOrbitConfig {
 pub struct PropagationConfig {
     /// Fixed integrator step size in seconds.
     pub dt_s: f64,
-    /// Integrator.
-    pub integrator: IntegratorKind,
+    /// Named selection of integrator from scenario TOML.
+    pub integrator: IntegratorSelection,
     /// Central body shared by all mission segments.
     #[serde(default = "default_body_config")]
     pub body: BodyConfig,
@@ -199,10 +199,13 @@ pub enum BurnConfig {
     Circularize,
 }
 
-/// Supported integrators for scenario dispatch.
+/// Serde-only integrator selection from scenario TOML.
+///
+/// Mapped to [`crate::physics::integrators::Integrator`] during plan
+/// construction so the config type stays a pure serde boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum IntegratorKind {
+pub enum IntegratorSelection {
     /// Leapfrog integrator.
     Leapfrog,
     /// Velocity Verlet integrator.
