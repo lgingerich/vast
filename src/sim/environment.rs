@@ -1,37 +1,10 @@
 use super::config::ScenarioConfig;
 use super::engine::{PropagationResult, Propagator};
 use super::termination::{StopReason, TerminationCondition};
-use crate::errors::{EnvironmentError, NumericalError};
+use crate::errors::EnvironmentError;
 use crate::physics::state::CartesianState;
-use crate::physics::types::{Acceleration, Distance};
-use nalgebra::Vector3;
-
-/// Inertial thrust acceleration action in meters per second squared.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Action {
-    acceleration_mps2: [f64; 3],
-}
-
-impl Action {
-    /// Creates an inertial acceleration action in meters per second squared.
-    pub fn inertial(acceleration_mps2: [f64; 3]) -> Result<Self, NumericalError> {
-        if !acceleration_mps2
-            .iter()
-            .all(|component| component.is_finite())
-        {
-            return Err(NumericalError::NotFinite {
-                field: "action acceleration",
-            });
-        }
-        Ok(Self { acceleration_mps2 })
-    }
-
-    /// Returns the inertial acceleration components in meters per second squared.
-    #[must_use]
-    pub const fn acceleration_mps2(self) -> [f64; 3] {
-        self.acceleration_mps2
-    }
-}
+use crate::physics::thrust::ThrustMode;
+use crate::physics::types::Distance;
 
 /// Flat observation of the environment state after a step.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -66,8 +39,8 @@ pub trait Environment {
     /// Resets the environment for a new episode.
     fn reset(&mut self, seed: u64) -> Result<Observation, EnvironmentError>;
 
-    /// Applies one environment step.
-    fn step(&mut self, action: Action) -> Result<StepResult, EnvironmentError>;
+    /// Applies one environment step with the given thrust mode.
+    fn step(&mut self, thrust: ThrustMode) -> Result<StepResult, EnvironmentError>;
 }
 
 /// LEO circular-orbit rollout environment (MVP).
@@ -156,7 +129,7 @@ impl Environment for LeoCircularEnv {
         ))
     }
 
-    fn step(&mut self, action: Action) -> Result<StepResult, EnvironmentError> {
+    fn step(&mut self, thrust: ThrustMode) -> Result<StepResult, EnvironmentError> {
         if self.done {
             let state = self.propagator.current_state()?;
             return Ok(StepResult {
@@ -168,11 +141,10 @@ impl Environment for LeoCircularEnv {
             });
         }
 
-        let [ax, ay, az] = action.acceleration_mps2();
-        let command = Acceleration::from_vector(Vector3::new(ax, ay, az));
-        let result =
-            self.propagator
-                .advance_steps(&self.termination, self.steps_per_env_step, command)?;
+        self.propagator.set_thrust(thrust);
+        let result = self
+            .propagator
+            .advance_steps(&self.termination, self.steps_per_env_step)?;
         let done = result.stop_reason.is_some();
         self.done = done;
 
@@ -200,7 +172,7 @@ mod tests {
             dt_s = 10.0
             duration_s = 100.0
             integrator = "leapfrog"
-            force_model = { kind = "two_body" }
+            force_models = [{ kind = "two_body" }]
             sample_every_steps = 5
             steps_per_env_step = 3
             "#,
@@ -209,8 +181,7 @@ mod tests {
 
         let mut env = LeoCircularEnv::from_config(&config).expect("env");
         let _obs = env.reset(42).expect("reset");
-        let action = Action::inertial([0.0, 0.0, 0.0]).expect("action");
-        let result = env.step(action).expect("step");
+        let result = env.step(ThrustMode::coast()).expect("step");
 
         assert!(!result.done);
         assert_eq!(result.stop_reason, None);
@@ -226,7 +197,7 @@ mod tests {
             dt_s = 10.0
             duration_s = 50.0
             integrator = "leapfrog"
-            force_model = { kind = "two_body" }
+            force_models = [{ kind = "two_body" }]
             sample_every_steps = 5
             steps_per_env_step = 2
             "#,
@@ -235,11 +206,10 @@ mod tests {
 
         let mut env = LeoCircularEnv::from_config(&config).expect("env");
         let _obs = env.reset(42).expect("reset");
-        let action = Action::inertial([0.0, 0.0, 0.0]).expect("action");
 
-        let first = env.step(action).expect("first step");
-        let second = env.step(action).expect("second step");
-        let terminal = env.step(action).expect("terminal step");
+        let first = env.step(ThrustMode::coast()).expect("first step");
+        let second = env.step(ThrustMode::coast()).expect("second step");
+        let terminal = env.step(ThrustMode::coast()).expect("terminal step");
 
         assert!(!first.done);
         assert!(!second.done);
@@ -257,7 +227,7 @@ mod tests {
             dt_s = 10.0
             duration_s = 100.0
             integrator = "leapfrog"
-            force_model = { kind = "two_body" }
+            force_models = [{ kind = "two_body" }]
             sample_every_steps = 5
             "#,
         )

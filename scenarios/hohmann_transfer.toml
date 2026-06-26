@@ -9,7 +9,7 @@ altitude_m = 400_000.0
 dt_s = 30.0
 body = "earth"
 integrator = "leapfrog"
-force_model = { kind = "two_body" }
+force_models = [{ kind = "two_body" }]
 sample_every_steps = 20
 
 [[initial_burns]]
@@ -20,7 +20,8 @@ delta_v_mps = 2397.5
 stop = { kind = "apoapsis" }
 
 [[segments.burns]]
-kind = "circularize"
+kind = "prograde"
+delta_v_mps = 1475.0
 
 [[segments]]
 stop = { kind = "duration", duration_s = 86400.0 }

@@ -1,6 +1,5 @@
-use super::burns::BurnCommand;
 use super::config::{
-    BurnConfig, ForceModelKind, InitialOrbitConfig, IntegratorSelection, MissionScenarioConfig,
+    BurnConfig, ForceModelEntry, InitialOrbitConfig, IntegratorSelection, MissionScenarioConfig,
     ScenarioConfig, StopConfig,
 };
 use super::termination::TerminationCondition;
@@ -35,7 +34,7 @@ pub(crate) struct MissionPlan {
     pub(crate) initial_state: CartesianState,
     pub(crate) frame: Frame,
     pub(crate) propagation: PropagationPlan,
-    pub(crate) initial_burns: Vec<BurnCommand>,
+    pub(crate) initial_burns: Vec<BurnConfig>,
     pub(crate) segments: Vec<MissionSegmentPlan>,
 }
 
@@ -60,7 +59,7 @@ impl PropagationPlan {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct MissionSegmentPlan {
     pub(crate) termination: TerminationCondition,
-    pub(crate) burns: Vec<BurnCommand>,
+    pub(crate) burns: Vec<BurnConfig>,
 }
 
 impl ScenarioConfig {
@@ -85,7 +84,7 @@ impl ScenarioConfig {
             self.dt_s,
             self.integrator,
             &frame,
-            &self.force_model,
+            &self.force_models,
             self.sample_every_steps,
         )?;
         let initial_state = circular_initial_state(self.altitude_m, &frame)?;
@@ -124,28 +123,19 @@ impl MissionScenarioConfig {
             self.propagation.dt_s,
             self.propagation.integrator,
             &frame,
-            &self.propagation.force_model,
+            &self.propagation.force_models,
             self.propagation.sample_every_steps,
         )?;
         let initial_state = initial_state(&self.initial_orbit, &frame)?;
-        let initial_burns = self
-            .initial_burns
-            .iter()
-            .copied()
-            .map(burn_command)
-            .collect::<Result<Vec<_>, _>>()?;
         let segments = self
             .segments
             .iter()
             .map(|segment| {
                 let termination = termination(&segment.stop)?;
-                let burns = segment
-                    .burns
-                    .iter()
-                    .copied()
-                    .map(burn_command)
-                    .collect::<Result<Vec<_>, _>>()?;
-                Ok(MissionSegmentPlan { termination, burns })
+                Ok(MissionSegmentPlan {
+                    termination,
+                    burns: segment.burns.clone(),
+                })
             })
             .collect::<Result<Vec<_>, MissionError>>()?;
 
@@ -153,7 +143,7 @@ impl MissionScenarioConfig {
             initial_state,
             frame,
             propagation,
-            initial_burns,
+            initial_burns: self.initial_burns.clone(),
             segments,
         })
     }
@@ -173,7 +163,7 @@ fn propagation_plan(
     dt_s: f64,
     selection: IntegratorSelection,
     frame: &Frame,
-    force_model: &ForceModelKind,
+    force_models: &[ForceModelEntry],
     sample_every_steps: usize,
 ) -> Result<PropagationPlan, MissionError> {
     if sample_every_steps == 0 {
@@ -185,7 +175,7 @@ fn propagation_plan(
     Ok(PropagationPlan {
         dt: TimeStep::new(dt_s),
         integrator: selection.into(),
-        dynamics: runtime_dynamics(force_model, frame)?,
+        dynamics: runtime_dynamics(force_models, frame)?,
         mu: frame.mu()?,
         sample_every_steps,
     })
@@ -203,18 +193,46 @@ impl From<IntegratorSelection> for IntegratorKind {
 }
 
 /// Resolves a configured force model into validated runtime dynamics.
+///
+/// At least one gravity model (two_body or j2) is required. Drag is optional
+/// and composes with whichever gravity model is selected.
 fn runtime_dynamics(
-    force_model: &ForceModelKind,
+    entries: &[ForceModelEntry],
     frame: &Frame,
 ) -> Result<RuntimeDynamics, MissionError> {
-    match force_model {
-        ForceModelKind::TwoBody => Ok(RuntimeDynamics::TwoBody(TwoBodyGravity::from_frame(frame)?)),
-        ForceModelKind::J2 => Ok(RuntimeDynamics::J2(J2Gravity::from_frame(frame)?)),
-        ForceModelKind::J2Drag {
+    let has_two_body = entries
+        .iter()
+        .any(|e| matches!(e, ForceModelEntry::TwoBody));
+    let has_j2 = entries.iter().any(|e| matches!(e, ForceModelEntry::J2));
+    let drag_area = entries.iter().find_map(|e| match e {
+        ForceModelEntry::Drag {
             area_per_mass_m2_kg,
-        } => {
+        } => Some(*area_per_mass_m2_kg),
+        _ => None,
+    });
+
+    let use_j2 = has_j2 || !has_two_body;
+    if !has_two_body && !has_j2 {
+        return Err(MissionError::InvalidField {
+            field: "force_models",
+            reason: "at least one gravity model (two_body or j2) is required".to_string(),
+        });
+    }
+
+    match (use_j2, drag_area) {
+        (false, None) => Ok(RuntimeDynamics::TwoBody(TwoBodyGravity::from_frame(frame)?)),
+        (true, None) => Ok(RuntimeDynamics::J2(J2Gravity::from_frame(frame)?)),
+        (false, Some(area)) => {
             let atmosphere = ExponentialAtmosphere::from_frame(frame)?;
-            let drag = AtmosphericDrag::new(atmosphere, AreaPerMass::new(*area_per_mass_m2_kg));
+            let drag = AtmosphericDrag::new(atmosphere, AreaPerMass::new(area));
+            let gravity = TwoBodyGravity::from_frame(frame)?;
+            Ok(RuntimeDynamics::TwoBodyDrag(CompositeDynamics::new(
+                gravity, drag,
+            )))
+        }
+        (true, Some(area)) => {
+            let atmosphere = ExponentialAtmosphere::from_frame(frame)?;
+            let drag = AtmosphericDrag::new(atmosphere, AreaPerMass::new(area));
             let gravity = J2Gravity::from_frame(frame)?;
             Ok(RuntimeDynamics::J2Drag(CompositeDynamics::new(
                 gravity, drag,
@@ -266,14 +284,6 @@ fn termination(stop: &StopConfig) -> Result<TerminationCondition, MissionError> 
     }
 }
 
-fn burn_command(config: BurnConfig) -> Result<BurnCommand, MissionError> {
-    match config {
-        BurnConfig::Inertial { delta_v_mps } => BurnCommand::inertial(delta_v_mps),
-        BurnConfig::Prograde { delta_v_mps } => BurnCommand::prograde(delta_v_mps),
-        BurnConfig::Circularize => Ok(BurnCommand::circularize()),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -297,7 +307,7 @@ mod tests {
             dt_s = 10.0
             duration_s = 100.0
             integrator = "leapfrog"
-            force_model = { kind = "two_body" }
+            force_models = [{ kind = "two_body" }]
             sample_every_steps = 0
             "#,
         )
@@ -320,7 +330,7 @@ mod tests {
             dt_s = 10.0
             duration_s = 100.0
             integrator = "leapfrog"
-            force_model = { kind = "j2" }
+            force_models = [{ kind = "j2" }]
             sample_every_steps = 5
             "#,
         )
@@ -340,7 +350,7 @@ mod tests {
             dt_s = 10.0
             duration_s = 100.0
             integrator = "runge_kutta4"
-            force_model = { kind = "j2_drag", area_per_mass_m2_kg = 0.02 }
+            force_models = [{ kind = "j2" }, { kind = "drag", area_per_mass_m2_kg = 0.02 }]
             sample_every_steps = 5
             "#,
         )
@@ -359,8 +369,8 @@ mod tests {
         // two-body the RAAN is fixed. Propagating both for several orbits
         // and comparing the final RAAN distinguishes the two models.
         let inclination_deg = 51.6_f64;
-        let two_body_final_raan = final_raan_deg(inclination_deg, "{ kind = \"two_body\" }");
-        let j2_final_raan = final_raan_deg(inclination_deg, "{ kind = \"j2\" }");
+        let two_body_final_raan = final_raan_deg(inclination_deg, "kind = \"two_body\"");
+        let j2_final_raan = final_raan_deg(inclination_deg, "kind = \"j2\"");
 
         assert!(
             (two_body_final_raan - j2_final_raan).abs() > 0.1,
@@ -370,8 +380,9 @@ mod tests {
 
     #[test]
     fn drag_scenario_shrinks_orbit_relative_to_two_body() {
-        let two_body_delta = radius_delta("{ kind = \"two_body\" }");
-        let drag_delta = radius_delta("{ kind = \"j2_drag\", area_per_mass_m2_kg = 0.02 }");
+        let two_body_delta = radius_delta("kind = \"two_body\"");
+        let drag_delta =
+            radius_delta("kind = \"j2\" }, { kind = \"drag\", area_per_mass_m2_kg = 0.02");
 
         assert!(
             two_body_delta.abs() < 1.0,
@@ -391,7 +402,7 @@ mod tests {
             dt_s = 10.0
             duration_s = 100.0
             integrator = "leapfrog"
-            force_model = {{ kind = "two_body" }}
+            force_models = [{{ kind = "two_body" }}]
             sample_every_steps = 5
             {extra}
             "#
@@ -420,7 +431,7 @@ mod tests {
             [propagation]
             dt_s = 10.0
             integrator = "leapfrog"
-            force_model = {force_model_inline}
+            force_models = [{{ {force_model_inline} }}]
             sample_every_steps = 1000
 
             [[segments]]
@@ -455,7 +466,7 @@ mod tests {
             dt_s = 10.0
             duration_s = 7_200.0
             integrator = "runge_kutta4"
-            force_model = {force_model_inline}
+            force_models = [{{ {force_model_inline} }}]
             sample_every_steps = 1000
             "#,
         );

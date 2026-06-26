@@ -26,6 +26,7 @@ pub use physics::{
         CartesianState, CartesianStateBuffer, CartesianStateComponents, CartesianStates,
         CartesianStatesMut,
     },
+    thrust::ThrustMode,
     types::{
         Acceleration, Angle, AngularRate, AreaPerMass, Distance, Duration, Eccentricity, Epoch,
         EquatorialRadius, GravitationalParameter, J2Coefficient, MassDensity, Position,
@@ -40,13 +41,11 @@ pub use errors::{
 
 pub use sim::{
     config::{
-        BurnConfig, ForceModelKind, InitialOrbitConfig, IntegratorSelection, LoadedScenario,
+        BurnConfig, ForceModelEntry, InitialOrbitConfig, IntegratorSelection, LoadedScenario,
         MissionScenarioConfig, MissionSegmentConfig, PropagationConfig, ScenarioConfig, StopConfig,
     },
     engine::{PropagationResult, TrajectorySample},
-    environment::{
-        Action, Environment, LeoCircularEnv, Observation, RolloutEpisodeResult, StepResult,
-    },
+    environment::{Environment, LeoCircularEnv, Observation, RolloutEpisodeResult, StepResult},
     mission::{MissionResult, MissionSegmentResult, run_mission},
     termination::StopReason,
 };

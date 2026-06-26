@@ -6,4 +6,5 @@ pub mod integrators;
 pub mod orbits;
 pub mod sim;
 pub mod state;
+pub mod thrust;
 pub mod types;

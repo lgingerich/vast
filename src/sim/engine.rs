@@ -1,11 +1,12 @@
-use super::burns::BurnCommand;
+use super::config::BurnConfig;
 use super::plan::PropagationPlan;
 use super::termination::{StopReason, TerminationCondition, TerminationTracker};
 use crate::errors::PropagationError;
-use crate::physics::dynamics::ControlledDynamics;
+use crate::physics::dynamics::ThrustWrapper;
 use crate::physics::frame::Frame;
 use crate::physics::state::{CartesianState, CartesianStateBuffer};
-use crate::physics::types::{Acceleration, Epoch, TimeStep};
+use crate::physics::thrust::ThrustMode;
+use crate::physics::types::{Epoch, TimeStep, Velocity};
 
 /// One recorded state sample along a propagation.
 #[derive(Debug, Clone, PartialEq)]
@@ -60,6 +61,7 @@ pub(crate) struct Propagator {
     epoch: Epoch,
     propagation: PropagationPlan,
     states: CartesianStateBuffer<1>,
+    thrust_mode: ThrustMode,
 }
 
 impl Propagator {
@@ -77,6 +79,7 @@ impl Propagator {
             epoch: Epoch::ZERO,
             propagation,
             states,
+            thrust_mode: ThrustMode::coast(),
         })
     }
 
@@ -84,6 +87,7 @@ impl Propagator {
     pub(crate) fn reset(&mut self, initial_state: CartesianState) -> Result<(), PropagationError> {
         self.epoch = Epoch::ZERO;
         self.states.write_from_state(0, &initial_state)?;
+        self.thrust_mode = ThrustMode::coast();
         Ok(())
     }
 
@@ -92,17 +96,31 @@ impl Propagator {
         Ok(self.states.read_state(0)?)
     }
 
-    /// Applies a runtime burn command to body index 0.
-    pub(crate) fn apply_burn(
-        &mut self,
-        burn: BurnCommand,
-    ) -> Result<(), crate::errors::MissionError> {
+    /// Sets the thrust mode for the next advance.
+    pub(crate) fn set_thrust(&mut self, mode: ThrustMode) {
+        self.thrust_mode = mode;
+    }
+
+    /// Applies an impulsive burn to body index 0.
+    pub(crate) fn apply_burn(&mut self, mode: ThrustMode) -> Result<(), PropagationError> {
         let state = self.current_state()?;
-        let updated = burn.apply_to(state, self.propagation.mu())?;
-        self.states
-            .write_from_state(0, &updated)
-            .map_err(PropagationError::from)?;
+        let dv = mode.resolve_delta_v(state)?;
+        let new_vel = Velocity::from_vector(state.velocity.vector() + dv.vector());
+        let updated = CartesianState::new(state.position, new_vel);
+        self.states.write_from_state(0, &updated)?;
         Ok(())
+    }
+
+    /// Resolves a burn configuration against the current state and applies it.
+    pub(crate) fn apply_burn_config(&mut self, config: BurnConfig) -> Result<(), PropagationError> {
+        match config {
+            BurnConfig::Inertial { delta_v_mps } => {
+                self.apply_burn(ThrustMode::inertial(delta_v_mps))
+            }
+            BurnConfig::Prograde { delta_v_mps } => {
+                self.apply_burn(ThrustMode::prograde(delta_v_mps))
+            }
+        }
     }
 
     /// Runs one propagation segment, collecting samples into the caller's sink.
@@ -115,7 +133,6 @@ impl Propagator {
         let result = self.advance(
             termination,
             None,
-            Acceleration::ZERO,
             segment_index,
             Some(&mut samples),
             self.epoch,
@@ -137,23 +154,14 @@ impl Propagator {
         &mut self,
         termination: &TerminationCondition,
         max_steps: usize,
-        command: Acceleration,
     ) -> Result<AdvanceResult, PropagationError> {
-        self.advance(
-            termination,
-            Some(max_steps),
-            command,
-            None,
-            None,
-            Epoch::ZERO,
-        )
+        self.advance(termination, Some(max_steps), None, None, Epoch::ZERO)
     }
 
     fn advance(
         &mut self,
         termination: &TerminationCondition,
         max_steps: Option<usize>,
-        command: Acceleration,
         segment_index: Option<usize>,
         mut samples: Option<&mut Vec<TrajectorySample>>,
         termination_start_epoch: Epoch,
@@ -204,7 +212,7 @@ impl Propagator {
                 _ => self.propagation.dt,
             };
 
-            self.step_once(step, command)?;
+            self.step_once(step)?;
             self.epoch = self.epoch.advance_by(step);
             steps += 1;
 
@@ -223,11 +231,11 @@ impl Propagator {
         }
     }
 
-    fn step_once(&mut self, step: TimeStep, command: Acceleration) -> Result<(), PropagationError> {
+    fn step_once(&mut self, step: TimeStep) -> Result<(), PropagationError> {
         self.propagation.integrator.step(
-            &ControlledDynamics {
-                dynamics: &self.propagation.dynamics,
-                command,
+            &ThrustWrapper {
+                base: &self.propagation.dynamics,
+                mode: &self.thrust_mode,
             },
             &mut self.states.view_mut(),
             0,
@@ -311,11 +319,7 @@ mod tests {
         let mut propagator = Propagator::new(initial_state(), frame(), plan).expect("propagator");
 
         let result = propagator
-            .advance_steps(
-                &TerminationCondition::Duration(Duration::new(100.0)),
-                2,
-                Acceleration::ZERO,
-            )
+            .advance_steps(&TerminationCondition::Duration(Duration::new(100.0)), 2)
             .expect("advance");
 
         assert_eq!(result.steps, 2);

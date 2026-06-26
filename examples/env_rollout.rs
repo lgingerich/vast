@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 
-use vast::{Action, Environment, LeoCircularEnv, ScenarioConfig, stop_reason_name};
+use vast::{Environment, LeoCircularEnv, ScenarioConfig, ThrustMode, stop_reason_name};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- load rollout scenario ---
@@ -12,7 +12,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         dt_s = 10.0
         duration_s = 300.0
         integrator = "leapfrog"
-        force_model = { kind = "two_body" }
+        force_models = [{ kind = "two_body" }]
         sample_every_steps = 10
         steps_per_env_step = 20
         "#,
@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         initial.altitude_m / 1000.0,
         initial.speed_mps / 1000.0,
     );
-    println!("action: inertial acceleration [0.0, 2.0e-4, 0.0] m/s^2 | reward: MVP zero reward",);
+    println!("thrust: inertial acceleration [0.0, 2.0e-4, 0.0] m/s^2 | reward: MVP zero reward",);
     println!();
     println!(
         "{:>8} {:>8} {:>14} {:>14} {:>12} {:>16}",
@@ -40,12 +40,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // --- step until done ---
-    let action = Action::inertial([0.0, 2.0e-4, 0.0])?;
+    let thrust = ThrustMode::inertial([0.0, 2.0e-4, 0.0]);
     let mut env_steps = 0_usize;
     let mut integrator_steps = 0_usize;
     let mut total_reward = 0.0;
     let stop_reason = loop {
-        let step = env.step(action)?;
+        let step = env.step(thrust)?;
         env_steps += 1;
         integrator_steps += step.steps;
         total_reward += step.reward;

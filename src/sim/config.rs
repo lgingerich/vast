@@ -53,8 +53,9 @@ pub struct ScenarioConfig {
     pub duration_s: f64,
     /// Named selection of integrator from scenario TOML.
     pub integrator: IntegratorSelection,
-    /// Force model.
-    pub force_model: ForceModelKind,
+    /// Force models to enable.
+    #[serde(default = "default_force_models")]
+    pub force_models: Vec<ForceModelEntry>,
     /// Sample trajectory every N integrator steps.
     pub sample_every_steps: usize,
     /// Integrator steps advanced by one environment step.
@@ -81,6 +82,10 @@ fn default_steps_per_env_step() -> usize {
 
 fn default_body_config() -> BodyConfig {
     BodyConfig::Earth
+}
+
+fn default_force_models() -> Vec<ForceModelEntry> {
+    vec![ForceModelEntry::TwoBody]
 }
 
 /// Serializable mission scenario loaded from TOML.
@@ -144,8 +149,9 @@ pub struct PropagationConfig {
     /// Central body shared by all mission segments.
     #[serde(default = "default_body_config")]
     pub body: BodyConfig,
-    /// Force model.
-    pub force_model: ForceModelKind,
+    /// Force models to enable.
+    #[serde(default = "default_force_models")]
+    pub force_models: Vec<ForceModelEntry>,
     /// Sample trajectory every N integrator steps.
     pub sample_every_steps: usize,
 }
@@ -195,8 +201,6 @@ pub enum BurnConfig {
         /// Prograde delta-v magnitude in meters per second.
         delta_v_mps: f64,
     },
-    /// Match the local circular speed at the current radius.
-    Circularize,
 }
 
 /// Serde-only integrator selection from scenario TOML.
@@ -225,6 +229,8 @@ pub enum IntegratorSelection {
 pub enum BodyConfig {
     /// Earth using WGS 84 / EGM2008 constants and a loose LEO atmosphere.
     Earth,
+    /// Moon using NASA constants.
+    Moon,
 }
 
 impl BodyConfig {
@@ -232,26 +238,31 @@ impl BodyConfig {
     pub const fn inertial_frame(&self) -> Frame {
         match self {
             Self::Earth => Frame::new(Origin::CelestialBody(BodyId::Earth), Axes::J2000Eq),
+            Self::Moon => Frame::new(Origin::CelestialBody(BodyId::Moon), Axes::J2000Eq),
         }
     }
 }
 
-/// Supported force models for scenario configuration.
+/// Individual force model entry for scenario configuration.
 ///
-/// Each variant resolves to a concrete `Dynamics` implementation in the
-/// runtime plan. Physical constants such as gravitational parameter,
-/// equatorial radius, J2, and atmosphere come from the scenario's chosen
-/// central body; only spacecraft or model-specific parameters remain here.
-/// Always written as an inline table with a `kind` tag in TOML.
+/// Each entry represents one physical force to enable. Forces are composed
+/// additively by the plan builder. At least one gravity model (two_body or
+/// j2) is required.
+///
+/// In TOML this is written as an array of tagged inline tables:
+///
+/// ```toml
+/// force_models = [{ kind = "two_body" }, { kind = "drag", area_per_mass_m2_kg = 0.02 }]
+/// ```
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case", tag = "kind")]
-pub enum ForceModelKind {
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum ForceModelEntry {
     /// Two-body point-mass gravity.
     TwoBody,
     /// Central-body gravity with the body's J2 zonal harmonic.
     J2,
-    /// J2 gravity plus exponential atmospheric drag.
-    J2Drag {
+    /// Exponential atmospheric drag.
+    Drag {
         /// Drag area per unit mass (C_d * A / m) in m^2/kg.
         area_per_mass_m2_kg: f64,
     },
@@ -271,7 +282,7 @@ mod tests {
             dt_s = 10.0
             duration_s = 100.0
             integrator = "leapfrog"
-            force_model = { kind = "two_body" }
+            force_models = [{ kind = "two_body" }]
             sample_every_steps = 5
             typo_field = true
             "#,
@@ -296,7 +307,7 @@ mod tests {
             dt_s = 10.0
             body = "earth"
             integrator = "leapfrog"
-            force_model = { kind = "two_body" }
+            force_models = [{ kind = "two_body" }]
             sample_every_steps = 5
 
             [[initial_burns]]
@@ -307,7 +318,8 @@ mod tests {
             stop = { kind = "duration", duration_s = 100.0 }
 
             [[segments.burns]]
-            kind = "circularize"
+            kind = "prograde"
+            delta_v_mps = 50.0
             "#,
         )
         .expect("mission");
@@ -316,6 +328,9 @@ mod tests {
             panic!("expected mission config");
         };
         assert_eq!(config.initial_burns.len(), 1);
-        assert_eq!(config.segments[0].burns, vec![BurnConfig::Circularize]);
+        assert_eq!(
+            config.segments[0].burns,
+            vec![BurnConfig::Prograde { delta_v_mps: 50.0 }]
+        );
     }
 }

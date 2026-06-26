@@ -353,7 +353,7 @@ mod tests {
             dt_s = 10.0
             duration_s = 100.0
             integrator = "leapfrog"
-            force_model = { kind = "two_body" }
+            force_models = [{ kind = "two_body" }]
             sample_every_steps = 5
             "#,
         )

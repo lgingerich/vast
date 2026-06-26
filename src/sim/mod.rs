@@ -1,4 +1,3 @@
-pub(crate) mod burns;
 pub(crate) mod config;
 pub(crate) mod engine;
 pub(crate) mod environment;

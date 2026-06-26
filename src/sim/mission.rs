@@ -32,7 +32,7 @@ pub fn run_mission(config: &MissionScenarioConfig) -> Result<MissionResult, Miss
     let mut propagator = Propagator::new(plan.initial_state, plan.frame, plan.propagation)?;
 
     for burn in &plan.initial_burns {
-        propagator.apply_burn(*burn)?;
+        propagator.apply_burn_config(*burn)?;
     }
 
     let mut segment_results = Vec::with_capacity(plan.segments.len());
@@ -42,10 +42,9 @@ pub fn run_mission(config: &MissionScenarioConfig) -> Result<MissionResult, Miss
         let propagation = propagator.run_segment(&segment.termination, Some(segment_index))?;
         final_epoch = propagation.final_epoch;
 
-        let mut burns_applied = 0_usize;
+        let burns_applied = segment.burns.len();
         for burn in &segment.burns {
-            propagator.apply_burn(*burn)?;
-            burns_applied += 1;
+            propagator.apply_burn_config(*burn)?;
         }
 
         segment_results.push(MissionSegmentResult {
@@ -68,7 +67,7 @@ pub fn run_mission(config: &MissionScenarioConfig) -> Result<MissionResult, Miss
 mod tests {
     use super::*;
     use crate::sim::config::{
-        BodyConfig, BurnConfig, ForceModelKind, InitialOrbitConfig, IntegratorSelection,
+        BodyConfig, BurnConfig, ForceModelEntry, InitialOrbitConfig, IntegratorSelection,
         LoadedScenario, MissionSegmentConfig, PropagationConfig, StopConfig,
     };
 
@@ -84,7 +83,7 @@ mod tests {
                 dt_s: 10.0,
                 integrator: IntegratorSelection::Leapfrog,
                 body: BodyConfig::Earth,
-                force_model: ForceModelKind::TwoBody,
+                force_models: vec![ForceModelEntry::TwoBody],
                 sample_every_steps: 5,
             },
             initial_burns: vec![BurnConfig::Prograde { delta_v_mps: 100.0 }],
@@ -121,7 +120,7 @@ mod tests {
                 dt_s: 10.0,
                 integrator: IntegratorSelection::Leapfrog,
                 body: BodyConfig::Earth,
-                force_model: ForceModelKind::TwoBody,
+                force_models: vec![ForceModelEntry::TwoBody],
                 sample_every_steps: 1,
             },
             initial_burns: vec![],
