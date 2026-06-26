@@ -2,7 +2,7 @@
 
 mod errors;
 mod physics;
-mod recording;
+mod recorder;
 pub(crate) mod sim;
 
 pub use physics::{
@@ -51,7 +51,7 @@ pub use sim::{
     termination::StopReason,
 };
 
-pub use recording::{
+pub use recorder::{
     EpisodeMetrics, EpisodeRecord, MissionSegmentMetrics, RunManifest, RunRecorder,
     TrajectoryPoint, list_runs, read_trajectory, stop_reason_name,
 };
