@@ -1,4 +1,59 @@
-# Agent Guidance
+# AGENTS.md
+
+Guidance for AI coding agents working in this repository.
+
+## Core Behavior
+
+- Ask before assuming when requirements, architecture, or intent are unclear.
+- Prefer the simplest solution that satisfies the request.
+- Think before writing code for architecture, debugging, or non-trivial feature work. Surface the approach and tradeoffs first.
+- Stay in scope. Only modify files and code directly related to the current task.
+- Do not refactor, rename, reformat, or reorganize unrelated code. Mention worthwhile follow-ups instead of making them.
+- Ask before big changes that restructure existing code, remove behavior, change public APIs, or alter project conventions.
+- Do not preserve backwards compatibility for internal Rust APIs unless the user
+  explicitly asks. When an internal API needs different semantics, update the
+  existing method/type directly and migrate call sites.
+- Do not add parallel helper methods such as `*_trusted`, `*_unchecked`, or
+  alternate constructors merely to avoid changing existing internal callers.
+  Prefer one clear method with the correct invariant boundary.
+- Admit uncertainty before it costs the user. If a fact, version, API, or approach is uncertain, say so before relying on it.
+- Before destructive or irreversible actions, explain the impact and wait for explicit confirmation.
+
+## Rust Project Standards
+
+- Use Cargo for all Rust workflows.
+- Lock the tech stack to Rust, Cargo, rustfmt, Clippy, rustdoc, and cargo-nextest unless the user asks for alternatives.
+- Keep this template library-first unless the user asks for binary-specific structure.
+- Preserve the pinned Rust toolchain in `rust-toolchain.toml` unless asked to change it.
+- Match the existing strict lint style in `Cargo.toml`.
+- Prefer clear public APIs, useful documentation, and focused tests.
+- Do not weaken lint levels, release profiles, or CI checks without calling it out first.
+
+## Verification
+
+After code changes, run the relevant checks:
+
+```bash
+cargo fmt --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo doc --no-deps --all-features
+cargo test
+```
+
+If `cargo nextest` is installed, also run:
+
+```bash
+cargo nextest run --all-targets --all-features
+```
+
+## Communication
+
+- Never open with filler phrases like "Great question", "Of course", or "Certainly". Start with the answer or action.
+- Match length to the task. Be concise for small tasks and more detailed for design/debugging work.
+- Summarize what changed and how it was verified.
+- Mention useful follow-ups, but do not implement them without being asked.
+
+## Project-Specific
 
 VAST is an idiomatic Rust astrodynamics simulator whose **primary product
 goal is an RL training environment** for space: massively parallel,
@@ -16,7 +71,7 @@ by Tiger Style, but adapted to this project: keep work bounded, make invalid
 states hard to ignore, and design for performance without hiding correctness. Do
 not copy TigerBeetle-specific constraints blindly.
 
-## Product Direction
+### Product Direction
 
 - **RL env is the north star.** When choosing between features, prefer work that
   completes the environment loop: scenario setup, propagation step, action
@@ -36,22 +91,7 @@ not copy TigerBeetle-specific constraints blindly.
   development. Do not introduce these speculatively before the propagator path
   exists.
 
-## Core Behavior
-
-- Ask before assuming when requirements, architecture, or intent are unclear.
-- Prefer the simplest solution that satisfies the request.
-- Think before writing code for architecture, debugging, or non-trivial feature work. Surface the approach and tradeoffs first.
-- Stay in scope. Only modify files and code directly related to the current task.
-- Do not refactor, rename, reformat, or reorganize unrelated code. Mention worthwhile follow-ups instead of making them.
-- Ask before big changes that restructure existing code, remove behavior, change public APIs, or alter project conventions.
-- Do not preserve backwards compatibility for internal Rust APIs unless the user explicitly asks. When an internal API needs
-  different semantics, update the existing method/type directly and migrate call sites.
-- Do not add parallel helper methods such as `*_trusted`, `*_unchecked`, or alternate constructors merely to avoid changing 
-  existing internal callers. Prefer one clear method with the correct invariant boundary.
-- Admit uncertainty before it costs the user. If a fact, version, API, or approach is uncertain, say so before relying on it.
-- Before destructive or irreversible actions, explain the impact and wait for explicit confirmation.
-
-## Core Priorities
+### Core Priorities
 
 - Performance is a primary design constraint. Prefer bounded work, predictable
   memory use, cache-friendly data layout, and allocation-free stepping paths.
@@ -70,7 +110,7 @@ not copy TigerBeetle-specific constraints blindly.
 - Avoid adding dependencies unless they clearly improve safety, correctness, or
   maintainability.
 
-## Architecture Principles
+### Architecture Principles
 
 - Keep the crate library-first. Examples, visualizations, CLIs, and future
   tools should be thin consumers of reusable simulation APIs.
@@ -94,7 +134,7 @@ not copy TigerBeetle-specific constraints blindly.
   impulsive burns and mission-segment scripting are secondary to the environment
   step loop unless a task explicitly targets them.
 
-## Invariants And Assertions
+### Invariants And Assertions
 
 - Enforce invariants at boundaries: public constructors, domain-type arithmetic,
   and before returning new simulation state.
@@ -124,7 +164,7 @@ not copy TigerBeetle-specific constraints blindly.
   tests for impossible states, non-finite values, bad radii, invalid timesteps,
   and coordinate-system edge cases.
 
-## Units And Coordinate Systems
+### Units And Coordinate Systems
 
 - Use SI units internally unless a module explicitly says otherwise.
 - Prefer scalar domain types such as `Distance`, `Speed`, and
@@ -137,7 +177,7 @@ not copy TigerBeetle-specific constraints blindly.
 - Do not hide coordinate conversions inside unrelated algorithms. Make frame and
   unit changes visible at the call site or in clearly named conversion methods.
 
-## Allocation And Bounded Work
+### Allocation And Bounded Work
 
 - The core stepping path should not allocate. Keep integrators and dynamics
   models allocation-free unless there is a strong reason.
@@ -149,7 +189,7 @@ not copy TigerBeetle-specific constraints blindly.
   or render trails. If a loop is intentionally unbounded, make that clear in the
   surrounding structure.
 
-## State Storage And Stepping
+### State Storage And Stepping
 
 - Use `CartesianStateBuffer`, `CartesianStates`, and `CartesianStatesMut` as the
   core dense Cartesian state storage path. The internal layout is SoA for batched
@@ -162,7 +202,7 @@ not copy TigerBeetle-specific constraints blindly.
 - Do not claim mutual N-body or coupled dynamics readiness until stepping uses a
   read-old/write-new state split or another deterministic update strategy.
 
-## Rust Style
+### Rust Style
 
 - Use `cargo` for Rust workflows.
 - Prefer clear, direct Rust over clever abstractions. Use ownership, borrowing,
@@ -188,16 +228,7 @@ not copy TigerBeetle-specific constraints blindly.
   block minimal, document the invariants that make it safe, and test boundary
   conditions.
 
-## Rust Project Standards
-
-- Use Cargo for all Rust workflows.
-- Lock the tech stack to Rust, Cargo, rustfmt, Clippy, rustdoc, and cargo-nextest unless the user asks for alternatives.
-- Preserve the pinned Rust toolchain in `rust-toolchain.toml` unless asked to change it.
-- Match the existing strict lint style in `Cargo.toml`.
-- Prefer clear public APIs, useful documentation, and focused tests.
-- Do not weaken lint levels, release profiles, or CI checks without calling it out first.
-
-## Comments And Naming
+### Comments And Naming
 
 - Comments should explain why a design is shaped a certain way, not restate the
   code.
@@ -206,7 +237,7 @@ not copy TigerBeetle-specific constraints blindly.
 - Avoid abbreviations unless they are standard in orbital mechanics or units.
 - Prefer names that compose cleanly as the simulator grows.
 
-## Dependencies
+### Dependencies
 
 - Treat each dependency as a design decision. Consider correctness, API
   stability, compile time, maintenance cost, and whether it belongs in core or
@@ -216,7 +247,7 @@ not copy TigerBeetle-specific constraints blindly.
 - Use `thiserror` for typed library errors when error enums become useful.
   Reserve broad error handling for executable/setup boundaries.
 
-## Testing Principles
+### Testing Principles
 
 - Add unit tests for non-trivial logic and edge cases.
 - Prefer invariant, boundary, and contract tests over tests that mirror
@@ -227,18 +258,18 @@ not copy TigerBeetle-specific constraints blindly.
   deterministic resets, and invalid physical states.
 - Avoid tests that rely on timing or flaky behavior.
 
-## Architecture Documentation
+### Architecture Documentation
 
 `docs/architecture.md` is the living architecture reference: layer boundaries,
 simulation vs physics concepts, data flow, and open design questions.
 
-### Before Starting Significant Work
+#### Before Starting Significant Work
 
 - Read `docs/architecture.md` when the task touches scenarios, propagators,
   termination, events, controls, environments, or other simulation-layer APIs.
 - Read `ROADMAP.md` for prioritized unimplemented work in the same area.
 
-### After Major Work
+#### After Major Work
 
 Keep `docs/architecture.md` in sync in the same change set when work:
 
@@ -250,19 +281,19 @@ Keep `docs/architecture.md` in sync in the same change set when work:
 Updates should be concise: adjust the layered model, "what exists today",
 planned concepts, or open questions — not a changelog of every commit.
 
-### Review Expectations
+#### Review Expectations
 
 - Treat a stale architecture doc as a bug when the crate's public shape or
   layer boundaries no longer match the document.
 - Mention architecture doc updates in the task summary when they were part of
   the change.
 
-## Roadmap Maintenance
+### Roadmap Maintenance
 
 `ROADMAP.md` is the living plan for recommended, not-yet-done work. Keep it
 current in the same change set as the code or decision it reflects.
 
-### Before Starting Significant Work
+#### Before Starting Significant Work
 
 - Read `ROADMAP.md` to see whether the task is already planned, deprioritized,
   or scoped with explicit deferrals.
@@ -270,7 +301,7 @@ current in the same change set as the code or decision it reflects.
   add it before or as part of the implementation PR unless the user asked for a
   one-off experiment.
 
-### When Adding New Items
+#### When Adding New Items
 
 - Place the item under the best-fit category. Create a new category section only
   when the work does not fit an existing one.
@@ -283,7 +314,7 @@ current in the same change set as the code or decision it reflects.
 - Do not add speculative items the project has not decided to pursue. If
   something belongs in "avoid for now", leave it off the roadmap.
 
-### When Completing Work
+#### When Completing Work
 
 - Remove the finished item from its category section.
 - Add a concise bullet to the **Implemented baseline** list at the top of
@@ -296,37 +327,13 @@ current in the same change set as the code or decision it reflects.
 - If the finished work changes what is implemented or planned at the layer level,
   update `docs/architecture.md` accordingly.
 
-### Review Expectations
+#### Review Expectations
 
 - Treat a stale roadmap as a bug. Finished features should not remain listed as
   unimplemented; planned work should not be missing after a substantive merge.
 - Mention roadmap updates in the task summary when they were part of the change.
 
-## Verification
-
-After substantive code changes, run the relevant checks:
-
-```bash
-cargo fmt --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo doc --no-deps --all-features
-cargo test
-```
-
-If `cargo nextest` is installed, also run:
-
-```bash
-cargo nextest run --all-targets --all-features
-```
-
-## Communication
-
-- Never open with filler phrases like "Great question", "Of course", or "Certainly". Start with the answer or action.
-- Match length to the task. Be concise for small tasks and more detailed for design/debugging work.
-- Summarize what changed and how it was verified.
-- Mention useful follow-ups, but do not implement them without being asked.
-
-## Review Checklist
+### Review Checklist
 
 - Is the ownership and borrowing model minimal and correct?
 - Are there unnecessary clones, allocations, temporary collections, or panics?
