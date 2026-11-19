@@ -62,3 +62,52 @@ State storage and stepping:
 - No scenario loading, export formats, or control policies leaking into stepping and dynamics.
 - Treat each new dependency as a design decision (correctness, API stability, compile time, maintenance, whether it belongs in core or only in examples/tools). Default to the standard library and existing dependencies.
 - Reserve broad error handling (`anyhow`-style) for executable/setup boundaries such as `runner`; use `thiserror` enums in the library (`src/errors.rs`).
+
+## Agent Workflow
+`docs/architecture.md` is the living architecture reference (layer boundaries, simulation vs physics concepts, data flow, open design questions); `ROADMAP.md` is the living plan for recommended, not-yet-done work.
+
+### Architecture Documentation
+Before significant work:
+- Read `docs/architecture.md` when the task touches scenarios, propagators, termination, events, controls, environments, or other simulation-layer APIs.
+- Read `ROADMAP.md` for prioritized unimplemented work in the same area.
+
+After major work, keep `docs/architecture.md` in sync in the same change set when work:
+- adds or changes public simulation-layer types or module boundaries
+- implements items from the Simulation Layer roadmap category
+- resolves an open design question listed in the architecture doc
+- shifts what is "implemented today" vs planned
+
+Updates are concise: adjust the layered model, "what exists today", planned concepts, or open questions, not a changelog of every commit. Treat a stale architecture doc as a bug when the crate's public shape or layer boundaries no longer match it. Mention architecture doc updates in the task summary.
+
+### Roadmap Maintenance
+Keep `ROADMAP.md` current in the same change set as the code or decision it reflects.
+
+Before significant work:
+- Read `ROADMAP.md` to see whether the task is already planned, deprioritized, or scoped with explicit deferrals.
+- If the work is not on the roadmap but is a durable simulator capability, add it before or as part of the implementation PR unless the user asked for a one-off experiment.
+
+When adding items:
+- Place the item under the best-fit category. Create a new category only when the work does not fit an existing one.
+- Assign exactly one priority: **P1** (next), **P2** (soon after), or **P3** (later). No finer-grained priority numbers.
+- Include **What**, **Why**, **How it helps**, **First version scope**, and **Defer** when the item is non-trivial.
+- Run the design checklist at the bottom of `ROADMAP.md` before adding force models or other hot-path features.
+- Do not add speculative items the project has not decided to pursue. If something belongs in "avoid for now", leave it off the roadmap.
+
+When completing work:
+- Remove the finished item from its category section.
+- Add a concise bullet to the **Implemented baseline** list at the top of `ROADMAP.md`.
+- If completion only covers the first-version scope, add follow-on work as new P2/P3 items under the same or a related category rather than leaving a stale entry.
+- If priorities shift because something else is now more important, rebalance P1/P2/P3 within the affected category.
+- If the finished work changes what is implemented or planned at the layer level, update `docs/architecture.md`.
+
+Treat a stale roadmap as a bug: finished features must not remain listed as unimplemented, and planned work must not be missing after a substantive merge. Mention roadmap updates in the task summary.
+
+### Review Checklist
+- Is the ownership and borrowing model minimal and correct?
+- Are there unnecessary clones, allocations, temporary collections, or panics?
+- Are core APIs ergonomic, with borrows where possible and ownership where appropriate?
+- Are invariants checked at the right boundaries?
+- Is this the simplest correct solution for the current repo, not imagined future infrastructure?
+- Would `cargo fmt`, `cargo test`, or strict Clippy complain?
+- If this change completes or introduces planned work, is `ROADMAP.md` updated?
+- If this change affects layers, boundaries, or resolved design questions, is `docs/architecture.md` updated?
