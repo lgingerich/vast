@@ -34,7 +34,7 @@ name = "runner"
 path = "src/bin/runner.rs"
 
 [dependencies]
-nalgebra = "0.34.2"
+nalgebra = "0.35.0"
 thiserror = "2.0.18"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
