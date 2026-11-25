@@ -34,18 +34,18 @@ name = "runner"
 path = "src/bin/runner.rs"
 
 [dependencies]
-nalgebra = "0.34.2"
-thiserror = "2.0.18"
-serde = { version = "1.0.219", features = ["derive"] }
-serde_json = "1.0.140"
-toml = "0.8.23"
-clap = { version = "4.5.39", features = ["derive"] }
-axum = "0.8.4"
-tower-http = { version = "0.6.6", features = ["cors"] }
-tokio = { version = "1.45.1", features = ["macros", "rt-multi-thread"] }
+nalgebra = "0.35"
+thiserror = "2.0.21"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+toml = "1.2"
+clap = { version = "4.6.9", features = ["derive"] }
+axum = "0.8.9"
+tower-http = { version = "0.7", features = ["cors"] }
+tokio = { version = "1.54", features = ["macros", "rt-multi-thread"] }
 
 [dev-dependencies]
-macroquad = "0.4.14"
+macroquad = "0.4.16"
 
 [profile.release]
 codegen-units = 1
